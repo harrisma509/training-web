@@ -1,0 +1,20 @@
+name: training-web
+
+services:
+  training-web:
+    build: .
+    container_name: training-web
+    restart: unless-stopped
+    env_file:
+      - .env
+    volumes:
+      - /volume1/docker/training/web:/app:rw
+    ports:
+      - "8088:8080"
+    networks:
+      - training_net
+    command: uvicorn app:app --host 0.0.0.0 --port 8080 --reload
+
+networks:
+  training_net:
+    external: true
