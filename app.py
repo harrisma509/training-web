@@ -341,7 +341,7 @@ def create_sync_request():
                 )
                 VALUES (
                     'dashboard',
-                    1,
+                    7,
                     'pending'
                 )
                 RETURNING

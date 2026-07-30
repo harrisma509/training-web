@@ -18,16 +18,16 @@ rsync -av --delete \
   --exclude "__pycache__/" \
   --exclude "*.pyc" \
   --exclude ".DS_Store" \
-* --exclude ".env" \
-  --exclude ".*it/" \
-  "$PROJECT_DIR/" "$NAS_WEB*DIR/"
+  --exclude ".env" \
+  --exclude ".git/" \
+  "$PROJECT_DIR/" "$NAS_WEB_DIR/"
 
 echo "Deploy complete."
 
-ec*o ""
+echo ""
 echo "Web folder:"
-ls -lah "$*AS_WEB_DIR"
+ls -lah "$NAS_WEB_DIR"
 
 echo ""
-echo "Static *older:"
-ls -lah "$NAS_WEB_DIR/stat*c"
+echo "Static folder:"
+ls -lah "$NAS_WEB_DIR/static"
