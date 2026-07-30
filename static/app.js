@@ -64,6 +64,7 @@ function renderDailyTable() {
   const rows = dailyRows.map(row => `
     <tr>
       <td>${safe(row.date)}</td>
+      <td>${row.weight_lb == null ? "" : Number(row.weight_lb).toFixed(1)}</td>
       <td>${safe(row.activity_categories)}</td>
       <td>${safe(row.main_ride_name)}</td>
       <td>${safe(row.main_ride_bike_name)}</td>
@@ -79,6 +80,7 @@ function renderDailyTable() {
     <thead>
       <tr>
         <th>Date</th>
+        <th>Weight</th>
         <th>Count</th>
         <th>Main Ride</th>
         <th>Bike</th>
