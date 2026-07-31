@@ -1,8 +1,16 @@
+"""Define the FastAPI routes for the Health Auto Export API.
+
+This module is named ``routes`` because it owns the HTTP endpoint paths,
+request validation, authentication errors, and response formatting. Metric
+dispatch belongs to ``dispatcher.py`` so the HTTP boundary stays independent
+of the supported health metric families.
+"""
+
 from fastapi import APIRouter, HTTPException, Request
 
 from health_api.auth import validate_token
-from health_api.db.writer import upsert_weight
-from health_api.router import route_metrics
+from health_api.db.weight_writer import upsert_weight
+from health_api.dispatcher import route_metrics
 
 router = APIRouter(prefix="/api/health")
 

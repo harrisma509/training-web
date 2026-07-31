@@ -77,8 +77,11 @@ def api_daily(limit: int = 365):
             other_activity_names,
             other_load,
             total_load,
+            health_sleep.sleep_score AS sleep_score,
             health_weight.weight_lb AS weight_lb
         from daily_training
+        left join health_sleep
+            on health_sleep.date = daily_training.date
         left join health_weight
             on health_weight.date = daily_training.date
         order by daily_training.date desc

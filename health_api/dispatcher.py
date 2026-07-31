@@ -1,3 +1,10 @@
+"""Dispatch incoming Health Auto Export metrics to metric handlers.
+
+This module is named ``dispatcher`` because it dispatches metrics by name,
+not by URL. It keeps webhook dispatch separate from FastAPI request and
+response handling in ``routes.py``.
+"""
+
 from health_api.handlers.weight import SUPPORTED_WEIGHT_METRICS, WeightRecord, build_weight_rows
 
 
