@@ -9,10 +9,13 @@ from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from psycopg.rows import dict_row
 
+from health_api.routes import router as health_router
+
 
 BASE_DIR = Path(__file__).resolve().parent
 
 app = FastAPI(title="Training Dashboard")
+app.include_router(health_router)
 
 app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")
 
@@ -55,7 +58,7 @@ def api_daily(limit: int = 365):
 
     sql = """
         select
-            date,
+            daily_training.date AS date,
             activity_count,
             activity_categories,
             ride_count,
@@ -73,9 +76,12 @@ def api_daily(limit: int = 365):
             main_ride_band,
             other_activity_names,
             other_load,
-            total_load
+            total_load,
+            health_weight.weight_lb AS weight_lb
         from daily_training
-        order by date desc
+        left join health_weight
+            on health_weight.date = daily_training.date
+        order by daily_training.date desc
         limit %s
     """
 
