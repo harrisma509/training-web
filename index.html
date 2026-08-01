@@ -65,6 +65,26 @@
         <table id="weeklyTable"></table>
       </div>
     </section>
+
+    <div id="weeklyDrawer" class="weekly-drawer hidden" aria-hidden="true">
+      <div class="weekly-drawer-header">
+        <div class="drawer-title-row">
+          <div>
+            <div class="drawer-title">Weekly Commentary Editor</div>
+            <div class="drawer-subtitle">Edit commentary fields for the selected week</div>
+          </div>
+          <button id="drawerCloseBtn" type="button" class="drawer-close-button" aria-label="Close drawer">×</button>
+        </div>
+        <div id="drawerContext" class="drawer-context"></div>
+      </div>
+      <div class="weekly-drawer-body">
+        <div id="weeklyDrawerContent" class="weekly-drawer-content"></div>
+        <div class="drawer-actions">
+          <button id="drawerCancelBtn" type="button" class="button-secondary">Cancel</button>
+          <button id="drawerSaveBtn" type="button" class="button-primary">Save</button>
+        </div>
+      </div>
+    </div>
   </main>
 
 <script src="/static/app.js"></script>

@@ -2,11 +2,13 @@ import os
 from datetime import date, datetime, timezone
 from decimal import Decimal
 from pathlib import Path
+from typing import Optional
 
 import psycopg
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel
 from psycopg.rows import dict_row
 
 from health_api.routes import router as health_router
@@ -135,6 +137,24 @@ def api_weekly(limit: int = 60):
         select
             weeks.week_start,
             weekly_training.week_end,
+            wc.weekly_comment AS weekly_comment,
+            wc.week_type AS week_type,
+            wc.event AS event,
+            wc.planned_focus AS planned_focus,
+            wc.actual_focus AS actual_focus,
+            wc.risk_note AS risk_note,
+            wc.coach_note AS coach_note,
+            wc.task_note AS task_note,
+            wc.lesson_learned AS lesson_learned,
+            wc.status_override AS status_override,
+            wc.is_travel_week AS is_travel_week,
+            wc.is_sick_week AS is_sick_week,
+            wc.is_injury_week AS is_injury_week,
+            wc.is_bike_park_week AS is_bike_park_week,
+            wc.is_recovery_week AS is_recovery_week,
+            wc.is_goal_week AS is_goal_week,
+            wc.hide_from_dashboard AS hide_from_dashboard,
+            wc.display_priority AS display_priority,
             weekly_training.total_load,
             weekly_training.main_ride_load,
             weekly_training.other_load,
@@ -154,6 +174,8 @@ def api_weekly(limit: int = 60):
         from weeks
         left join weekly_training
             on weekly_training.week_start = weeks.week_start
+        left join weekly_commentary wc
+            on wc.week_start = weekly_training.week_start
         left join health_vo2_max
             on health_vo2_max.week_start = weeks.week_start
         left join (
@@ -174,6 +196,64 @@ def api_weekly(limit: int = 60):
             rows = cur.fetchall()
 
     return JSONResponse(rows_to_json(rows))
+
+
+class WeeklyCommentaryUpdate(BaseModel):
+    week_type: Optional[str] = None
+    event: Optional[str] = None
+    planned_focus: Optional[str] = None
+    actual_focus: Optional[str] = None
+    weekly_comment: Optional[str] = None
+    risk_note: Optional[str] = None
+    coach_note: Optional[str] = None
+    task_note: Optional[str] = None
+    lesson_learned: Optional[str] = None
+    status_override: Optional[str] = None
+    is_travel_week: Optional[bool] = None
+    is_sick_week: Optional[bool] = None
+    is_injury_week: Optional[bool] = None
+    is_bike_park_week: Optional[bool] = None
+    is_recovery_week: Optional[bool] = None
+    is_goal_week: Optional[bool] = None
+    hide_from_dashboard: Optional[bool] = None
+    display_priority: Optional[int] = None
+
+
+@app.patch("/api/weekly-commentary/{week_start}")
+def update_weekly_comment(week_start: str, payload: WeeklyCommentaryUpdate):
+    try:
+        week_start_date = datetime.strptime(week_start, "%Y-%m-%d").date()
+    except ValueError:
+        raise HTTPException(status_code=422, detail="week_start must be YYYY-MM-DD")
+
+    update_values = payload.dict(exclude_unset=True)
+    if "weekly_comment" in update_values and update_values["weekly_comment"] == "":
+        update_values["weekly_comment"] = None
+
+    if not update_values:
+        raise HTTPException(status_code=400, detail="No updatable fields provided")
+
+    insert_columns = ["week_start"] + list(update_values.keys()) + ["created_at", "updated_at"]
+    insert_placeholders = ["%s"] * len(insert_columns)
+    insert_values = [week_start_date] + list(update_values.values()) + ["now()", "now()"]
+    on_conflict_set = ",\n            ".join(
+        f"{col} = excluded.{col}" for col in update_values.keys()
+    ) + ",\n            updated_at = now()"
+
+    sql = f"""
+        insert into weekly_commentary ({', '.join(insert_columns)})
+        values ({', '.join(insert_placeholders)})
+        on conflict (week_start) do update
+        set {on_conflict_set}
+    """
+
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(sql, insert_values)
+
+    response_data = {"week_start": week_start_date.isoformat()}
+    response_data.update(update_values)
+    return JSONResponse(response_data)
 
 
 @app.get("/api/status")
