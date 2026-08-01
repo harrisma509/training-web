@@ -9,11 +9,13 @@ of the supported health metric families.
 from fastapi import APIRouter, HTTPException, Request
 
 from health_api.auth import validate_token
+from health_api.db.falls_writer import upsert_falls
 from health_api.db.rhr_writer import upsert_rhr
 from health_api.db.hrv_writer import upsert_hrv
 from health_api.db.sleep_writer import upsert_sleep
 from health_api.db.steps_writer import upsert_steps
 from health_api.db.weight_writer import upsert_weight
+from health_api.db.vo2_writer import upsert_vo2
 from health_api.dispatcher import route_metrics
 
 router = APIRouter(prefix="/api/health")
@@ -38,13 +40,15 @@ async def ingest(request: Request):
         raise HTTPException(status_code=400, detail="payload must contain data.metrics")
 
     valid_metrics = [metric for metric in metrics if isinstance(metric, dict)]
-    weight_rows, rhr_rows, steps_rows, sleep_rows, hrv_metrics, handlers_run, warnings = route_metrics(valid_metrics)
+    weight_rows, rhr_rows, steps_rows, sleep_rows, hrv_metrics, vo2_rows, falls_rows, handlers_run, warnings = route_metrics(valid_metrics)
     rows_upserted = (
         upsert_weight(weight_rows)
         + upsert_rhr(rhr_rows)
         + upsert_steps(steps_rows)
         + upsert_sleep(sleep_rows)
         + upsert_hrv(hrv_metrics)
+        + upsert_vo2(vo2_rows)
+        + upsert_falls(falls_rows)
     )
 
     return {

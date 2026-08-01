@@ -124,6 +124,8 @@ function renderWeeklyTable() {
       <td>${safe(row.ramp_pct_display)}</td>
       <td>${statusPill(row.status_level)}</td>
       <td>${safe(row.status_text)}</td>
+      <td>${row.vo2max == null ? "" : Number(row.vo2max).toFixed(1)}</td>
+      <td>${safe(row.falls)}</td>
     </tr>
   `).join("");
 
@@ -146,6 +148,8 @@ function renderWeeklyTable() {
         <th>Ramp</th>
         <th>Status</th>
         <th>Status Text</th>
+        <th>VO2 Max</th>
+        <th>Falls</th>
       </tr>
     </thead>
     <tbody>

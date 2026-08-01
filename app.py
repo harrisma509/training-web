@@ -125,25 +125,46 @@ def api_weekly(limit: int = 60):
     limit = max(1, min(limit, 260))
 
     sql = """
+        with weeks AS (
+            select week_start from weekly_training
+            union
+            select week_start from health_vo2_max
+            union
+            select date - (extract(isodow from date)::integer - 1) from health_falls
+        )
         select
-            week_start,
-            week_end,
-            total_load,
-            main_ride_load,
-            other_load,
-            activity_days,
-            ride_count,
-            walk_count,
-            hike_count,
-            strength_count,
-            very_hard_epic_days,
-            chronic_weekly_cw,
-            ac_ratio,
-            ramp_pct_display,
-            status_level,
-            status_text
-        from weekly_training
-        order by week_start desc
+            weeks.week_start,
+            weekly_training.week_end,
+            weekly_training.total_load,
+            weekly_training.main_ride_load,
+            weekly_training.other_load,
+            weekly_training.activity_days,
+            weekly_training.ride_count,
+            weekly_training.walk_count,
+            weekly_training.hike_count,
+            weekly_training.strength_count,
+            weekly_training.very_hard_epic_days,
+            weekly_training.chronic_weekly_cw,
+            weekly_training.ac_ratio,
+            weekly_training.ramp_pct_display,
+            weekly_training.status_level,
+            weekly_training.status_text,
+            health_vo2_max.vo2max AS vo2max
+            ,coalesce(fall_weeks.falls, 0) AS falls
+        from weeks
+        left join weekly_training
+            on weekly_training.week_start = weeks.week_start
+        left join health_vo2_max
+            on health_vo2_max.week_start = weeks.week_start
+        left join (
+            select
+                date - (extract(isodow from date)::integer - 1) AS week_start,
+                sum(falls) AS falls
+            from health_falls
+            group by 1
+        ) fall_weeks
+            on fall_weeks.week_start = weeks.week_start
+        order by weeks.week_start desc
         limit %s
     """
 
