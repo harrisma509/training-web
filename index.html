@@ -19,13 +19,14 @@
     <nav class="tabs header-tabs">
       <button id="dailyTab" class="active" type="button">Daily</button>
       <button id="weeklyTab" type="button">Weekly</button>
+      <button id="zonesTab" type="button">Zones</button>
     </nav>
 
     <div class="header-actions">
       <div id="dailyControls" class="control-group">
         <label for="dailyLimit">Daily rows</label>
         <select id="dailyLimit">
-          <option value="30" selected>30</option>
+          <option value="60" selected>60</option>
           <option value="90">90</option>
           <option value="365">365</option>
           <option value="1000">1000</option>
@@ -41,6 +42,16 @@
           <option value="260">260</option>
         </select>
         <button id="weeklyRefresh" type="button">Refresh</button>
+      </div>
+
+      <div id="zonesControls" class="control-group hidden">
+        <label for="zonesLimit">Zones rows</label>
+        <select id="zonesLimit">
+          <option value="26">26</option>
+          <option value="60" selected>60</option>
+          <option value="260">260</option>
+        </select>
+        <button id="zonesRefresh" type="button">Refresh</button>
       </div>
 
       <div id="syncStatus" class="sync-pill sync-muted">
@@ -63,6 +74,12 @@
     <section id="weeklyPane" class="hidden">
       <div class="table-wrap">
         <table id="weeklyTable"></table>
+      </div>
+    </section>
+
+    <section id="zonesPane" class="hidden">
+      <div class="table-wrap">
+        <table id="zonesTable"></table>
       </div>
     </section>
 

@@ -1,19 +1,25 @@
 let dailyRows = [];
 let weeklyRows = [];
+let zonesRows = [];
 let activeTab = "daily";
 
 const dailyTab = document.getElementById("dailyTab");
 const weeklyTab = document.getElementById("weeklyTab");
+const zonesTab = document.getElementById("zonesTab");
 const dailyPane = document.getElementById("dailyPane");
 const weeklyPane = document.getElementById("weeklyPane");
+const zonesPane = document.getElementById("zonesPane");
 
 const dailyControls = document.getElementById("dailyControls");
 const weeklyControls = document.getElementById("weeklyControls");
+const zonesControls = document.getElementById("zonesControls");
 
 const dailyLimit = document.getElementById("dailyLimit");
 const weeklyLimit = document.getElementById("weeklyLimit");
+const zonesLimit = document.getElementById("zonesLimit");
 const dailyRefresh = document.getElementById("dailyRefresh");
 const weeklyRefresh = document.getElementById("weeklyRefresh");
+const zonesRefresh = document.getElementById("zonesRefresh");
 
 
 const syncStatus = document.getElementById("syncStatus");
@@ -21,8 +27,10 @@ const syncNowBtn = document.getElementById("syncNowBtn");
 
 dailyTab.addEventListener("click", () => showTab("daily"));
 weeklyTab.addEventListener("click", () => showTab("weekly"));
+zonesTab.addEventListener("click", () => showTab("zones"));
 dailyRefresh.addEventListener("click", loadDaily);
 weeklyRefresh.addEventListener("click", loadWeekly);
+zonesRefresh.addEventListener("click", loadZones);
 syncNowBtn.addEventListener("click", handleSyncNow);
 
 function safe(value) {
@@ -44,15 +52,20 @@ function showTab(tab) {
   activeTab = tab;
 
   const isDaily = tab === "daily";
+  const isWeekly = tab === "weekly";
+  const isZones = tab === "zones";
 
   dailyPane.classList.toggle("hidden", !isDaily);
-  weeklyPane.classList.toggle("hidden", isDaily);
+  weeklyPane.classList.toggle("hidden", !isWeekly);
+  zonesPane.classList.toggle("hidden", !isZones);
 
   dailyControls.classList.toggle("hidden", !isDaily);
-  weeklyControls.classList.toggle("hidden", isDaily);
+  weeklyControls.classList.toggle("hidden", !isWeekly);
+  zonesControls.classList.toggle("hidden", !isZones);
 
   dailyTab.classList.toggle("active", isDaily);
-  weeklyTab.classList.toggle("active", !isDaily);
+  weeklyTab.classList.toggle("active", isWeekly);
+  zonesTab.classList.toggle("active", isZones);
 }
 
 function renderHeaderSummary() {
@@ -69,13 +82,13 @@ function renderDailyTable() {
       <td>${safe(row.steps)}</td>
       <td>${safe(row.rhr_bpm)}</td>
       <td>${row.hrv_sdnn_ms == null ? "" : Number(row.hrv_sdnn_ms).toFixed(0)}</td>
-      <td>${safe(row.activity_categories)}</td>
+      <td>${safe(row.total_load)}</td>
       <td>${safe(row.main_ride_name)}</td>
       <td>${safe(row.main_ride_bike_name)}</td>
       <td>${safe(row.main_ride_load)}</td>
       <td>${safe(row.main_ride_band)}</td>
-      <td>${safe(row.other_load)}</td>
-      <td>${safe(row.total_load)}</td>
+      <td>${safe(row.other_load)}</td>\
+      <td>${safe(row.activity_categories)}</td>
       <td>${safe(row.other_activity_names).replaceAll("\\n", "<br>")}</td>
     </tr>
   `).join("");
@@ -89,13 +102,13 @@ function renderDailyTable() {
         <th>Steps</th>
         <th>RHR</th>
         <th>HRV</th>
-        <th>Count</th>
+        <th>Total</th>
         <th>Main Ride</th>
         <th>Bike</th>
-        <th>Main Load</th>
+        <th>Main</th>
         <th>Band</th>
-        <th>Other Load</th>
-        <th>Total</th>
+        <th>Other</th>
+        <th>Count</th>
         <th>Other Activities</th>
       </tr>
     </thead>
@@ -123,6 +136,62 @@ async function loadWeekly() {
   if (activeTab === "weekly") {
     renderHeaderSummary();
   }
+}
+
+async function loadZones() {
+  const limit = zonesLimit.value;
+  zonesRows = await fetch(`/api/zones?limit=${limit}`).then(response => response.json());
+  renderZonesTable();
+
+  if (activeTab === "zones") {
+    renderHeaderSummary();
+  }
+}
+
+function formatPercent(value) {
+  if (value === null || value === undefined || value === "") {
+    return "";
+  }
+
+  const pct = Number(value);
+  if (Number.isNaN(pct)) {
+    return "";
+  }
+
+  return `${Math.round(pct)}%`;
+}
+
+function zonePctClass(metric, value) {
+  const pct = Number(value);
+
+  if (Number.isNaN(pct)) {
+    return "";
+  }
+
+  if (metric === "z1_z2_pct") {
+    if (pct < 60) return "zone-bad";
+    if (pct <= 80) return "zone-good";
+    return "zone-strong";
+  }
+
+  if (metric === "z3_pct") {
+    if (pct < 10) return "zone-low";
+    if (pct <= 30) return "zone-good";
+    return "zone-bad";
+  }
+
+  if (metric === "z4_z5_pct") {
+    if (pct <= 10) return "zone-good";
+    if (pct <= 20) return "zone-caution";
+    return "zone-bad";
+  }
+
+  return "";
+}
+
+function getWeeklyCommentText(weekStart) {
+  const row = weeklyRows.find(r => r.week_start === weekStart);
+  return row && row.weekly_comment != null ? String(row.weekly_comment) : "";
 }
 
 function createWeeklyCommentEditor(cell) {
@@ -469,13 +538,13 @@ function renderWeeklyTable() {
         <th>Week Start</th>
         <th>Weekly Comment</th>
         <th></th>
-        <th>Total Load</th>
-        <th>Chronic</th>
+        <th>Total</th>
+        <th>Chron</th>
         <th>A/C</th>
         <th>Ramp</th>
         <th>Status</th>
         <th>Status Text</th>
-        <th>Main Ride</th>
+        <th>Main</th>
         <th>Other</th>
         <th>Days</th>
         <th>Rides</th>
@@ -504,6 +573,53 @@ function renderWeeklyTable() {
   });
 }
 
+function renderZonesTable() {
+  const rows = zonesRows.map(row => {
+    const z1z2Class = zonePctClass("z1_z2_pct", row.z1_z2_pct);
+    const z3Class = zonePctClass("z3_pct", row.z3_pct);
+    const z4z5Class = zonePctClass("z4_z5_pct", row.z4_z5_pct);
+
+    return `
+      <tr>
+        <td>${safe(row.week_start)}</td>
+        <td>${safe(row.ride_time_hhmm)}</td>
+        <td class="${z1z2Class}">${formatPercent(row.z1_z2_pct)}</td>
+        <td class="${z3Class}">${formatPercent(row.z3_pct)}</td>
+        <td class="${z4z5Class}">${formatPercent(row.z4_z5_pct)}</td>
+        <td>${safe(row.z1_hhmm)}</td>
+        <td>${safe(row.z2_hhmm)}</td>
+        <td>${safe(row.z3_hhmm)}</td>
+        <td>${safe(row.z4_hhmm)}</td>
+        <td>${safe(row.z5_hhmm)}</td>
+        <td>${safe(row.ride_count)}</td>
+        <td>${safe(row.zone_flag)}</td>
+      </tr>
+    `;
+  }).join("");
+
+  document.getElementById("zonesTable").innerHTML = `
+    <thead>
+      <tr>
+        <th>Week Start</th>
+        <th>Ride Time</th>
+        <th>Z1-Z2%(60-80)</th>
+        <th>Z3%(10-30)</th>
+        <th>Z4-Z5%(0-10)</th>
+        <th>Z1</th>
+        <th>Z2</th>
+        <th>Z3</th>
+        <th>Z4</th>
+        <th>Z5</th>
+        <th>Ride Count</th>
+        <th>Flag</th>
+      </tr>
+    </thead>
+    <tbody>
+      ${rows}
+    </tbody>
+  `;
+}
+
 function updateWeeklyRowComment(weekStart, comment) {
   const row = weeklyRows.find(r => r.week_start === weekStart);
   if (row) {
@@ -523,7 +639,8 @@ function escapeHtml(value) {
 async function loadData() {
   await Promise.all([
     loadDaily(),
-    loadWeekly()
+    loadWeekly(),
+    loadZones()
   ]);
 
   renderHeaderSummary();

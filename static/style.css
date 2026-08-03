@@ -34,28 +34,28 @@ body {
 }
 
 .header-top {
-  display: grid;
-  grid-template-columns: minmax(220px, 1fr) auto auto;
+  display: flex;
   align-items: center;
-  gap: 14px;
-  padding: 12px 20px 10px;
+  gap: 8px;
+  padding: 3px 8px;
+  flex-wrap: nowrap;
 }
 
 .brand h1 {
   margin: 0;
-  font-size: 22px;
-  line-height: 1.1;
+  font-size: 18px;
+  line-height: 1;
+  white-space: nowrap;
 }
 
 .subtitle {
-  margin: 4px 0 0;
-  color: var(--muted);
-  font-size: 13px;
+  display: none;
 }
 
 .header-tabs {
   display: flex;
-  gap: 8px;
+  gap: 4px;
+  flex: 0 0 auto;
 }
 
 .header-tabs button {
@@ -63,15 +63,41 @@ body {
   border-color: var(--line);
 }
 
+.header-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+  margin-left: auto;
+  min-width: 0;
+  flex-wrap: nowrap;
+}
+
+.control-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+  white-space: nowrap;
+  min-width: 0;
+}
+
+.control-group label {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1;
+}
+
 button,
 select {
   border: 1px solid var(--line);
   background: var(--panel2);
   color: var(--text);
-  padding: 10px 14px;
-  border-radius: 10px;
+  padding: 4px 8px;
+  border-radius: 8px;
   font-weight: 700;
-  font-size: 13px;
+  font-size: 12px;
+  line-height: 1;
 }
 
 button:hover,
@@ -93,21 +119,21 @@ button.active {
 .sync-pill {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  min-height: 38px;
-  padding: 8px 12px;
+  gap: 6px;
+  min-height: 26px;
+  padding: 3px 8px;
   border: 1px solid var(--line);
   border-radius: 999px;
   background: rgba(15, 23, 42, 0.65);
   color: var(--text);
-  font-size: 13px;
+  font-size: 11px;
   font-weight: 800;
   white-space: nowrap;
 }
 
 .sync-dot {
-  width: 9px;
-  height: 9px;
+  width: 7px;
+  height: 7px;
   border-radius: 999px;
   background: var(--gray);
   box-shadow: 0 0 0 3px rgba(107, 114, 128, 0.18);
@@ -129,13 +155,13 @@ button.active {
 }
 
 main {
-  padding: 12px 12px 20px;
+  padding: 3px 8px 8px;
 }
 
 .table-wrap {
   overflow-x: auto;
   overflow-y: auto;
-  max-height: calc(100vh - 155px);
+  max-height: calc(100vh - 68px);
   background: var(--panel);
   border: 1px solid var(--line);
   border-radius: 14px;
@@ -149,11 +175,11 @@ table {
 
 th,
 td {
-  padding: 10px 12px;
+  padding: 3px 6px;
   border-bottom: 1px solid var(--line);
   text-align: left;
   vertical-align: top;
-  font-size: 13px;
+  font-size: 12px;
   white-space: nowrap;
 }
 
@@ -170,6 +196,36 @@ th {
 
 tr:hover td {
   background: rgba(96, 165, 250, 0.08);
+}
+
+.zone-good {
+  background: color-mix(in srgb, var(--green) 26%, var(--panel));
+  color: var(--text);
+  font-weight: 700;
+}
+
+.zone-strong {
+  background: color-mix(in srgb, var(--green) 40%, var(--panel));
+  color: #ecfdf5;
+  font-weight: 700;
+}
+
+.zone-caution {
+  background: color-mix(in srgb, var(--yellow) 34%, var(--panel));
+  color: #fef3c7;
+  font-weight: 700;
+}
+
+.zone-bad {
+  background: color-mix(in srgb, var(--red) 34%, var(--panel));
+  color: #fee2e2;
+  font-weight: 700;
+}
+
+.zone-low {
+  background: color-mix(in srgb, var(--muted) 25%, var(--panel));
+  color: var(--muted);
+  font-weight: 700;
 }
 
 .weekly-comment-cell {
@@ -390,6 +446,22 @@ tr:hover td {
 }
 
 @media (max-width: 1050px) {
+  .header-top {
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  .header-actions {
+    width: 100%;
+    margin-left: 0;
+    flex-wrap: wrap;
+    justify-content: flex-start;
+  }
+
+  .control-group {
+    flex-wrap: wrap;
+  }
+
   .weekly-drawer,
   .drawer-icon-cell {
     display: none;

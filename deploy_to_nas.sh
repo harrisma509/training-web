@@ -20,6 +20,9 @@ rsync -av --delete \
   --exclude ".DS_Store" \
   --exclude ".env" \
   --exclude ".git/" \
+  --exclude ".venv/" \
+  --exclude "venv/" \
+  --exclude "env/" \
   "$PROJECT_DIR/" "$NAS_WEB_DIR/"
 
 echo "Deploy complete."
