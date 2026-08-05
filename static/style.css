@@ -243,6 +243,55 @@ th {
   letter-spacing: 0.06em;
 }
 
+.status-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  padding: 2px 8px;
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.status-active {
+  background: rgba(52, 211, 153, 0.15);
+  color: var(--green);
+}
+
+.status-retired {
+  background: rgba(156, 163, 175, 0.15);
+  color: var(--muted);
+}
+
+.status-muted {
+  background: rgba(107, 114, 128, 0.15);
+  color: var(--muted);
+}
+
+.gear-row-retired {
+  opacity: 0.72;
+}
+
+.gear-header-row {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 10px 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+.gear-title {
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.gear-subtitle {
+  color: var(--muted);
+  font-size: 12px;
+}
+
 tr:hover td {
   box-shadow: inset 0 0 0 9999px rgb(96 165 250 / 20%);
 }

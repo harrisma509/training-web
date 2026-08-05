@@ -2,6 +2,7 @@ window.AppState = window.AppState || {
   dailyRows: [],
   weeklyRows: [],
   zonesRows: [],
+  gearRows: [],
   activeTab: "daily",
 };
 

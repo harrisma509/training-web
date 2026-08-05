@@ -3,20 +3,25 @@ const state = window.AppState;
 const dailyTab = document.getElementById("dailyTab");
 const weeklyTab = document.getElementById("weeklyTab");
 const zonesTab = document.getElementById("zonesTab");
+const gearTab = document.getElementById("gearTab");
 const dailyPane = document.getElementById("dailyPane");
 const weeklyPane = document.getElementById("weeklyPane");
 const zonesPane = document.getElementById("zonesPane");
+const gearPane = document.getElementById("gearPane");
 
 const dailyControls = document.getElementById("dailyControls");
 const weeklyControls = document.getElementById("weeklyControls");
 const zonesControls = document.getElementById("zonesControls");
+const gearControls = document.getElementById("gearControls");
 
 const dailyLimit = document.getElementById("dailyLimit");
 const weeklyLimit = document.getElementById("weeklyLimit");
 const zonesLimit = document.getElementById("zonesLimit");
+const gearLimit = document.getElementById("gearLimit");
 const dailyRefresh = document.getElementById("dailyRefresh");
 const weeklyRefresh = document.getElementById("weeklyRefresh");
 const zonesRefresh = document.getElementById("zonesRefresh");
+const gearRefresh = document.getElementById("gearRefresh");
 
 
 const syncNowBtn = document.getElementById("syncNowBtn");
@@ -24,9 +29,11 @@ const syncNowBtn = document.getElementById("syncNowBtn");
 dailyTab.addEventListener("click", () => showTab("daily"));
 weeklyTab.addEventListener("click", () => showTab("weekly"));
 zonesTab.addEventListener("click", () => showTab("zones"));
+gearTab.addEventListener("click", () => showTab("gear"));
 dailyRefresh.addEventListener("click", loadDaily);
 weeklyRefresh.addEventListener("click", loadWeekly);
 zonesRefresh.addEventListener("click", loadZones);
+gearRefresh.addEventListener("click", loadGear);
 syncNowBtn.addEventListener("click", handleSyncNow);
 
 function safe(value) {
@@ -50,18 +57,22 @@ function showTab(tab) {
   const isDaily = tab === "daily";
   const isWeekly = tab === "weekly";
   const isZones = tab === "zones";
+  const isGear = tab === "gear";
 
   dailyPane.classList.toggle("hidden", !isDaily);
   weeklyPane.classList.toggle("hidden", !isWeekly);
   zonesPane.classList.toggle("hidden", !isZones);
+  gearPane.classList.toggle("hidden", !isGear);
 
   dailyControls.classList.toggle("hidden", !isDaily);
   weeklyControls.classList.toggle("hidden", !isWeekly);
   zonesControls.classList.toggle("hidden", !isZones);
+  gearControls.classList.toggle("hidden", !isGear);
 
   dailyTab.classList.toggle("active", isDaily);
   weeklyTab.classList.toggle("active", isWeekly);
   zonesTab.classList.toggle("active", isZones);
+  gearTab.classList.toggle("active", isGear);
 }
 
 function renderHeaderSummary() {
@@ -251,7 +262,8 @@ async function loadData() {
   await Promise.all([
     loadDaily(),
     loadWeekly(),
-    loadZones()
+    loadZones(),
+    loadGear()
   ]);
 
   renderHeaderSummary();

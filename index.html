@@ -20,6 +20,7 @@
       <button id="dailyTab" class="active" type="button">Daily</button>
       <button id="weeklyTab" type="button">Weekly</button>
       <button id="zonesTab" type="button">Zones</button>
+      <button id="gearTab" type="button">Gear</button>
     </nav>
 
     <div class="header-actions">
@@ -54,6 +55,16 @@
         <button id="zonesRefresh" type="button">Refresh</button>
       </div>
 
+      <div id="gearControls" class="control-group hidden">
+        <label for="gearLimit">Gear rows</label>
+        <select id="gearLimit">
+          <option value="26">26</option>
+          <option value="60" selected>60</option>
+          <option value="120">120</option>
+        </select>
+        <button id="gearRefresh" type="button">Refresh</button>
+      </div>
+
       <div id="syncStatus" class="sync-pill sync-muted">
         <span class="sync-dot"></span>
         <span>Sync status loading...</span>
@@ -83,6 +94,16 @@
       </div>
     </section>
 
+    <section id="gearPane" class="hidden">
+      <div class="table-wrap">
+        <div class="gear-header-row">
+          <div class="gear-title">Gear</div>
+          <div class="gear-subtitle">Read-only usage summary from Strava activities.</div>
+        </div>
+        <table id="gearTable"></table>
+      </div>
+    </section>
+
     <div id="weeklyDrawer" class="weekly-drawer hidden" aria-hidden="true">
       <div class="weekly-drawer-header">
         <div class="drawer-title-row">
@@ -107,6 +128,7 @@
 <script src="/static/constants.js"></script>
 <script src="/static/weekly.js"></script>
 <script src="/static/zones.js"></script>
+<script src="/static/gear.js"></script>
 <script src="/static/sync.js"></script>
 <script src="/static/app.js"></script>
 </body>
