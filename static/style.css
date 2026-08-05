@@ -187,6 +187,17 @@ table {
   min-width: 1050px;
 }
 
+#zonesTable {
+  min-width: unset;
+  width: auto;
+  table-layout: auto;
+}
+
+#zonesTable th,
+#zonesTable td {
+  padding: 1px 4px;
+}
+
 th,
 td {
   padding: 3px 6px;
@@ -237,8 +248,8 @@ tr:hover td {
 }
 
 .zone-low {
-  background: color-mix(in srgb, var(--muted) 25%, var(--panel));
-  color: var(--muted);
+  background: color-mix(in srgb, var(--red) 24%, var(--panel));
+  color: #fee2e2;
   font-weight: 700;
 }
 

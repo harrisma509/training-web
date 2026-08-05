@@ -69,6 +69,7 @@ function renderZonesTable() {
       <tr>
         <td>${safe(row.week_start)}</td>
         <td>${safe(row.ride_time_hhmm)}</td>
+        <td>${safe(row.zone_flag)}</td>
         <td class="${z1z2Class}">${formatPercent(row.z1_z2_pct)}</td>
         <td class="${z3Class}">${formatPercent(row.z3_pct)}</td>
         <td class="${z4z5Class}">${formatPercent(row.z4_z5_pct)}</td>
@@ -78,7 +79,6 @@ function renderZonesTable() {
         <td>${safe(row.z4_hhmm)}</td>
         <td>${safe(row.z5_hhmm)}</td>
         <td>${safe(row.ride_count)}</td>
-        <td>${safe(row.zone_flag)}</td>
       </tr>
     `;
   }).join("");
@@ -88,6 +88,7 @@ function renderZonesTable() {
       <tr>
         <th>Week Start</th>
         <th>Ride Time</th>
+        <th>Flag</th>
         <th>${zoneHeaderLabel("z1_z2_pct", "Z1-Z2")}</th>
         <th>${zoneHeaderLabel("z3_pct", "Z3")}</th>
         <th>${zoneHeaderLabel("z4_z5_pct", "Z4-Z5")}</th>
@@ -97,7 +98,6 @@ function renderZonesTable() {
         <th>Z4</th>
         <th>Z5</th>
         <th>Ride Count</th>
-        <th>Flag</th>
       </tr>
     </thead>
     <tbody>
