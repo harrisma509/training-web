@@ -220,23 +220,23 @@ th {
 }
 
 tr:hover td {
-  background: rgba(96, 165, 250, 0.08);
+  box-shadow: inset 0 0 0 9999px rgb(96 165 250 / 20%);
 }
 
 .zone-good {
-  background: color-mix(in srgb, var(--green) 55%, var(--panel));
+  background: color-mix(in srgb, var(--green) 90%, var(--panel));
   color: #ecfdf5;
   font-weight: 800;
 }
 
 .zone-strong {
-  background: color-mix(in srgb, var(--green) 72%, var(--panel));
+  background: color-mix(in srgb, var(--green) 55%, var(--panel));
   color: #052e16;
   font-weight: 900;
 }
 
 .zone-caution {
-  background: color-mix(in srgb, var(--yellow) 70%, var(--panel));
+  background: color-mix(in srgb, var(--yellow) 90%, var(--panel));
   color: #1f1300;
   font-weight: 900;
 }
@@ -248,7 +248,7 @@ tr:hover td {
 }
 
 .zone-low {
-  background: color-mix(in srgb, var(--red) 52%, var(--panel));
+  background: color-mix(in srgb, var(--red) 32%, var(--panel));
   color: #fff1f2;
   font-weight: 800;
 }
