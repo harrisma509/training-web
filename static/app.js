@@ -117,7 +117,27 @@ function formatHrvMs(value) {
   return `${Math.round(parsed)} ms`;
 }
 
+function hasMainRide(row) {
+  const rideId = row.main_ride_id == null ? "" : String(row.main_ride_id).trim();
+  const rideName = row.main_ride_name == null ? "" : String(row.main_ride_name).trim();
+  return Boolean(rideId || rideName);
+}
+
+function hasOtherActivity(row) {
+  const otherCount = row.other_count == null ? 0 : Number(row.other_count);
+  if (Number.isFinite(otherCount) && otherCount > 0) {
+    return true;
+  }
+
+  const otherActivityNames = row.other_activity_names == null ? "" : String(row.other_activity_names).trim();
+  return Boolean(otherActivityNames);
+}
+
 function renderMainRideCell(row) {
+  if (!hasMainRide(row)) {
+    return "";
+  }
+
   const name = safe(row.main_ride_name);
   if (!name) {
     return "";
@@ -136,7 +156,9 @@ function renderMainRideCell(row) {
 
 function renderDailyTable() {
   const rows = state.dailyRows.map(row => {
-    const mainRideLoad = row.main_ride_load_text || (row.main_ride_load == null ? "" : Number(row.main_ride_load).toFixed(0));
+    const hasRide = hasMainRide(row);
+    const hasOther = hasOtherActivity(row);
+    const mainRideLoad = hasRide ? (row.main_ride_load_text || (row.main_ride_load == null ? "" : Number(row.main_ride_load).toFixed(0))) : "";
     return `
     <tr>
       <td>${safe(row.date)}</td>
@@ -146,14 +168,14 @@ function renderDailyTable() {
       <td>${safe(row.rhr_bpm)}</td>
       <td>${formatHrvMs(row.hrv_sdnn_ms)}</td>
       <td>${row.total_load == null ? "" : Number(row.total_load).toFixed(0)}</td>
-      <td>${safe(row.main_ride_time)}</td>
-      <td>${row.main_ride_miles == null ? "" : Number(row.main_ride_miles).toFixed(1)}</td>
-      <td>${formatCommaInt(row.main_ride_elevation_ft)}</td>
+      <td>${hasRide ? safe(row.main_ride_time) : ""}</td>
+      <td>${hasRide && row.main_ride_miles != null ? Number(row.main_ride_miles).toFixed(1) : ""}</td>
+      <td>${hasRide ? formatCommaInt(row.main_ride_elevation_ft) : ""}</td>
       <td>${renderMainRideCell(row)}</td>
-      <td>${safe(row.main_ride_bike_name)}</td>
+      <td>${hasRide ? safe(row.main_ride_bike_name) : ""}</td>
       <td>${safe(mainRideLoad)}</td>
-      <td>${formatHrZones(row.main_ride_hr_zones)}</td>
-      <td>${safe(row.other_load == null ? "" : Number(row.other_load).toFixed(0))}</td>
+      <td>${hasRide ? formatHrZones(row.main_ride_hr_zones) : ""}</td>
+      <td>${hasOther && row.other_load != null ? Number(row.other_load).toFixed(0) : ""}</td>
       <td>${safe(row.activity_categories)}</td>
       <td>${safe(row.other_activity_names).replaceAll("\\n", "<br>")}</td>
     </tr>

@@ -160,13 +160,13 @@ function auditScoreClass(row) {
 
 function auditGradeSquare(grade) {
   if (grade === "G") {
-    return "🟩";
+    return `<span class="weekly-status-dot green" title="Green audit"></span>`;
   }
   if (grade === "Y") {
-    return "🟨";
+    return `<span class="weekly-status-dot yellow" title="Yellow audit"></span>`;
   }
   if (grade === "R") {
-    return "🟥";
+    return `<span class="weekly-status-dot red" title="Red audit"></span>`;
   }
   return "";
 }
@@ -271,12 +271,12 @@ function getWeeklyHoursStatus(hoursValue) {
   const yellowMin = window.APP_CONSTANTS.WEEKLY_HOURS_YELLOW_MIN;
 
   if (parsed >= greenMin) {
-    return { icon: "🟩", cssClass: "weekly-hours-green" };
+    return { cssClass: "weekly-hours-green", title: `Hours green: >= ${greenMin}` };
   }
   if (parsed >= yellowMin) {
-    return { icon: "🟨", cssClass: "weekly-hours-yellow" };
+    return { cssClass: "weekly-hours-yellow", title: `Hours yellow: >= ${yellowMin} and < ${greenMin}` };
   }
-  return { icon: "🟥", cssClass: "weekly-hours-red" };
+  return { cssClass: "weekly-hours-red", title: `Hours red: < ${yellowMin}` };
 }
 
 function renderWeeklyHoursCell(hoursValue) {
@@ -290,7 +290,8 @@ function renderWeeklyHoursCell(hoursValue) {
     return valueText;
   }
 
-  return `<span class="weekly-hours-value ${status.cssClass}">${status.icon} ${valueText}</span>`;
+  const colorName = status.cssClass.replace("weekly-hours-", "");
+  return `<span class="weekly-hours-value ${status.cssClass}"><span class="weekly-status-dot ${colorName}" title="${escapeHtml(status.title)}"></span>${valueText}</span>`;
 }
 
 function openWeeklyAuditDrawer(weekStart) {

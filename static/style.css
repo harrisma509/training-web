@@ -139,6 +139,30 @@ button.active {
   box-shadow: 0 0 0 3px rgba(107, 114, 128, 0.18);
 }
 
+.weekly-status-dot {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  margin-right: 6px;
+  vertical-align: middle;
+}
+
+.weekly-status-dot.green {
+  background: var(--green);
+  box-shadow: 0 0 0 3px rgba(52, 211, 153, 0.16);
+}
+
+.weekly-status-dot.yellow {
+  background: var(--yellow);
+  box-shadow: 0 0 0 3px rgba(251, 191, 36, 0.16);
+}
+
+.weekly-status-dot.red {
+  background: var(--red);
+  box-shadow: 0 0 0 3px rgba(248, 113, 113, 0.16);
+}
+
 .sync-healthy .sync-dot {
   background: var(--green);
   box-shadow: 0 0 0 3px rgba(52, 211, 153, 0.18);
@@ -362,8 +386,10 @@ tr:hover td {
 .audit-score-button {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 4px 8px;
+  justify-content: center;
+  width: 30px;
+  height: 18px;
+  padding: 0;
   border-radius: 999px;
   border: 1px solid rgba(148, 163, 184, 0.2);
   background: rgba(255, 255, 255, 0.06);
@@ -375,6 +401,10 @@ tr:hover td {
 
 .audit-score-button:hover {
   background: rgba(96, 165, 250, 0.16);
+}
+
+.audit-score-button .weekly-status-dot {
+  margin-right: 0;
 }
 
 .audit-score-green {
