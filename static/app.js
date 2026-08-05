@@ -70,7 +70,9 @@ function renderHeaderSummary() {
 
 
 function renderDailyTable() {
-  const rows = state.dailyRows.map(row => `
+  const rows = state.dailyRows.map(row => {
+    const mainRideLoad = row.main_ride_load_text || (row.main_ride_load == null ? "" : Number(row.main_ride_load).toFixed(0));
+    return `
     <tr>
       <td>${safe(row.date)}</td>
       <td>${row.weight_lb == null ? "" : Number(row.weight_lb).toFixed(1)}</td>
@@ -78,16 +80,20 @@ function renderDailyTable() {
       <td>${safe(row.steps)}</td>
       <td>${safe(row.rhr_bpm)}</td>
       <td>${row.hrv_sdnn_ms == null ? "" : Number(row.hrv_sdnn_ms).toFixed(0)}</td>
-      <td>${safe(row.total_load)}</td>
+      <td>${row.total_load == null ? "" : Number(row.total_load).toFixed(0)}</td>
+      <td>${safe(row.main_ride_time)}</td>
+      <td>${row.main_ride_miles == null ? "" : Number(row.main_ride_miles).toFixed(1)}</td>
+      <td>${row.main_ride_elevation_ft == null ? "" : Number(row.main_ride_elevation_ft).toFixed(0)}</td>
       <td>${safe(row.main_ride_name)}</td>
       <td>${safe(row.main_ride_bike_name)}</td>
-      <td>${safe(row.main_ride_load)}</td>
-      <td>${safe(row.main_ride_band)}</td>
-      <td>${safe(row.other_load)}</td>\
+      <td>${safe(mainRideLoad)}</td>
+      <td>${formatHrZones(row.main_ride_hr_zones)}</td>
+      <td>${safe(row.other_load == null ? "" : Number(row.other_load).toFixed(0))}</td>
       <td>${safe(row.activity_categories)}</td>
       <td>${safe(row.other_activity_names).replaceAll("\\n", "<br>")}</td>
     </tr>
-  `).join("");
+  `;
+  }).join("");
 
   document.getElementById("dailyTable").innerHTML = `
     <thead>
@@ -99,10 +105,13 @@ function renderDailyTable() {
         <th>RHR</th>
         <th>HRV</th>
         <th>Total</th>
+        <th>Time</th>
+        <th>Miles</th>
+        <th>Ft</th>
         <th>Main Ride</th>
         <th>Bike</th>
-        <th>Main</th>
-        <th>Band</th>
+        <th>Main Ride Load</th>
+        <th>HR Zones</th>
         <th>Other</th>
         <th>Count</th>
         <th>Other Activities</th>
@@ -139,8 +148,16 @@ function escapeHtml(value) {
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
+    .replace(/\"/g, "&quot;")
     .replace(/'/g, "&#39;");
+}
+
+function formatHrZones(value) {
+  if (value === null || value === undefined || value === "") {
+    return "";
+  }
+  const escaped = escapeHtml(String(value));
+  return escaped.replace(/\b(Z[1-5])\b/g, '<span class="hr-zone-label">$1</span>');
 }
 
 async function loadData() {

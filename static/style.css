@@ -149,6 +149,10 @@ button.active {
   box-shadow: 0 0 0 3px rgba(251, 191, 36, 0.18);
 }
 
+.hr-zone-label {
+  font-weight: 700;
+}
+
 .sync-failed .sync-dot {
   background: var(--red);
   box-shadow: 0 0 0 3px rgba(248, 113, 113, 0.18);
