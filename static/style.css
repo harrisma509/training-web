@@ -242,6 +242,26 @@ tr:hover td {
   font-weight: 700;
 }
 
+.ac-ratio-low {
+  color: var(--yellow);
+  font-weight: 700;
+}
+
+.ac-ratio-target {
+  color: var(--green);
+  font-weight: 700;
+}
+
+.ac-ratio-caution {
+  color: var(--yellow);
+  font-weight: 700;
+}
+
+.ac-ratio-spike {
+  color: var(--red);
+  font-weight: 700;
+}
+
 .weekly-comment-cell {
   cursor: pointer;
   min-width: 420px;

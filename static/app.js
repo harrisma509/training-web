@@ -164,7 +164,7 @@ function renderDailyTable() {
     <thead>
       <tr>
         <th>Date</th>
-        <th>Weight</th>
+        <th>Lbs</th>
         <th>Sleep</th>
         <th>Steps</th>
         <th>RHR</th>

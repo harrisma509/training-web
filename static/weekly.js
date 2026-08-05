@@ -195,6 +195,61 @@ function formatWeeklyFixed(value, digits = 1) {
   return parsed.toFixed(digits);
 }
 
+function formatWeeklyAcRatio(value) {
+  if (value === null || value === undefined || value === "") {
+    return "";
+  }
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) {
+    return "";
+  }
+  const rounded = Number(parsed.toFixed(2));
+  return rounded % 1 === 0 ? rounded.toFixed(0) : rounded.toString();
+}
+
+function getAcRatioClass(acRatio) {
+  const parsed = Number(acRatio);
+  if (!Number.isFinite(parsed)) {
+    return "";
+  }
+  if (parsed < window.APP_CONSTANTS.AC_RATIO_TARGET_MIN) {
+    return "ac-ratio-low";
+  }
+  if (parsed <= window.APP_CONSTANTS.AC_RATIO_TARGET_MAX) {
+    return "ac-ratio-target";
+  }
+  if (parsed <= window.APP_CONSTANTS.AC_RATIO_CAUTION_MAX) {
+    return "ac-ratio-caution";
+  }
+  return "ac-ratio-spike";
+}
+
+function getAcRatioTitle(acRatio) {
+  const parsed = Number(acRatio);
+  if (!Number.isFinite(parsed)) {
+    return "";
+  }
+  if (parsed < window.APP_CONSTANTS.AC_RATIO_TARGET_MIN) {
+    return "Low: A/C below 0.8. Week is below chronic load.";
+  }
+  if (parsed <= window.APP_CONSTANTS.AC_RATIO_TARGET_MAX) {
+    return "Target: A/C 0.8-1.3. Load matches chronic baseline.";
+  }
+  if (parsed <= window.APP_CONSTANTS.AC_RATIO_CAUTION_MAX) {
+    return "Caution: A/C 1.3-1.5. Elevated load.";
+  }
+  return "Spike: A/C above 1.5. Load exceeds chronic baseline.";
+}
+
+function renderAcRatioCell(acRatio) {
+  const cellValue = formatWeeklyAcRatio(acRatio) || safe(acRatio);
+  const cssClass = getAcRatioClass(acRatio);
+  const titleText = getAcRatioTitle(acRatio);
+  const classAttr = cssClass ? ` class="${cssClass}"` : "";
+  const titleAttr = titleText ? ` title="${escapeHtml(titleText)}"` : "";
+  return `<td${classAttr}${titleAttr}>${cellValue}</td>`;
+}
+
 function formatWeeklyInt(value) {
   if (value === null || value === undefined || value === "") {
     return "";
@@ -563,13 +618,13 @@ function renderWeeklyTable() {
         ${row.audit_grade ? `<button class="audit-score-button ${auditScoreClass(row)}" data-week-start="${safe(row.week_start)}" type="button" title="${auditGradeTitle(row.audit_grade)}" aria-label="View weekly audit details">${auditGradeSquare(row.audit_grade)}</button>` : ""}
       </td>
       <td class="drawer-icon-cell"><button class="drawer-open-button" data-week-start="${safe(row.week_start)}" type="button" aria-label="Edit weekly commentary"></button></td>
-      <td>${safe(row.total_load)}</td>
       <td>${renderWeeklyHoursCell(row.weekly_total_hours)}</td>
       <td>${formatWeeklyFixed(row.weekly_total_miles, 1)}</td>
       <td>${formatWeeklyInt(row.weekly_total_elevation_ft)}</td>
       <td>${formatWeeklyFixed(row.weekly_avg_weight, 1)}</td>
-      <td>${safe(row.chronic_weekly_cw)}</td>
-      <td>${safe(row.ac_ratio)}</td>
+      <td>${formatWeeklyInt(row.total_load)}</td>
+      <td>${formatWeeklyInt(row.chronic_weekly_cw)}</td>
+      ${renderAcRatioCell(row.ac_ratio)}
       <td>${safe(row.ramp_pct_display)}</td>
       <td>${statusPill(row.status_level)}</td>
       <td>${safe(row.status_text)}</td>
@@ -593,13 +648,13 @@ function renderWeeklyTable() {
         <th>Weekly Comment</th>
         <th>Audit</th>
         <th></th>
-        <th>Total</th>
         <th>Hours</th>
         <th>Miles</th>
         <th>Ft</th>
-        <th>Avg Wt</th>
-        <th>Chron</th>
-        <th>A/C</th>
+        <th>Lbs</th>
+        <th>Acute</th>
+        <th>Chronic</th>
+        <th title="A/C = acute weekly load vs 28-day chronic baseline. Target 0.8-1.3.">A/C</th>
         <th>Ramp</th>
         <th>Status</th>
         <th>Status Text</th>
