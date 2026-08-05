@@ -80,6 +80,189 @@ const drawerCloseBtn = document.getElementById("drawerCloseBtn");
 const drawerCancelBtn = document.getElementById("drawerCancelBtn");
 const drawerSaveBtn = document.getElementById("drawerSaveBtn");
 
+const weeklyAuditDrawer = createWeeklyAuditDrawer();
+const auditDrawerCloseBtn = document.getElementById("auditDrawerCloseBtn");
+const auditDrawerTitle = document.getElementById("auditDrawerTitle");
+const auditDrawerScore = document.getElementById("auditDrawerScore");
+const auditDrawerSummary = document.getElementById("auditDrawerSummary");
+const auditDrawerNextAction = document.getElementById("auditDrawerNextAction");
+const auditDrawerBody = document.getElementById("auditDrawerBody");
+const auditDrawerLoading = document.getElementById("auditDrawerLoading");
+const auditDrawerError = document.getElementById("auditDrawerError");
+const auditDrawerNoItems = document.getElementById("auditDrawerNoItems");
+
+function createWeeklyAuditDrawer() {
+  const markup = `
+    <div id="weeklyAuditDrawer" class="audit-drawer hidden" aria-hidden="true">
+      <div class="audit-drawer-panel">
+        <div class="audit-drawer-header">
+          <div>
+            <div id="auditDrawerTitle" class="audit-drawer-title">Weekly Audit</div>
+            <div id="auditDrawerSubtitle" class="audit-drawer-subtitle">Audit details for the selected week</div>
+          </div>
+          <button id="auditDrawerCloseBtn" type="button" class="drawer-close-button" aria-label="Close audit drawer">×</button>
+        </div>
+        <div class="audit-drawer-body">
+          <div id="auditDrawerScore" class="audit-score-summary"></div>
+          <div id="auditDrawerSummary" class="audit-summary"></div>
+          <div id="auditDrawerNextAction" class="audit-next-action"></div>
+          <div id="auditDrawerError" class="audit-error hidden"></div>
+          <div id="auditDrawerLoading" class="audit-loading">Loading audit details...</div>
+          <div id="auditDrawerNoItems" class="audit-no-items hidden">No audit details found for this week.</div>
+          <div class="audit-detail-table-wrap hidden">
+            <table id="auditDetailTable" class="audit-detail-table">
+              <thead>
+                <tr>
+                  <th>Item</th>
+                  <th>Status</th>
+                  <th>Summary</th>
+                </tr>
+              </thead>
+              <tbody id="auditDetailTableBody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+  document.body.insertAdjacentHTML("beforeend", markup);
+  const drawer = document.getElementById("weeklyAuditDrawer");
+  drawer.addEventListener("click", event => {
+    if (event.target === drawer) {
+      closeWeeklyAuditDrawer();
+    }
+  });
+  return drawer;
+}
+
+function formatAuditScoreString(row) {
+  if (!row.audit_grade) {
+    return "";
+  }
+  const green = row.audit_green_count == null ? 0 : row.audit_green_count;
+  const yellow = row.audit_yellow_count == null ? 0 : row.audit_yellow_count;
+  const red = row.audit_red_count == null ? 0 : row.audit_red_count;
+  return `${safe(row.audit_grade)} 🟩${green} 🟨${yellow} 🟥${red}`;
+}
+
+function auditScoreClass(row) {
+  if (row.audit_grade === "G") {
+    return "audit-score-green";
+  }
+  if (row.audit_grade === "Y") {
+    return "audit-score-yellow";
+  }
+  if (row.audit_grade === "R") {
+    return "audit-score-red";
+  }
+  return "";
+}
+
+function auditGradeSquare(grade) {
+  if (grade === "G") {
+    return "🟩";
+  }
+  if (grade === "Y") {
+    return "🟨";
+  }
+  if (grade === "R") {
+    return "🟥";
+  }
+  return "";
+}
+
+function auditGradeTitle(grade) {
+  if (grade === "G") {
+    return "Green audit";
+  }
+  if (grade === "Y") {
+    return "Yellow audit";
+  }
+  if (grade === "R") {
+    return "Red audit";
+  }
+  return "";
+}
+
+function openWeeklyAuditDrawer(weekStart) {
+  const row = window.AppState.weeklyRows.find(r => r.week_start === weekStart);
+  if (!row) {
+    return;
+  }
+
+  auditDrawerTitle.textContent = `Weekly Audit - ${safe(row.week_start)}`;
+  auditDrawerScore.innerHTML = formatAuditScoreString(row);
+  auditDrawerScore.className = `audit-score-summary ${auditScoreClass(row)}`;
+  if (row.audit_summary) {
+    auditDrawerSummary.textContent = row.audit_summary;
+    auditDrawerSummary.classList.remove("hidden");
+  } else {
+    auditDrawerSummary.textContent = "";
+    auditDrawerSummary.classList.add("hidden");
+  }
+  if (row.audit_next_week_action) {
+    auditDrawerNextAction.textContent = row.audit_next_week_action;
+    auditDrawerNextAction.classList.remove("hidden");
+  } else {
+    auditDrawerNextAction.textContent = "";
+    auditDrawerNextAction.classList.add("hidden");
+  }
+
+  auditDrawerError.classList.add("hidden");
+  auditDrawerLoading.classList.remove("hidden");
+  auditDrawerNoItems.classList.add("hidden");
+  document.querySelector(".audit-detail-table-wrap").classList.add("hidden");
+
+  weeklyAuditDrawer.classList.remove("hidden");
+  weeklyAuditDrawer.setAttribute("aria-hidden", "false");
+
+  fetch(`/api/weekly-audit/${weekStart}/items`)
+    .then(response => {
+      if (!response.ok) {
+        throw new Error(`Unable to load audit details: ${response.status}`);
+      }
+      return response.json();
+    })
+    .then(items => {
+      auditDrawerLoading.classList.add("hidden");
+      const body = document.getElementById("auditDetailTableBody");
+      body.innerHTML = items.map(item => `
+        <tr>
+          <td>${escapeHtml(safe(item.item_label))}</td>
+          <td>${escapeHtml(safe(item.status))}</td>
+          <td>${escapeHtml(safe(item.summary))}</td>
+        </tr>
+      `).join("");
+
+      if (items.length === 0) {
+        auditDrawerNoItems.classList.remove("hidden");
+        document.querySelector(".audit-detail-table-wrap").classList.add("hidden");
+      } else {
+        auditDrawerNoItems.classList.add("hidden");
+        document.querySelector(".audit-detail-table-wrap").classList.remove("hidden");
+      }
+    })
+    .catch(error => {
+      console.error(error);
+      auditDrawerLoading.classList.add("hidden");
+      auditDrawerError.textContent = "Unable to load audit details. Please try again.";
+      auditDrawerError.classList.remove("hidden");
+    });
+}
+
+function closeWeeklyAuditDrawer() {
+  weeklyAuditDrawer.classList.add("hidden");
+  weeklyAuditDrawer.setAttribute("aria-hidden", "true");
+}
+
+function attachAuditScoreHandlers() {
+  document.querySelectorAll(".audit-score-button").forEach(button => {
+    button.addEventListener("click", () => {
+      openWeeklyAuditDrawer(button.dataset.weekStart);
+    });
+  });
+}
+
 function openWeeklyDrawer(weekStart) {
   const row = window.AppState.weeklyRows.find(r => r.week_start === weekStart);
   if (!row) {
@@ -322,6 +505,9 @@ function renderWeeklyTable() {
       <td class="weekly-comment-cell" data-week-start="${safe(row.week_start)}" contenteditable="false" tabindex="0">
         <div class="weekly-comment-display" title="${escapeHtml(safe(row.weekly_comment))}">${escapeHtml(truncateText(safe(row.weekly_comment), 100))}</div>
       </td>
+      <td class="weekly-audit-cell">
+        ${row.audit_grade ? `<button class="audit-score-button ${auditScoreClass(row)}" data-week-start="${safe(row.week_start)}" type="button" title="${auditGradeTitle(row.audit_grade)}" aria-label="View weekly audit details">${auditGradeSquare(row.audit_grade)}</button>` : ""}
+      </td>
       <td class="drawer-icon-cell"><button class="drawer-open-button" data-week-start="${safe(row.week_start)}" type="button" aria-label="Edit weekly commentary"></button></td>
       <td>${safe(row.total_load)}</td>
       <td>${safe(row.chronic_weekly_cw)}</td>
@@ -347,6 +533,7 @@ function renderWeeklyTable() {
       <tr>
         <th>Week Start</th>
         <th>Weekly Comment</th>
+        <th>Audit</th>
         <th></th>
         <th>Total</th>
         <th>Chron</th>
@@ -381,6 +568,7 @@ function renderWeeklyTable() {
       event.stopPropagation();
     });
   });
+  attachAuditScoreHandlers();
 }
 
 function updateWeeklyRowComment(weekStart, comment) {
@@ -393,6 +581,7 @@ function updateWeeklyRowComment(weekStart, comment) {
 drawerCloseBtn.addEventListener("click", () => closeWeeklyDrawer());
 drawerCancelBtn.addEventListener("click", () => closeWeeklyDrawer());
 drawerSaveBtn.addEventListener("click", saveWeeklyDrawer);
+auditDrawerCloseBtn.addEventListener("click", () => closeWeeklyAuditDrawer());
 weeklyDrawer.addEventListener("click", event => {
   if (event.target === weeklyDrawer) {
     closeWeeklyDrawer();

@@ -20,9 +20,10 @@ from fastapi import FastAPI
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 
-from health_api.routes import router as health_router
+from health_api.ingest_routes import router as health_router
 from routes.daily import router as daily_router
 from routes.weekly import router as weekly_router
+from routes.weekly_audit import router as weekly_audit_router
 from routes.zones import router as zones_router
 from routes.weekly_commentary import router as weekly_commentary_router
 from routes.status import router as status_router
@@ -34,6 +35,7 @@ app = FastAPI(title="Training Dashboard")
 app.include_router(health_router)
 app.include_router(daily_router)
 app.include_router(weekly_router)
+app.include_router(weekly_audit_router)
 app.include_router(zones_router)
 app.include_router(weekly_commentary_router)
 app.include_router(status_router)

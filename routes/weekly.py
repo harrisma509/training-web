@@ -48,6 +48,12 @@ def api_weekly(limit: int = 60):
             wc.is_goal_week AS is_goal_week,
             wc.hide_from_dashboard AS hide_from_dashboard,
             wc.display_priority AS display_priority,
+            wa.overall_grade AS audit_grade,
+            wa.green_count AS audit_green_count,
+            wa.yellow_count AS audit_yellow_count,
+            wa.red_count AS audit_red_count,
+            wa.audit_summary AS audit_summary,
+            wa.next_week_action AS audit_next_week_action,
             weekly_training.total_load,
             weekly_training.main_ride_load,
             weekly_training.other_load,
@@ -67,6 +73,8 @@ def api_weekly(limit: int = 60):
         from weeks
         left join weekly_training
             on weekly_training.week_start = weeks.week_start
+        left join weekly_audit wa
+            on wa.week_start = weeks.week_start
         left join weekly_commentary wc
             on wc.week_start = weekly_training.week_start
         left join health_vo2_max
