@@ -68,6 +68,71 @@ function renderHeaderSummary() {
   return;
 }
 
+function formatCommaInt(value) {
+  if (value === null || value === undefined || value === "") {
+    return "";
+  }
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) {
+    return "";
+  }
+  return new Intl.NumberFormat("en-US").format(Math.round(parsed));
+}
+
+function formatSleepHours(totalSleepHours) {
+  if (totalSleepHours === null || totalSleepHours === undefined || totalSleepHours === "") {
+    return "";
+  }
+  const parsed = Number(totalSleepHours);
+  if (!Number.isFinite(parsed) || parsed < 0) {
+    return "";
+  }
+  const totalMinutes = Math.round(parsed * 60);
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+  return `${hours}:${String(minutes).padStart(2, "0")}`;
+}
+
+function formatSleepCell(score, totalSleepHours) {
+  const scoreText = score === null || score === undefined || score === "" ? "" : String(score);
+  const hoursText = formatSleepHours(totalSleepHours);
+
+  if (scoreText && hoursText) {
+    return `(${scoreText}) ${hoursText}`;
+  }
+  if (scoreText) {
+    return scoreText;
+  }
+  return hoursText;
+}
+
+function formatHrvMs(value) {
+  if (value === null || value === undefined || value === "") {
+    return "";
+  }
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) {
+    return "";
+  }
+  return `${Math.round(parsed)} ms`;
+}
+
+function renderMainRideCell(row) {
+  const name = safe(row.main_ride_name);
+  if (!name) {
+    return "";
+  }
+
+  const rideId = row.main_ride_id == null ? "" : String(row.main_ride_id).trim();
+  const escapedName = escapeHtml(name);
+
+  if (/^[0-9]+$/.test(rideId)) {
+    return `<a class="activity-link" href="https://www.strava.com/activities/${rideId}" target="_blank" rel="noopener noreferrer">${escapedName}</a>`;
+  }
+
+  return escapedName;
+}
+
 
 function renderDailyTable() {
   const rows = state.dailyRows.map(row => {
@@ -76,15 +141,15 @@ function renderDailyTable() {
     <tr>
       <td>${safe(row.date)}</td>
       <td>${row.weight_lb == null ? "" : Number(row.weight_lb).toFixed(1)}</td>
-      <td>${safe(row.sleep_score)}</td>
-      <td>${safe(row.steps)}</td>
+      <td>${formatSleepCell(row.sleep_score, row.total_sleep_hr)}</td>
+      <td>${formatCommaInt(row.steps)}</td>
       <td>${safe(row.rhr_bpm)}</td>
-      <td>${row.hrv_sdnn_ms == null ? "" : Number(row.hrv_sdnn_ms).toFixed(0)}</td>
+      <td>${formatHrvMs(row.hrv_sdnn_ms)}</td>
       <td>${row.total_load == null ? "" : Number(row.total_load).toFixed(0)}</td>
       <td>${safe(row.main_ride_time)}</td>
       <td>${row.main_ride_miles == null ? "" : Number(row.main_ride_miles).toFixed(1)}</td>
-      <td>${row.main_ride_elevation_ft == null ? "" : Number(row.main_ride_elevation_ft).toFixed(0)}</td>
-      <td>${safe(row.main_ride_name)}</td>
+      <td>${formatCommaInt(row.main_ride_elevation_ft)}</td>
+      <td>${renderMainRideCell(row)}</td>
       <td>${safe(row.main_ride_bike_name)}</td>
       <td>${safe(mainRideLoad)}</td>
       <td>${formatHrZones(row.main_ride_hr_zones)}</td>
@@ -104,10 +169,10 @@ function renderDailyTable() {
         <th>Steps</th>
         <th>RHR</th>
         <th>HRV</th>
-        <th>Total</th>
+        <th>Load</th>
         <th>Time</th>
         <th>Miles</th>
-        <th>Ft</th>
+        <th>Feet</th>
         <th>Main Ride</th>
         <th>Bike</th>
         <th>Main Ride Load</th>

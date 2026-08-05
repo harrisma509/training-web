@@ -184,6 +184,60 @@ function auditGradeTitle(grade) {
   return "";
 }
 
+function formatWeeklyFixed(value, digits = 1) {
+  if (value === null || value === undefined || value === "") {
+    return "";
+  }
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) {
+    return "";
+  }
+  return parsed.toFixed(digits);
+}
+
+function formatWeeklyInt(value) {
+  if (value === null || value === undefined || value === "") {
+    return "";
+  }
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) {
+    return "";
+  }
+  return new Intl.NumberFormat("en-US").format(Math.round(parsed));
+}
+
+function getWeeklyHoursStatus(hoursValue) {
+  const parsed = Number(hoursValue);
+  if (!Number.isFinite(parsed)) {
+    return null;
+  }
+
+  const greenMin = window.APP_CONSTANTS.WEEKLY_HOURS_GREEN_MIN;
+  const yellowMin = window.APP_CONSTANTS.WEEKLY_HOURS_YELLOW_MIN;
+
+  if (parsed >= greenMin) {
+    return { icon: "🟩", cssClass: "weekly-hours-green" };
+  }
+  if (parsed >= yellowMin) {
+    return { icon: "🟨", cssClass: "weekly-hours-yellow" };
+  }
+  return { icon: "🟥", cssClass: "weekly-hours-red" };
+}
+
+function renderWeeklyHoursCell(hoursValue) {
+  const valueText = formatWeeklyFixed(hoursValue, 1);
+  if (!valueText) {
+    return "";
+  }
+
+  const status = getWeeklyHoursStatus(hoursValue);
+  if (!status) {
+    return valueText;
+  }
+
+  return `<span class="weekly-hours-value ${status.cssClass}">${status.icon} ${valueText}</span>`;
+}
+
 function openWeeklyAuditDrawer(weekStart) {
   const row = window.AppState.weeklyRows.find(r => r.week_start === weekStart);
   if (!row) {
@@ -510,6 +564,10 @@ function renderWeeklyTable() {
       </td>
       <td class="drawer-icon-cell"><button class="drawer-open-button" data-week-start="${safe(row.week_start)}" type="button" aria-label="Edit weekly commentary"></button></td>
       <td>${safe(row.total_load)}</td>
+      <td>${renderWeeklyHoursCell(row.weekly_total_hours)}</td>
+      <td>${formatWeeklyFixed(row.weekly_total_miles, 1)}</td>
+      <td>${formatWeeklyInt(row.weekly_total_elevation_ft)}</td>
+      <td>${formatWeeklyFixed(row.weekly_avg_weight, 1)}</td>
       <td>${safe(row.chronic_weekly_cw)}</td>
       <td>${safe(row.ac_ratio)}</td>
       <td>${safe(row.ramp_pct_display)}</td>
@@ -536,6 +594,10 @@ function renderWeeklyTable() {
         <th>Audit</th>
         <th></th>
         <th>Total</th>
+        <th>Hours</th>
+        <th>Miles</th>
+        <th>Ft</th>
+        <th>Avg Wt</th>
         <th>Chron</th>
         <th>A/C</th>
         <th>Ramp</th>

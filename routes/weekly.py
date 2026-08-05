@@ -26,6 +26,28 @@ def api_weekly(limit: int = 60):
             select week_start from health_vo2_max
             union
             select date - (extract(isodow from date)::integer - 1) from health_falls
+        ),
+        daily_activity_week AS (
+            SELECT
+                date - (extract(isodow from date)::integer - 1) AS week_start,
+                ROUND(
+                    SUM(
+                        COALESCE(EXTRACT(EPOCH FROM NULLIF(main_ride_time, '')::interval), 0)
+                        + COALESCE(EXTRACT(EPOCH FROM NULLIF(other_time, '')::interval), 0)
+                    ) / 3600.0,
+                    1
+                ) AS weekly_total_hours,
+                ROUND(SUM(COALESCE(main_ride_miles, 0) + COALESCE(other_miles, 0))::numeric, 1) AS weekly_total_miles,
+                SUM(COALESCE(main_ride_elevation_ft, 0) + COALESCE(other_elevation_ft, 0)) AS weekly_total_elevation_ft
+            FROM daily_training
+            GROUP BY 1
+        ),
+        weekly_weight AS (
+            SELECT
+                date - (extract(isodow from date)::integer - 1) AS week_start,
+                AVG(weight_lb) AS weekly_avg_weight
+            FROM health_weight
+            GROUP BY 1
         )
         select
             weeks.week_start,
@@ -55,6 +77,10 @@ def api_weekly(limit: int = 60):
             wa.audit_summary AS audit_summary,
             wa.next_week_action AS audit_next_week_action,
             weekly_training.total_load,
+            daily_activity_week.weekly_total_hours,
+            daily_activity_week.weekly_total_miles,
+            daily_activity_week.weekly_total_elevation_ft,
+            weekly_weight.weekly_avg_weight,
             weekly_training.main_ride_load,
             weekly_training.other_load,
             weekly_training.activity_days,
@@ -75,6 +101,10 @@ def api_weekly(limit: int = 60):
             on weekly_training.week_start = weeks.week_start
         left join weekly_audit wa
             on wa.week_start = weeks.week_start
+        left join daily_activity_week
+            on daily_activity_week.week_start = weeks.week_start
+        left join weekly_weight
+            on weekly_weight.week_start = weeks.week_start
         left join weekly_commentary wc
             on wc.week_start = weekly_training.week_start
         left join health_vo2_max

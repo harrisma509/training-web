@@ -6,6 +6,8 @@ window.AppState = window.AppState || {
 };
 
 window.APP_CONSTANTS = Object.freeze({
+  WEEKLY_HOURS_GREEN_MIN: 6,
+  WEEKLY_HOURS_YELLOW_MIN: 4,
   ZONE_THRESHOLDS: Object.freeze({
     z1_z2_pct: Object.freeze({
       targetMin: 60,

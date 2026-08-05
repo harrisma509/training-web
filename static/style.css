@@ -153,6 +153,16 @@ button.active {
   font-weight: 700;
 }
 
+.activity-link {
+  color: var(--blue);
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.activity-link:hover {
+  text-decoration: underline;
+}
+
 .sync-failed .sync-dot {
   background: var(--red);
   box-shadow: 0 0 0 3px rgba(248, 113, 113, 0.18);
@@ -351,6 +361,25 @@ tr:hover td {
   border-color: rgba(248, 113, 113, 0.35);
 }
 
+.weekly-hours-value {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-weight: 600;
+}
+
+.weekly-hours-green {
+  color: var(--green);
+}
+
+.weekly-hours-yellow {
+  color: var(--yellow);
+}
+
+.weekly-hours-red {
+  color: var(--red);
+}
+
 .audit-score-summary {
   padding: 10px 14px;
   border-radius: 10px;
@@ -385,7 +414,7 @@ tr:hover td {
 
 .audit-drawer-panel {
   width: 100%;
-  max-width: 520px;
+  max-width: 820px;
   background: var(--panel);
   box-shadow: -18px 0 52px rgba(0, 0, 0, 0.45);
   display: grid;
@@ -420,12 +449,13 @@ tr:hover td {
 }
 
 .audit-detail-table-wrap {
-  overflow-x: auto;
+  overflow-x: hidden;
 }
 
 .audit-detail-table {
   width: 100%;
   border-collapse: collapse;
+  table-layout: auto;
 }
 
 .audit-detail-table th,
@@ -434,6 +464,19 @@ tr:hover td {
   border-bottom: 1px solid var(--line);
   text-align: left;
   font-size: 13px;
+  white-space: normal;
+  vertical-align: top;
+}
+
+.audit-detail-table th:nth-child(1),
+.audit-detail-table td:nth-child(1) {
+  width: 34%;
+}
+
+.audit-detail-table th:nth-child(2),
+.audit-detail-table td:nth-child(2) {
+  width: 22%;
+  white-space: nowrap;
 }
 
 .audit-error {
@@ -449,8 +492,6 @@ tr:hover td {
 .audit-no-items {
   color: var(--muted);
   font-size: 13px;
-}
-  content: "✎";
 }
 
 .weekly-drawer {
