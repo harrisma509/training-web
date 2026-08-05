@@ -1,8 +1,34 @@
+# Secrets and local config
+.env
+.env.*
+!.env.example
+
+# Python cache/build artifacts
 __pycache__/
 *.pyc
 *.pyo
-.DS_Store
-.env
+*.pyd
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Virtual environments
 .venv/
 venv/
-.pytest_cache/
+env/
+
+# Logs and runtime output
+*.log
+logs/
+tmp/
+
+# macOS
+.DS_Store
+
+# Local editor/project noise
+.vscode/
+.idea/
+
+# Coverage/debug artifacts
+.coverage
+htmlcov/
