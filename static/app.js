@@ -4,15 +4,18 @@ const dailyTab = document.getElementById("dailyTab");
 const weeklyTab = document.getElementById("weeklyTab");
 const zonesTab = document.getElementById("zonesTab");
 const gearTab = document.getElementById("gearTab");
+const componentsTab = document.getElementById("componentsTab");
 const dailyPane = document.getElementById("dailyPane");
 const weeklyPane = document.getElementById("weeklyPane");
 const zonesPane = document.getElementById("zonesPane");
 const gearPane = document.getElementById("gearPane");
+const componentsPane = document.getElementById("componentsPane");
 
 const dailyControls = document.getElementById("dailyControls");
 const weeklyControls = document.getElementById("weeklyControls");
 const zonesControls = document.getElementById("zonesControls");
 const gearControls = document.getElementById("gearControls");
+const componentsControls = document.getElementById("componentsControls");
 
 const dailyLimit = document.getElementById("dailyLimit");
 const weeklyLimit = document.getElementById("weeklyLimit");
@@ -23,6 +26,8 @@ const dailyRefresh = document.getElementById("dailyRefresh");
 const weeklyRefresh = document.getElementById("weeklyRefresh");
 const zonesRefresh = document.getElementById("zonesRefresh");
 const gearRefresh = document.getElementById("gearRefresh");
+const componentsRefresh = document.getElementById("componentsRefresh");
+const componentsBikeSelect = document.getElementById("componentsBikeSelect");
 const settingsBtn = document.getElementById("settingsBtn");
 const settingsDrawer = document.getElementById("settingsDrawer");
 const settingsCloseBtn = document.getElementById("settingsCloseBtn");
@@ -69,9 +74,10 @@ function sanitizePreferences(rawPreferences = {}) {
   const next = { ...window.DEFAULT_PREFERENCES, ...(rawPreferences || {}) };
 
   next.appearance = ["system", "light", "dark"].includes(next.appearance) ? next.appearance : "system";
-  next.activeTab = ["daily", "weekly", "zones", "gear"].includes(next.activeTab) ? next.activeTab : "daily";
+  next.activeTab = ["daily", "weekly", "zones", "gear", "components"].includes(next.activeTab) ? next.activeTab : "daily";
   next.rememberLastTab = next.rememberLastTab !== false;
-  next.startupTab = ["daily", "weekly", "zones", "gear"].includes(next.startupTab) ? next.startupTab : "daily";
+  next.startupTab = ["daily", "weekly", "zones", "gear", "components"].includes(next.startupTab) ? next.startupTab : "daily";
+  next.componentsSelectedGearId = next.componentsSelectedGearId == null ? "" : String(next.componentsSelectedGearId).trim();
   next.hideShoes = Boolean(next.hideShoes);
   next.hideRetired = Boolean(next.hideRetired);
   next.dailyLimit = normalizeStoredPreference(next.dailyLimit, 60, VALID_ROW_LIMITS.daily);
@@ -101,6 +107,7 @@ function persistPreferences() {
     activeTab: state.activeTab,
     rememberLastTab: state.rememberLastTab,
     startupTab: state.startupTab,
+    componentsSelectedGearId: state.componentsSelectedGearId,
     hideShoes: state.hideShoes,
     hideRetired: state.hideRetired,
     dailyLimit: state.dailyLimit,
@@ -247,10 +254,18 @@ dailyTab.addEventListener("click", () => showTab("daily"));
 weeklyTab.addEventListener("click", () => showTab("weekly"));
 zonesTab.addEventListener("click", () => showTab("zones"));
 gearTab.addEventListener("click", () => showTab("gear"));
+componentsTab.addEventListener("click", () => showTab("components"));
 dailyRefresh.addEventListener("click", loadDaily);
 weeklyRefresh.addEventListener("click", loadWeekly);
 zonesRefresh.addEventListener("click", loadZones);
 gearRefresh.addEventListener("click", loadGear);
+componentsRefresh?.addEventListener("click", () => loadComponents());
+componentsBikeSelect?.addEventListener("change", event => {
+  const selectedGearId = String(event.target.value || "").trim();
+  window.AppState.componentsSelectedGearId = selectedGearId;
+  persistPreferences();
+  loadComponents();
+});
 hideShoesCheckbox?.addEventListener("change", event => {
   const checked = event.target.checked;
   window.AppState.hideShoes = checked;
@@ -304,7 +319,7 @@ rememberLastTab?.addEventListener("change", event => {
 });
 startupTab?.addEventListener("change", event => {
   const selectedTab = event.target.value;
-  if (!["daily", "weekly", "zones", "gear"].includes(selectedTab)) {
+  if (!["daily", "weekly", "zones", "gear", "components"].includes(selectedTab)) {
     return;
   }
 
@@ -430,21 +445,25 @@ function showTab(tab) {
   const isWeekly = tab === "weekly";
   const isZones = tab === "zones";
   const isGear = tab === "gear";
+  const isComponents = tab === "components";
 
   dailyPane.classList.toggle("hidden", !isDaily);
   weeklyPane.classList.toggle("hidden", !isWeekly);
   zonesPane.classList.toggle("hidden", !isZones);
   gearPane.classList.toggle("hidden", !isGear);
+  componentsPane.classList.toggle("hidden", !isComponents);
 
   dailyControls.classList.toggle("hidden", !isDaily);
   weeklyControls.classList.toggle("hidden", !isWeekly);
   zonesControls.classList.toggle("hidden", !isZones);
   gearControls.classList.toggle("hidden", !isGear);
+  componentsControls.classList.toggle("hidden", !isComponents);
 
   dailyTab.classList.toggle("active", isDaily);
   weeklyTab.classList.toggle("active", isWeekly);
   zonesTab.classList.toggle("active", isZones);
   gearTab.classList.toggle("active", isGear);
+  componentsTab.classList.toggle("active", isComponents);
 }
 
 function renderHeaderSummary() {
@@ -785,7 +804,8 @@ async function loadData() {
     loadDaily(),
     loadWeekly(),
     loadZones(),
-    loadGear()
+    loadGear(),
+    loadComponents()
   ]);
 
   renderHeaderSummary();

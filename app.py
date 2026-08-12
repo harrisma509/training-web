@@ -29,6 +29,7 @@ from routes.gear import router as gear_router
 from routes.weekly_commentary import router as weekly_commentary_router
 from routes.status import router as status_router
 from routes.sync import router as sync_router
+from routes.components import router as components_router
 
 BASE_DIR = Path(__file__).resolve().parent
 
@@ -42,6 +43,7 @@ app.include_router(gear_router)
 app.include_router(weekly_commentary_router)
 app.include_router(status_router)
 app.include_router(sync_router)
+app.include_router(components_router)
 
 app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")
 

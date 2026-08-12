@@ -21,6 +21,7 @@
       <button id="weeklyTab" type="button">Weekly</button>
       <button id="zonesTab" type="button">Zones</button>
       <button id="gearTab" type="button">Gear</button>
+      <button id="componentsTab" type="button">Components</button>
     </nav>
 
     <div class="header-actions">
@@ -57,6 +58,12 @@
 
       <div id="gearControls" class="control-group hidden">
         <button id="gearRefresh" type="button">Refresh</button>
+      </div>
+
+      <div id="componentsControls" class="control-group hidden">
+        <label for="componentsBikeSelect">Bike</label>
+        <select id="componentsBikeSelect"></select>
+        <button id="componentsRefresh" type="button">Refresh</button>
       </div>
 
       <div id="syncStatus" class="sync-pill sync-muted">
@@ -102,6 +109,7 @@
             <option value="weekly">Weekly</option>
             <option value="zones">Zones</option>
             <option value="gear">Gear</option>
+            <option value="components">Components</option>
           </select>
         </div>
 
@@ -196,6 +204,19 @@
       </div>
     </section>
 
+    <section id="componentsPane" class="hidden">
+      <div class="table-wrap">
+        <div class="gear-header-row">
+          <div class="gear-header-main">
+            <div class="gear-title">Components</div>
+            <div class="gear-subtitle">Read-only component usage and latest service recency by bike.</div>
+          </div>
+          <div id="componentsSummary" class="components-summary"></div>
+        </div>
+        <table id="componentsTable"></table>
+      </div>
+    </section>
+
     <div id="weeklyDrawer" class="weekly-drawer hidden" aria-hidden="true">
       <div class="weekly-drawer-header">
         <div class="drawer-title-row">
@@ -221,6 +242,7 @@
 <script src="/static/weekly.js"></script>
 <script src="/static/zones.js"></script>
 <script src="/static/gear.js"></script>
+<script src="/static/components.js"></script>
 <script src="/static/sync.js"></script>
 <script src="/static/app.js"></script>
 </body>

@@ -4,6 +4,7 @@ window.DEFAULT_PREFERENCES = Object.freeze({
   activeTab: "daily",
   rememberLastTab: true,
   startupTab: "daily",
+  componentsSelectedGearId: "",
   hideShoes: true,
   hideRetired: true,
   dailyLimit: 60,
@@ -16,6 +17,12 @@ window.AppState = window.AppState || {
   weeklyRows: [],
   zonesRows: [],
   gearRows: [],
+  componentsData: {
+    available_bikes: [],
+    selected_gear_id: null,
+    selected_bike: null,
+    components: [],
+  },
   ...window.DEFAULT_PREFERENCES,
 };
 
