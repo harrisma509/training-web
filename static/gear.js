@@ -16,23 +16,73 @@ function formatGearNumber(value, digits = 0) {
   if (!Number.isFinite(parsed)) {
     return "0";
   }
-  return digits > 0 ? parsed.toFixed(digits) : String(Math.round(parsed));
+
+  if (digits > 0) {
+    const fixed = parsed.toFixed(digits);
+    const [integer, fraction] = fixed.split(".");
+    const formattedInt = new Intl.NumberFormat("en-US").format(Number(integer));
+    return fraction ? `${formattedInt}.${fraction}` : formattedInt;
+  }
+
+  return new Intl.NumberFormat("en-US").format(Math.round(parsed));
+}
+
+function normalizeGearDisplayPart(value) {
+  if (value === null || value === undefined) {
+    return "";
+  }
+
+  const text = String(value).trim();
+  if (!text) {
+    return "";
+  }
+
+  const normalized = text.toLowerCase();
+  if (normalized === "null" || normalized === "undefined" || normalized === "none") {
+    return "";
+  }
+
+  return text;
+}
+
+function formatGearDisplayName(row) {
+  const parts = [
+    normalizeGearDisplayPart(row.model_year),
+    normalizeGearDisplayPart(row.brand),
+    normalizeGearDisplayPart(row.gear_name),
+  ].filter(Boolean);
+
+  return parts.join(" ") || normalizeGearDisplayPart(row.gear_name) || normalizeGearDisplayPart(row.gear_id) || "";
+}
+
+function shouldShowGearRow(row) {
+  const hideShoes = window.AppState.hideShoes;
+  const hideRetired = window.AppState.hideRetired;
+
+  if (hideShoes && String(row.gear_type).toLowerCase() === "shoe") {
+    return false;
+  }
+  if (hideRetired && row.retired) {
+    return false;
+  }
+  return true;
 }
 
 function renderGearTable() {
-  const rows = window.AppState.gearRows.map(row => `
-    <tr class="${row.retired ? "gear-row-retired" : ""}">
-      <td>${escapeHtml(safe(row.gear_name) || safe(row.gear_id))}</td>
-      <td>${safe(row.gear_type)}</td>
-      <td>${gearStatusBadge(row)}</td>
-      <td>${formatGearNumber(row.ride_count)}</td>
-      <td>${formatGearNumber(row.activity_count)}</td>
-      <td>${formatGearNumber(row.miles, 1)}</td>
-      <td>${formatGearNumber(row.hours, 1)}</td>
-      <td>${formatGearNumber(row.elevation_ft)}</td>
-      <td>${safe(row.last_activity_date)}</td>
-    </tr>
-  `).join("");
+  const rows = window.AppState.gearRows
+    .filter(row => shouldShowGearRow(row))
+    .map(row => `
+      <tr class="${row.retired ? "gear-row-retired" : ""}">
+        <td>${escapeHtml(formatGearDisplayName(row))}</td>
+        <td>${safe(row.gear_type)}</td>
+        <td>${gearStatusBadge(row)}</td>
+        <td>${formatGearNumber(row.ride_count)}</td>
+        <td>${formatGearNumber(row.miles, 1)}</td>
+        <td>${formatGearNumber(row.hours, 1)}</td>
+        <td>${formatGearNumber(row.elevation_ft)}</td>
+        <td>${safe(row.last_activity_date)}</td>
+      </tr>
+    `).join("");
 
   document.getElementById("gearTable").innerHTML = `
     <thead>
@@ -41,7 +91,6 @@ function renderGearTable() {
         <th>Type</th>
         <th>Status</th>
         <th>Rides</th>
-        <th>Activities</th>
         <th>Miles</th>
         <th>Hours</th>
         <th>Elevation</th>

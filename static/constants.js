@@ -4,6 +4,8 @@ window.AppState = window.AppState || {
   zonesRows: [],
   gearRows: [],
   activeTab: "daily",
+  hideShoes: true,
+  hideRetired: true,
 };
 
 window.APP_CONSTANTS = Object.freeze({

@@ -18,6 +18,8 @@ const dailyLimit = document.getElementById("dailyLimit");
 const weeklyLimit = document.getElementById("weeklyLimit");
 const zonesLimit = document.getElementById("zonesLimit");
 const gearLimit = document.getElementById("gearLimit");
+const hideShoesCheckbox = document.getElementById("hideShoesCheckbox");
+const hideRetiredCheckbox = document.getElementById("hideRetiredCheckbox");
 const dailyRefresh = document.getElementById("dailyRefresh");
 const weeklyRefresh = document.getElementById("weeklyRefresh");
 const zonesRefresh = document.getElementById("zonesRefresh");
@@ -34,7 +36,22 @@ dailyRefresh.addEventListener("click", loadDaily);
 weeklyRefresh.addEventListener("click", loadWeekly);
 zonesRefresh.addEventListener("click", loadZones);
 gearRefresh.addEventListener("click", loadGear);
+hideShoesCheckbox?.addEventListener("change", event => {
+  window.AppState.hideShoes = event.target.checked;
+  renderGearTable();
+});
+hideRetiredCheckbox?.addEventListener("change", event => {
+  window.AppState.hideRetired = event.target.checked;
+  renderGearTable();
+});
 syncNowBtn.addEventListener("click", handleSyncNow);
+
+if (hideShoesCheckbox) {
+  hideShoesCheckbox.checked = window.AppState.hideShoes;
+}
+if (hideRetiredCheckbox) {
+  hideRetiredCheckbox.checked = window.AppState.hideRetired;
+}
 
 function safe(value) {
   if (value === null || value === undefined || value === "") {

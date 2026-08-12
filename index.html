@@ -97,8 +97,20 @@
     <section id="gearPane" class="hidden">
       <div class="table-wrap">
         <div class="gear-header-row">
-          <div class="gear-title">Gear</div>
-          <div class="gear-subtitle">Read-only usage summary from Strava activities.</div>
+          <div class="gear-header-main">
+            <div class="gear-title">Gear</div>
+            <div class="gear-subtitle">Read-only usage summary from Strava activities.</div>
+          </div>
+          <div class="gear-header-actions">
+            <label class="gear-hide-shoes-label" for="hideShoesCheckbox">
+              <input id="hideShoesCheckbox" type="checkbox" checked>
+              Hide shoes
+            </label>
+            <label class="gear-hide-shoes-label" for="hideRetiredCheckbox">
+              <input id="hideRetiredCheckbox" type="checkbox" checked>
+              Hide retired
+            </label>
+          </div>
         </div>
         <table id="gearTable"></table>
       </div>

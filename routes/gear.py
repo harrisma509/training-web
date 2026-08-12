@@ -23,8 +23,8 @@ def api_gear_dashboard(limit: int = 60):
             g.gear_name,
             g.gear_type,
             null::text as category,
-            null::text as brand,
-            null::int as model_year,
+            g.brand,
+            g.model_year,
             coalesce(g.retired, false) as retired,
             not coalesce(g.retired, false) as active,
             count(sa.activity_id) as activity_count,
@@ -56,10 +56,13 @@ def api_gear_dashboard(limit: int = 60):
             g.gear_id,
             g.gear_name,
             g.gear_type,
+            g.brand,
+            g.model_year,
             coalesce(g.retired, false)
         order by
             not coalesce(g.retired, false) desc,
             coalesce(g.retired, false) asc,
+            coalesce(g.model_year, 0) desc,
             max(sa.date_local) desc nulls last,
             g.gear_name
         limit %s
