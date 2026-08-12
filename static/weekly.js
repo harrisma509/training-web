@@ -598,8 +598,7 @@ async function saveWeeklyDrawer() {
 }
 
 async function loadWeekly() {
-  const weeklyLimit = document.getElementById("weeklyLimit");
-  const limit = weeklyLimit.value;
+  const limit = Number(window.AppState.weeklyLimit);
   window.AppState.weeklyRows = await fetch(`/api/weekly?limit=${limit}`).then(response => response.json());
   renderWeeklyTable();
 

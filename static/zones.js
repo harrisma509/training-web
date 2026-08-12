@@ -49,8 +49,7 @@ function zoneHeaderLabel(metric, title) {
 }
 
 async function loadZones() {
-  const zonesLimit = document.getElementById("zonesLimit");
-  const limit = zonesLimit.value;
+  const limit = Number(window.AppState.zonesLimit);
   window.AppState.zonesRows = await fetch(`/api/zones?limit=${limit}`).then(response => response.json());
   renderZonesTable();
 

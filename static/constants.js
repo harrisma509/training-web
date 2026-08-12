@@ -1,11 +1,22 @@
+window.APP_PREFERENCES_KEY = "training.preferences.v1";
+window.DEFAULT_PREFERENCES = Object.freeze({
+  appearance: "system",
+  activeTab: "daily",
+  rememberLastTab: true,
+  startupTab: "daily",
+  hideShoes: true,
+  hideRetired: true,
+  dailyLimit: 60,
+  weeklyLimit: 60,
+  zonesLimit: 60,
+});
+
 window.AppState = window.AppState || {
   dailyRows: [],
   weeklyRows: [],
   zonesRows: [],
   gearRows: [],
-  activeTab: "daily",
-  hideShoes: true,
-  hideRetired: true,
+  ...window.DEFAULT_PREFERENCES,
 };
 
 window.APP_CONSTANTS = Object.freeze({

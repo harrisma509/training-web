@@ -104,10 +104,10 @@ function renderGearTable() {
 }
 
 async function loadGear() {
-  const gearLimit = document.getElementById("gearLimit");
-  const limit = gearLimit.value;
+  const fixedLimit = 10000;
+
   try {
-    const response = await fetch(`/api/gear/dashboard?limit=${limit}`);
+    const response = await fetch(`/api/gear/dashboard?limit=${fixedLimit}`);
     if (!response.ok) {
       throw new Error(`Gear endpoint failed: ${response.status}`);
     }

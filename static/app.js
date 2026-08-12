@@ -17,16 +17,231 @@ const gearControls = document.getElementById("gearControls");
 const dailyLimit = document.getElementById("dailyLimit");
 const weeklyLimit = document.getElementById("weeklyLimit");
 const zonesLimit = document.getElementById("zonesLimit");
-const gearLimit = document.getElementById("gearLimit");
 const hideShoesCheckbox = document.getElementById("hideShoesCheckbox");
 const hideRetiredCheckbox = document.getElementById("hideRetiredCheckbox");
 const dailyRefresh = document.getElementById("dailyRefresh");
 const weeklyRefresh = document.getElementById("weeklyRefresh");
 const zonesRefresh = document.getElementById("zonesRefresh");
 const gearRefresh = document.getElementById("gearRefresh");
-
+const settingsBtn = document.getElementById("settingsBtn");
+const settingsDrawer = document.getElementById("settingsDrawer");
+const settingsCloseBtn = document.getElementById("settingsCloseBtn");
+const rememberLastTab = document.getElementById("rememberLastTab");
+const startupTab = document.getElementById("startupTab");
+const startupTabRow = document.getElementById("startupTabRow");
+const settingsDailyLimit = document.getElementById("settingsDailyLimit");
+const settingsWeeklyLimit = document.getElementById("settingsWeeklyLimit");
+const settingsZonesLimit = document.getElementById("settingsZonesLimit");
+const appearanceInputs = Array.from(document.querySelectorAll('input[name="appearance"]'));
+const settingsHideShoes = document.getElementById("settingsHideShoes");
+const settingsHideRetired = document.getElementById("settingsHideRetired");
+const settingsStatusSummary = document.getElementById("settingsStatusSummary");
+const refreshStatusBtn = document.getElementById("refreshStatusBtn");
+const copyDiagnosticsBtn = document.getElementById("copyDiagnosticsBtn");
 
 const syncNowBtn = document.getElementById("syncNowBtn");
+const systemThemeMedia = window.matchMedia ? window.matchMedia("(prefers-color-scheme: light)") : null;
+
+const VALID_ROW_LIMITS = {
+  daily: [60, 90, 365, 1000],
+  weekly: [26, 60, 260],
+  zones: [26, 60, 260],
+};
+
+function normalizeStoredPreference(value, fallback, allowedValues) {
+  if (value === null || value === undefined || value === "") {
+    return fallback;
+  }
+
+  const asString = String(value).trim();
+  if (allowedValues && allowedValues.length > 0) {
+    const parsed = Number(asString);
+    if (Number.isInteger(parsed) && allowedValues.includes(parsed)) {
+      return parsed;
+    }
+    return fallback;
+  }
+
+  return fallback;
+}
+
+function sanitizePreferences(rawPreferences = {}) {
+  const next = { ...window.DEFAULT_PREFERENCES, ...(rawPreferences || {}) };
+
+  next.appearance = ["system", "light", "dark"].includes(next.appearance) ? next.appearance : "system";
+  next.activeTab = ["daily", "weekly", "zones", "gear"].includes(next.activeTab) ? next.activeTab : "daily";
+  next.rememberLastTab = next.rememberLastTab !== false;
+  next.startupTab = ["daily", "weekly", "zones", "gear"].includes(next.startupTab) ? next.startupTab : "daily";
+  next.hideShoes = Boolean(next.hideShoes);
+  next.hideRetired = Boolean(next.hideRetired);
+  next.dailyLimit = normalizeStoredPreference(next.dailyLimit, 60, VALID_ROW_LIMITS.daily);
+  next.weeklyLimit = normalizeStoredPreference(next.weeklyLimit, 60, VALID_ROW_LIMITS.weekly);
+  next.zonesLimit = normalizeStoredPreference(next.zonesLimit, 60, VALID_ROW_LIMITS.zones);
+  delete next.gearLimit;
+
+  return next;
+}
+
+function loadSavedPreferences() {
+  try {
+    const storageValue = window.localStorage.getItem(window.APP_PREFERENCES_KEY);
+    if (!storageValue) {
+      return sanitizePreferences();
+    }
+    const parsed = JSON.parse(storageValue);
+    return sanitizePreferences(parsed);
+  } catch (error) {
+    return sanitizePreferences();
+  }
+}
+
+function persistPreferences() {
+  const snapshot = {
+    appearance: state.appearance,
+    activeTab: state.activeTab,
+    rememberLastTab: state.rememberLastTab,
+    startupTab: state.startupTab,
+    hideShoes: state.hideShoes,
+    hideRetired: state.hideRetired,
+    dailyLimit: state.dailyLimit,
+    weeklyLimit: state.weeklyLimit,
+    zonesLimit: state.zonesLimit,
+  };
+
+  try {
+    window.localStorage.setItem(window.APP_PREFERENCES_KEY, JSON.stringify(snapshot));
+  } catch (error) {
+    console.warn("Unable to persist preferences.", error);
+  }
+}
+
+function syncFormCheckboxes() {
+  if (hideShoesCheckbox) {
+    hideShoesCheckbox.checked = Boolean(window.AppState.hideShoes);
+  }
+  if (hideRetiredCheckbox) {
+    hideRetiredCheckbox.checked = Boolean(window.AppState.hideRetired);
+  }
+  if (settingsHideShoes) {
+    settingsHideShoes.checked = Boolean(window.AppState.hideShoes);
+  }
+  if (settingsHideRetired) {
+    settingsHideRetired.checked = Boolean(window.AppState.hideRetired);
+  }
+  if (rememberLastTab) {
+    rememberLastTab.checked = window.AppState.rememberLastTab !== false;
+  }
+}
+
+function syncLimitSelects() {
+  const selects = {
+    dailyLimit: window.AppState.dailyLimit,
+    weeklyLimit: window.AppState.weeklyLimit,
+    zonesLimit: window.AppState.zonesLimit,
+  };
+
+  Object.entries(selects).forEach(([elementId, value]) => {
+    const select = document.getElementById(elementId);
+    if (!select) {
+      return;
+    }
+    select.value = String(value);
+  });
+
+  if (settingsDailyLimit) {
+    settingsDailyLimit.value = String(window.AppState.dailyLimit);
+  }
+  if (settingsWeeklyLimit) {
+    settingsWeeklyLimit.value = String(window.AppState.weeklyLimit);
+  }
+  if (settingsZonesLimit) {
+    settingsZonesLimit.value = String(window.AppState.zonesLimit);
+  }
+  if (startupTab) {
+    startupTab.value = window.AppState.startupTab || "daily";
+  }
+  if (rememberLastTab) {
+    rememberLastTab.checked = window.AppState.rememberLastTab !== false;
+  }
+  if (startupTabRow) {
+    startupTabRow.classList.toggle("hidden", window.AppState.rememberLastTab !== false);
+  }
+}
+
+function updateStartupTabVisibility() {
+  if (!rememberLastTab || !startupTabRow) {
+    return;
+  }
+
+  const shouldHide = window.AppState.rememberLastTab !== false;
+  startupTabRow.classList.toggle("hidden", shouldHide);
+  rememberLastTab.checked = window.AppState.rememberLastTab !== false;
+}
+
+function applyAppearancePreference() {
+  if (!document.documentElement) {
+    return;
+  }
+
+  if (window.AppState.appearance === "light") {
+    document.documentElement.setAttribute("data-theme", "light");
+    return;
+  }
+
+  if (window.AppState.appearance === "dark") {
+    document.documentElement.setAttribute("data-theme", "dark");
+    return;
+  }
+
+  const prefersDark = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
+  document.documentElement.setAttribute("data-theme", prefersDark ? "dark" : "light");
+}
+
+function handleSystemAppearanceChange() {
+  if (window.AppState.appearance === "system") {
+    applyAppearancePreference();
+  }
+}
+
+function restorePreferences() {
+  const saved = loadSavedPreferences();
+  Object.assign(window.AppState, saved);
+  if (window.AppState.rememberLastTab === false) {
+    window.AppState.activeTab = window.AppState.startupTab || "daily";
+  }
+  applyAppearancePreference();
+  syncLimitSelects();
+  syncFormCheckboxes();
+  if (appearanceInputs.length > 0) {
+    appearanceInputs.forEach(input => {
+      input.checked = input.value === window.AppState.appearance;
+    });
+  }
+}
+
+function updatePreferenceState(newState) {
+  Object.assign(window.AppState, newState);
+  persistPreferences();
+  applyAppearancePreference();
+  syncLimitSelects();
+  syncFormCheckboxes();
+  renderGearTable();
+}
+
+function updateLimitPreference(key, value, reloadFn) {
+  const allowedValues = VALID_ROW_LIMITS[key.replace(/Limit$/, "")];
+  if (!allowedValues || !Number.isInteger(value) || !allowedValues.includes(value)) {
+    return;
+  }
+
+  window.AppState[key] = value;
+  syncLimitSelects();
+  persistPreferences();
+
+  if (typeof reloadFn === "function") {
+    reloadFn();
+  }
+}
 
 dailyTab.addEventListener("click", () => showTab("daily"));
 weeklyTab.addEventListener("click", () => showTab("weekly"));
@@ -37,20 +252,159 @@ weeklyRefresh.addEventListener("click", loadWeekly);
 zonesRefresh.addEventListener("click", loadZones);
 gearRefresh.addEventListener("click", loadGear);
 hideShoesCheckbox?.addEventListener("change", event => {
-  window.AppState.hideShoes = event.target.checked;
+  const checked = event.target.checked;
+  window.AppState.hideShoes = checked;
+  if (settingsHideShoes) {
+    settingsHideShoes.checked = checked;
+  }
+  persistPreferences();
   renderGearTable();
 });
 hideRetiredCheckbox?.addEventListener("change", event => {
-  window.AppState.hideRetired = event.target.checked;
+  const checked = event.target.checked;
+  window.AppState.hideRetired = checked;
+  if (settingsHideRetired) {
+    settingsHideRetired.checked = checked;
+  }
+  persistPreferences();
   renderGearTable();
 });
+settingsBtn?.addEventListener("click", () => {
+  settingsDrawer?.classList.remove("hidden");
+  settingsDrawer?.setAttribute("aria-hidden", "false");
+  loadSystemStatus();
+});
+settingsCloseBtn?.addEventListener("click", () => {
+  settingsDrawer?.classList.add("hidden");
+  settingsDrawer?.setAttribute("aria-hidden", "true");
+});
+settingsDrawer?.addEventListener("click", event => {
+  if (event.target === settingsDrawer) {
+    settingsCloseBtn?.click();
+  }
+});
+appearanceInputs.forEach(input => {
+  input.addEventListener("change", event => {
+    const selectedAppearance = event.target.value;
+    window.AppState.appearance = selectedAppearance;
+    persistPreferences();
+    applyAppearancePreference();
+  });
+});
+rememberLastTab?.addEventListener("change", event => {
+  const checked = Boolean(event.target.checked);
+  window.AppState.rememberLastTab = checked;
+  if (!checked) {
+    window.AppState.startupTab = window.AppState.startupTab || "daily";
+    window.AppState.activeTab = window.AppState.startupTab;
+    showTab(window.AppState.activeTab);
+  }
+  persistPreferences();
+  updateStartupTabVisibility();
+});
+startupTab?.addEventListener("change", event => {
+  const selectedTab = event.target.value;
+  if (!["daily", "weekly", "zones", "gear"].includes(selectedTab)) {
+    return;
+  }
+
+  window.AppState.startupTab = selectedTab;
+  if (window.AppState.rememberLastTab === false) {
+    window.AppState.activeTab = selectedTab;
+    showTab(selectedTab);
+  }
+  persistPreferences();
+});
+settingsHideShoes?.addEventListener("change", event => {
+  const checked = event.target.checked;
+  window.AppState.hideShoes = checked;
+  if (hideShoesCheckbox) {
+    hideShoesCheckbox.checked = checked;
+  }
+  persistPreferences();
+  renderGearTable();
+});
+settingsHideRetired?.addEventListener("change", event => {
+  const checked = event.target.checked;
+  window.AppState.hideRetired = checked;
+  if (hideRetiredCheckbox) {
+    hideRetiredCheckbox.checked = checked;
+  }
+  persistPreferences();
+  renderGearTable();
+});
+refreshStatusBtn?.addEventListener("click", loadSystemStatus);
+copyDiagnosticsBtn?.addEventListener("click", copySystemDiagnostics);
 syncNowBtn.addEventListener("click", handleSyncNow);
+
+if (dailyLimit) {
+  dailyLimit.addEventListener("change", event => {
+    const value = Number(event.target.value);
+    updateLimitPreference("dailyLimit", value, loadDaily);
+  });
+}
+if (weeklyLimit) {
+  weeklyLimit.addEventListener("change", event => {
+    const value = Number(event.target.value);
+    updateLimitPreference("weeklyLimit", value, loadWeekly);
+  });
+}
+if (zonesLimit) {
+  zonesLimit.addEventListener("change", event => {
+    const value = Number(event.target.value);
+    updateLimitPreference("zonesLimit", value, loadZones);
+  });
+}
+if (settingsDailyLimit) {
+  settingsDailyLimit.addEventListener("change", event => {
+    const value = Number(event.target.value);
+    updateLimitPreference("dailyLimit", value, () => {
+      if (window.AppState.activeTab === "daily") {
+        loadDaily();
+      }
+    });
+  });
+}
+if (settingsWeeklyLimit) {
+  settingsWeeklyLimit.addEventListener("change", event => {
+    const value = Number(event.target.value);
+    updateLimitPreference("weeklyLimit", value, () => {
+      if (window.AppState.activeTab === "weekly") {
+        loadWeekly();
+      }
+    });
+  });
+}
+if (settingsZonesLimit) {
+  settingsZonesLimit.addEventListener("change", event => {
+    const value = Number(event.target.value);
+    updateLimitPreference("zonesLimit", value, () => {
+      if (window.AppState.activeTab === "zones") {
+        loadZones();
+      }
+    });
+  });
+}
+
+if (systemThemeMedia && typeof systemThemeMedia.addEventListener === "function") {
+  systemThemeMedia.addEventListener("change", handleSystemAppearanceChange);
+} else if (systemThemeMedia && typeof systemThemeMedia.addListener === "function") {
+  systemThemeMedia.addListener(handleSystemAppearanceChange);
+}
+
+restorePreferences();
 
 if (hideShoesCheckbox) {
   hideShoesCheckbox.checked = window.AppState.hideShoes;
 }
 if (hideRetiredCheckbox) {
   hideRetiredCheckbox.checked = window.AppState.hideRetired;
+}
+if (settingsHideShoes) {
+  settingsHideShoes.checked = window.AppState.hideShoes;
+}
+if (settingsHideRetired) {
+  settingsHideRetired.checked = window.AppState.hideRetired;
 }
 
 function safe(value) {
@@ -70,6 +424,7 @@ function statusPill(value) {
 
 function showTab(tab) {
   state.activeTab = tab;
+  persistPreferences();
 
   const isDaily = tab === "daily";
   const isWeekly = tab === "weekly";
@@ -239,7 +594,7 @@ function renderDailyTable() {
 }
 
 async function loadDaily() {
-  const limit = dailyLimit.value;
+  const limit = Number(window.AppState.dailyLimit);
   state.dailyRows = await fetch(`/api/daily?limit=${limit}`).then(response => response.json());
   renderDailyTable();
 
@@ -275,6 +630,156 @@ function formatHrZones(value) {
   return escaped.replace(/\b(Z[1-5])\b/g, '<span class="hr-zone-label">$1</span>');
 }
 
+function formatDisplayTimestamp(value) {
+  if (!value) {
+    return "n/a";
+  }
+
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    return String(value);
+  }
+
+  return parsed.toLocaleString([], {
+    dateStyle: "medium",
+    timeStyle: "short",
+  });
+}
+
+function formatRequestDuration(value) {
+  if (value == null || value === "" || Number.isNaN(Number(value))) {
+    return "n/a";
+  }
+
+  const totalSeconds = Number(value);
+  if (!Number.isFinite(totalSeconds) || totalSeconds < 0) {
+    return "n/a";
+  }
+
+  const wholeSeconds = Math.floor(totalSeconds);
+  if (wholeSeconds < 60) {
+    return `${wholeSeconds} sec`;
+  }
+
+  const minutes = Math.floor(wholeSeconds / 60);
+  const seconds = wholeSeconds % 60;
+  return `${minutes} min ${seconds} sec`;
+}
+
+function renderSystemStatusSummary(data) {
+  const requestDurationSeconds = data.duration_seconds ?? data.latest_request_duration_seconds ?? null;
+  const rows = [
+    { label: "Status", value: data.health || "unknown" },
+    { label: "Sync status", value: data.status || "unknown" },
+    { label: "Latest request duration", value: requestDurationSeconds == null ? "n/a" : formatRequestDuration(requestDurationSeconds) },
+    { label: "Last sync", value: formatDisplayTimestamp(data.latest_sync_run_at_utc) },
+    { label: "Last good sync", value: formatDisplayTimestamp(data.last_good_sync_run_at_utc) },
+    { label: "Hours since good sync", value: data.hours_since_good_sync == null ? "n/a" : `${data.hours_since_good_sync} h` },
+    { label: "Warnings", value: data.warning_count ?? 0 },
+    { label: "Daily rows", value: data.daily_rows ?? "n/a" },
+    { label: "Weekly rows", value: data.weekly_rows ?? "n/a" },
+    { label: "Request status", value: data.latest_request_status || "n/a" },
+    { label: "Request time", value: formatDisplayTimestamp(data.latest_request_requested_at_utc) },
+  ];
+
+  const html = rows.map(row => `
+    <div class="settings-status-row">
+      <span class="settings-status-label">${escapeHtml(String(row.label))}</span>
+      <span class="settings-status-value">${escapeHtml(String(row.value))}</span>
+    </div>
+  `).join("");
+
+  settingsStatusSummary.innerHTML = `<div class="settings-status-list">${html}</div>`;
+}
+
+async function loadSystemStatus() {
+  if (!settingsStatusSummary) {
+    return;
+  }
+
+  settingsStatusSummary.textContent = "Loading...";
+
+  try {
+    const response = await fetch("/api/system-status");
+    if (!response.ok) {
+      throw new Error(`System status failed: ${response.status}`);
+    }
+
+    const data = await response.json();
+    renderSystemStatusSummary(data);
+  } catch (error) {
+    console.error(error);
+    settingsStatusSummary.textContent = "Unable to load system status.";
+  }
+}
+
+async function copySystemDiagnostics() {
+  if (!settingsStatusSummary || !copyDiagnosticsBtn) {
+    return;
+  }
+
+  const originalLabel = copyDiagnosticsBtn.textContent.trim();
+  const normalizeText = (value) => String(value || "").replace(/\s+\n/g, "\n").replace(/\n{3,}/g, "\n\n").trim();
+
+  const text = normalizeText(settingsStatusSummary.innerText || settingsStatusSummary.textContent || "");
+  if (!text) {
+    copyDiagnosticsBtn.textContent = "Unable to copy diagnostics";
+    window.clearTimeout(copyDiagnosticsBtn.feedbackTimer);
+    copyDiagnosticsBtn.feedbackTimer = window.setTimeout(() => {
+      copyDiagnosticsBtn.textContent = originalLabel;
+    }, 1800);
+    return;
+  }
+
+  const showFeedback = (label) => {
+    copyDiagnosticsBtn.textContent = label;
+    window.clearTimeout(copyDiagnosticsBtn.feedbackTimer);
+    copyDiagnosticsBtn.feedbackTimer = window.setTimeout(() => {
+      copyDiagnosticsBtn.textContent = originalLabel;
+    }, 1800);
+  };
+
+  try {
+    const canUseClipboard = typeof navigator !== "undefined"
+      && navigator.clipboard
+      && typeof navigator.clipboard.writeText === "function"
+      && window.isSecureContext;
+
+    if (canUseClipboard) {
+      await navigator.clipboard.writeText(text);
+    } else {
+      const tempElement = document.createElement("textarea");
+      tempElement.value = text;
+      tempElement.setAttribute("readonly", "");
+      tempElement.style.position = "fixed";
+      tempElement.style.top = "-9999px";
+      tempElement.style.left = "-9999px";
+      tempElement.style.opacity = "0";
+      document.body.appendChild(tempElement);
+      tempElement.focus();
+      tempElement.select();
+
+      let copied = false;
+      try {
+        copied = document.execCommand("copy");
+      } catch (error) {
+        copied = false;
+      }
+
+      document.body.removeChild(tempElement);
+
+      if (!copied) {
+        throw new Error("Clipboard fallback copy failed.");
+      }
+    }
+
+    showFeedback("Diagnostics copied");
+  } catch (error) {
+    console.warn("Clipboard unavailable.", error);
+    showFeedback("Unable to copy diagnostics");
+  }
+}
+
 async function loadData() {
   await Promise.all([
     loadDaily(),
@@ -285,8 +790,9 @@ async function loadData() {
 
   renderHeaderSummary();
   loadSyncStatus();
+  loadSystemStatus();
 }
 
 setInterval(loadSyncStatus, 60000);
-showTab("daily");
+showTab(window.AppState.activeTab || "daily");
 loadData();
