@@ -33,6 +33,7 @@
   --zone-caution-text: #1f1300;
   --zone-bad-text: #fff1f2;
   --zone-low-text: #fff1f2;
+  --record-cell-text: #f8fafc;
 }
 
 :root[data-theme="light"] {
@@ -70,6 +71,7 @@
   --zone-bad-text: #7f1d1d;
   --zone-low-text: #7f1d1d;
   --button-active-text: #ffffff;
+  --record-cell-text: #0f172a;
 }
 
 :root[data-theme="dark"] {
@@ -107,6 +109,7 @@
   --zone-caution-text: #1f1300;
   --zone-bad-text: #fff1f2;
   --zone-low-text: #fff1f2;
+  --record-cell-text: #f8fafc;
 }
 
 @media (prefers-color-scheme: light) {
@@ -145,6 +148,7 @@
     --zone-bad-text: #7f1d1d;
     --zone-low-text: #7f1d1d;
     --button-active-text: #ffffff;
+    --record-cell-text: #0f172a;
   }
 }
 
@@ -616,7 +620,7 @@ td {
 .record-cell {
   background: rgba(34, 197, 94, 0.14);
   box-shadow: inset 3px 0 0 #22c55e;
-  color: #f8fafc;
+  color: var(--record-cell-text);
 }
 
 .components-summary {
@@ -1239,7 +1243,7 @@ tr:hover td {
   left: 0;
   background: var(--drawer-overlay);
   display: grid;
-  place-items: end stretch;
+  place-items: start end;
   z-index: 25;
 }
 
@@ -1249,7 +1253,7 @@ tr:hover td {
 
 .settings-panel {
   width: min(90vw, 1000px);
-  max-height: 85vh;
+  max-height: 95vh;
   background: var(--panel);
   box-shadow: var(--shadow-elevated);
   display: grid;
@@ -1381,6 +1385,39 @@ tr:hover td {
 
 .settings-control-row select {
   min-width: 112px;
+}
+
+.settings-row-limits {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px 12px;
+  align-items: center;
+}
+
+.settings-limit-item {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 8px;
+  min-width: 0;
+}
+
+.settings-limit-item label {
+  color: var(--text);
+  font-size: 13px;
+  white-space: nowrap;
+  margin-right: 2px;
+}
+
+.settings-limit-item select {
+  min-width: 84px;
+  width: auto;
+}
+
+@media (max-width: 900px) {
+  .settings-row-limits {
+    grid-template-columns: 1fr;
+  }
 }
 
 .yearly-maintenance-actions {
