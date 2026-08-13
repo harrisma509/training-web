@@ -51,6 +51,19 @@ function populateYearlyMaintenanceYearOptions() {
   yearlyMaintenanceCalculateBtn.disabled = true;
 }
 
+function initializeYearlyMaintenanceSettings() {
+  if (!yearlyMaintenanceYear) {
+    return;
+  }
+
+  if (typeof populateYearlyMaintenanceYearOptions === "function") {
+    populateYearlyMaintenanceYearOptions();
+  }
+
+  yearlyMaintenancePreviewBtn?.addEventListener("click", handleYearlyMaintenancePreview);
+  yearlyMaintenanceCalculateBtn?.addEventListener("click", handleYearlyMaintenanceCalculate);
+}
+
 function renderYearlyMaintenancePreviewSummary(payload) {
   if (!yearlyMaintenancePreviewSummary) {
     return;
@@ -544,18 +557,14 @@ async function loadYearly() {
 }
 
 (function () {
-  function initializeYearlyMaintenanceSettings() {
-    if (!yearlyMaintenanceYear) {
-      return;
-    }
-
-    if (typeof populateYearlyMaintenanceYearOptions === "function") {
-      populateYearlyMaintenanceYearOptions();
-    }
-
-    yearlyMaintenancePreviewBtn?.addEventListener("click", handleYearlyMaintenancePreview);
-    yearlyMaintenanceCalculateBtn?.addEventListener("click", handleYearlyMaintenanceCalculate);
-  }
-
   initializeYearlyMaintenanceSettings();
 })();
+
+window.YearlyController = {
+  load: loadYearly,
+  showView: showYearlyView,
+  previewMaintenance: handleYearlyMaintenancePreview,
+  calculateMaintenance: handleYearlyMaintenanceCalculate,
+  populateMaintenanceYearOptions: populateYearlyMaintenanceYearOptions,
+  initMaintenance: initializeYearlyMaintenanceSettings,
+};

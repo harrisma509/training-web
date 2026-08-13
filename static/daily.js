@@ -173,3 +173,8 @@ async function loadDaily() {
     renderHeaderSummary();
   }
 }
+
+window.DailyController = {
+  load: loadDaily,
+  render: renderDailyTable,
+};

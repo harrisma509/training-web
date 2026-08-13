@@ -121,3 +121,8 @@ function renderZonesTable() {
     </tbody>
   `;
 }
+
+window.ZonesController = {
+  load: loadZones,
+  render: renderZonesTable,
+};

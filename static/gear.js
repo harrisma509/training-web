@@ -171,3 +171,9 @@ async function loadGear() {
 }
 
 bindGearFilterCheckboxes();
+
+window.GearController = {
+  load: loadGear,
+  render: renderGearTable,
+  syncFilters: bindGearFilterCheckboxes,
+};

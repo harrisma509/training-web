@@ -72,4 +72,11 @@
   window.truncateText = truncateText;
   window.formatDisplayTimestamp = formatDisplayTimestamp;
   window.formatRequestDuration = formatRequestDuration;
+  window.AppUtils = {
+    safe,
+    escapeHtml,
+    truncateText,
+    formatDisplayTimestamp,
+    formatRequestDuration,
+  };
 })();

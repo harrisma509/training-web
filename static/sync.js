@@ -137,3 +137,8 @@ async function handleSyncNow() {
     syncNowBtn.textContent = "Sync Now";
   }
 }
+
+window.SyncController = {
+  loadStatus: loadSyncStatus,
+  runSync: handleSyncNow,
+};

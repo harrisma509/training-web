@@ -6,6 +6,42 @@
  */
 const state = window.AppState;
 
+window.TrainingApp = window.TrainingApp || {
+  state: window.AppState,
+  api: window.api,
+  utils: window.AppUtils,
+  features: {},
+};
+window.TrainingApp.state = window.AppState;
+window.TrainingApp.api = window.api;
+window.TrainingApp.utils = window.AppUtils;
+window.TrainingApp.features = window.TrainingApp.features || {};
+
+if (window.DailyController) {
+  window.TrainingApp.features.daily = window.DailyController;
+}
+if (window.WeeklyController) {
+  window.TrainingApp.features.weekly = window.WeeklyController;
+}
+if (window.GearController) {
+  window.TrainingApp.features.gear = window.GearController;
+}
+if (window.SettingsController) {
+  window.TrainingApp.features.settings = window.SettingsController;
+}
+if (window.YearlyController) {
+  window.TrainingApp.features.yearly = window.YearlyController;
+}
+if (window.ZonesController) {
+  window.TrainingApp.features.zones = window.ZonesController;
+}
+if (window.ComponentsController) {
+  window.TrainingApp.features.components = window.ComponentsController;
+}
+if (window.SyncController) {
+  window.TrainingApp.features.sync = window.SyncController;
+}
+
 const dailyTab = document.getElementById("dailyTab");
 const weeklyTab = document.getElementById("weeklyTab");
 const zonesTab = document.getElementById("zonesTab");

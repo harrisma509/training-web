@@ -762,3 +762,9 @@ function registerWeeklyEventHandlers() {
 
 registerWeeklyEventHandlers();
 window.loadWeekly = loadWeekly;
+window.WeeklyController = {
+  load: loadWeekly,
+  render: renderWeeklyTable,
+  openDrawer: openWeeklyDrawer,
+  closeDrawer: closeWeeklyDrawer,
+};

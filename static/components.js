@@ -266,3 +266,9 @@ async function loadComponents() {
     renderHeaderSummary();
   }
 }
+
+window.ComponentsController = {
+  load: loadComponents,
+  render: renderComponentsTable,
+  syncBikeSelect: renderComponentsBikeSelect,
+};
