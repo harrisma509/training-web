@@ -22,6 +22,7 @@
       <button id="zonesTab" type="button">Zones</button>
       <button id="gearTab" type="button">Gear</button>
       <button id="componentsTab" type="button">Components</button>
+      <button id="yearlyTab" type="button">Yearly</button>
     </nav>
 
     <div class="header-actions">
@@ -64,6 +65,10 @@
         <label for="componentsBikeSelect">Bike</label>
         <select id="componentsBikeSelect"></select>
         <button id="componentsRefresh" type="button">Refresh</button>
+      </div>
+
+      <div id="yearlyControls" class="control-group hidden">
+        <button id="yearlyRefresh" type="button">Refresh</button>
       </div>
 
       <div id="syncStatus" class="sync-pill sync-muted">
@@ -110,6 +115,7 @@
             <option value="zones">Zones</option>
             <option value="gear">Gear</option>
             <option value="components">Components</option>
+            <option value="yearly">Yearly</option>
           </select>
         </div>
 
@@ -221,6 +227,23 @@
           <div id="componentsSummary" class="components-summary"></div>
         </div>
         <table id="componentsTable"></table>
+      </div>
+    </section>
+
+    <section id="yearlyPane" class="hidden">
+      <div class="table-wrap">
+        <div class="yearly-subnav">
+          <button id="yearlyAnnualTab" class="yearly-subtab active" type="button">Annual Metrics</button>
+          <button id="yearlyMonthlyTab" class="yearly-subtab" type="button">Monthly Hours</button>
+        </div>
+
+        <div id="yearlyAnnualView">
+          <table id="yearlyTable"></table>
+        </div>
+
+        <div id="yearlyMonthlyView" class="hidden">
+          <table id="yearlyMonthlyTable"></table>
+        </div>
       </div>
     </section>
 

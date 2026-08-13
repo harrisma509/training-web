@@ -11,6 +11,9 @@ window.DEFAULT_PREFERENCES = Object.freeze({
   dailyLimit: 60,
   weeklyLimit: 60,
   zonesLimit: 60,
+  yearlyView: "annual",
+  yearlyRows: [],
+  yearlyMonthlyRows: [],
 });
 
 window.AppState = window.AppState || {
@@ -18,6 +21,9 @@ window.AppState = window.AppState || {
   weeklyRows: [],
   zonesRows: [],
   gearRows: [],
+  yearlyRows: [],
+  yearlyMonthlyRows: [],
+  yearlyView: "annual",
   componentsData: {
     available_bikes: [],
     selected_gear_id: null,

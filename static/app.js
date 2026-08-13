@@ -5,17 +5,24 @@ const weeklyTab = document.getElementById("weeklyTab");
 const zonesTab = document.getElementById("zonesTab");
 const gearTab = document.getElementById("gearTab");
 const componentsTab = document.getElementById("componentsTab");
+const yearlyTab = document.getElementById("yearlyTab");
+const yearlyAnnualTab = document.getElementById("yearlyAnnualTab");
+const yearlyMonthlyTab = document.getElementById("yearlyMonthlyTab");
 const dailyPane = document.getElementById("dailyPane");
 const weeklyPane = document.getElementById("weeklyPane");
 const zonesPane = document.getElementById("zonesPane");
 const gearPane = document.getElementById("gearPane");
 const componentsPane = document.getElementById("componentsPane");
+const yearlyPane = document.getElementById("yearlyPane");
+const yearlyAnnualView = document.getElementById("yearlyAnnualView");
+const yearlyMonthlyView = document.getElementById("yearlyMonthlyView");
 
 const dailyControls = document.getElementById("dailyControls");
 const weeklyControls = document.getElementById("weeklyControls");
 const zonesControls = document.getElementById("zonesControls");
 const gearControls = document.getElementById("gearControls");
 const componentsControls = document.getElementById("componentsControls");
+const yearlyControls = document.getElementById("yearlyControls");
 
 const dailyLimit = document.getElementById("dailyLimit");
 const weeklyLimit = document.getElementById("weeklyLimit");
@@ -27,6 +34,7 @@ const weeklyRefresh = document.getElementById("weeklyRefresh");
 const zonesRefresh = document.getElementById("zonesRefresh");
 const gearRefresh = document.getElementById("gearRefresh");
 const componentsRefresh = document.getElementById("componentsRefresh");
+const yearlyRefresh = document.getElementById("yearlyRefresh");
 const componentsBikeSelect = document.getElementById("componentsBikeSelect");
 const settingsBtn = document.getElementById("settingsBtn");
 const settingsDrawer = document.getElementById("settingsDrawer");
@@ -75,9 +83,10 @@ function sanitizePreferences(rawPreferences = {}) {
   const next = { ...window.DEFAULT_PREFERENCES, ...(rawPreferences || {}) };
 
   next.appearance = ["system", "light", "dark"].includes(next.appearance) ? next.appearance : "system";
-  next.activeTab = ["daily", "weekly", "zones", "gear", "components"].includes(next.activeTab) ? next.activeTab : "daily";
+  next.activeTab = ["daily", "weekly", "zones", "gear", "components", "yearly"].includes(next.activeTab) ? next.activeTab : "daily";
   next.rememberLastTab = next.rememberLastTab !== false;
-  next.startupTab = ["daily", "weekly", "zones", "gear", "components"].includes(next.startupTab) ? next.startupTab : "daily";
+  next.startupTab = ["daily", "weekly", "zones", "gear", "components", "yearly"].includes(next.startupTab) ? next.startupTab : "daily";
+  next.yearlyView = ["annual", "monthly"].includes(next.yearlyView) ? next.yearlyView : "annual";
   next.defaultBikeGearId = next.defaultBikeGearId == null ? "" : String(next.defaultBikeGearId).trim();
   next.componentsSelectedGearId = next.componentsSelectedGearId == null ? "" : String(next.componentsSelectedGearId).trim();
   next.hideShoes = Boolean(next.hideShoes);
@@ -116,6 +125,7 @@ function persistPreferences() {
     dailyLimit: state.dailyLimit,
     weeklyLimit: state.weeklyLimit,
     zonesLimit: state.zonesLimit,
+    yearlyView: state.yearlyView,
   };
 
   try {
@@ -294,11 +304,15 @@ weeklyTab.addEventListener("click", () => showTab("weekly"));
 zonesTab.addEventListener("click", () => showTab("zones"));
 gearTab.addEventListener("click", () => showTab("gear"));
 componentsTab.addEventListener("click", () => showTab("components"));
+yearlyTab.addEventListener("click", () => showTab("yearly"));
+yearlyAnnualTab?.addEventListener("click", () => showYearlyView("annual"));
+yearlyMonthlyTab?.addEventListener("click", () => showYearlyView("monthly"));
 dailyRefresh.addEventListener("click", loadDaily);
 weeklyRefresh.addEventListener("click", loadWeekly);
 zonesRefresh.addEventListener("click", loadZones);
 gearRefresh.addEventListener("click", loadGear);
 componentsRefresh?.addEventListener("click", () => loadComponents());
+yearlyRefresh?.addEventListener("click", loadYearly);
 componentsBikeSelect?.addEventListener("change", event => {
   const selectedGearId = String(event.target.value || "").trim();
   window.AppState.componentsSelectedGearId = selectedGearId;
@@ -369,7 +383,7 @@ rememberLastTab?.addEventListener("change", event => {
 });
 startupTab?.addEventListener("change", event => {
   const selectedTab = event.target.value;
-  if (!["daily", "weekly", "zones", "gear", "components"].includes(selectedTab)) {
+  if (!["daily", "weekly", "zones", "gear", "components", "yearly"].includes(selectedTab)) {
     return;
   }
 
@@ -487,6 +501,25 @@ function statusPill(value) {
   return `<span class="pill status-${status}">${status}</span>`;
 }
 
+function showYearlyView(view) {
+  const nextView = ["annual", "monthly"].includes(view) ? view : "annual";
+  state.yearlyView = nextView;
+  persistPreferences();
+
+  if (yearlyAnnualView) {
+    yearlyAnnualView.classList.toggle("hidden", nextView !== "annual");
+  }
+  if (yearlyMonthlyView) {
+    yearlyMonthlyView.classList.toggle("hidden", nextView !== "monthly");
+  }
+  if (yearlyAnnualTab) {
+    yearlyAnnualTab.classList.toggle("active", nextView === "annual");
+  }
+  if (yearlyMonthlyTab) {
+    yearlyMonthlyTab.classList.toggle("active", nextView === "monthly");
+  }
+}
+
 function showTab(tab) {
   state.activeTab = tab;
   persistPreferences();
@@ -496,24 +529,32 @@ function showTab(tab) {
   const isZones = tab === "zones";
   const isGear = tab === "gear";
   const isComponents = tab === "components";
+  const isYearly = tab === "yearly";
 
   dailyPane.classList.toggle("hidden", !isDaily);
   weeklyPane.classList.toggle("hidden", !isWeekly);
   zonesPane.classList.toggle("hidden", !isZones);
   gearPane.classList.toggle("hidden", !isGear);
   componentsPane.classList.toggle("hidden", !isComponents);
+  yearlyPane.classList.toggle("hidden", !isYearly);
 
   dailyControls.classList.toggle("hidden", !isDaily);
   weeklyControls.classList.toggle("hidden", !isWeekly);
   zonesControls.classList.toggle("hidden", !isZones);
   gearControls.classList.toggle("hidden", !isGear);
   componentsControls.classList.toggle("hidden", !isComponents);
+  yearlyControls.classList.toggle("hidden", !isYearly);
 
   dailyTab.classList.toggle("active", isDaily);
   weeklyTab.classList.toggle("active", isWeekly);
   zonesTab.classList.toggle("active", isZones);
   gearTab.classList.toggle("active", isGear);
   componentsTab.classList.toggle("active", isComponents);
+  yearlyTab.classList.toggle("active", isYearly);
+
+  if (isYearly) {
+    showYearlyView(state.yearlyView || "annual");
+  }
 }
 
 function renderHeaderSummary() {
@@ -660,6 +701,153 @@ function renderDailyTable() {
       ${rows}
     </tbody>
   `;
+}
+
+function formatAnnualNumber(value, digits = 0) {
+  if (value === null || value === undefined || value === "") {
+    return "";
+  }
+
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) {
+    return "";
+  }
+
+  const formatter = new Intl.NumberFormat("en-US", {
+    minimumFractionDigits: digits,
+    maximumFractionDigits: digits,
+  });
+
+  return formatter.format(parsed);
+}
+
+function formatMonthlyHours(value) {
+  if (value === null || value === undefined || value === "") {
+    return "";
+  }
+
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric) || numeric < 0) {
+    return "";
+  }
+
+  const totalMinutes = Math.round(numeric * 60);
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+  return `${hours}:${String(minutes).padStart(2, "0")}`;
+}
+
+function formatRecordCell(value, digits = 0, isRecord = false) {
+  const formatted = value === null || value === undefined || value === "" ? "" : formatAnnualNumber(Number(value), digits);
+  if (!formatted) {
+    return "";
+  }
+  if (!isRecord) {
+    return formatted;
+  }
+  return `${formatted}<span class="record-trophy" aria-label="Record">🏆</span>`;
+}
+
+function renderYearlyTable() {
+  const rows = (window.AppState.yearlyRows || []).map(row => {
+    const isYtd = row.is_ytd === true || row.is_ytd === "true" || row.is_ytd === 1 || row.is_ytd === "1";
+
+    return `
+      <tr>
+        <td>${safe(row.calendar_year)}</td>
+        <td>${formatRecordCell(row.training_hours, 1, Boolean(row.training_hours_record))}</td>
+        <td>${formatRecordCell(row.active_days, 0, Boolean(row.active_days_record))}</td>
+        <td>${formatRecordCell(row.cycling_distance_mi, 1, Boolean(row.cycling_distance_mi_record))}</td>
+        <td>${formatRecordCell(row.total_elevation_ft, 0, Boolean(row.total_elevation_ft_record))}</td>
+        <td>${formatRecordCell(row.bike_elevation_ft, 0, Boolean(row.bike_elevation_ft_record))}</td>
+        <td>${formatRecordCell(row.ride_count, 0, Boolean(row.ride_count_record))}</td>
+        <td>${formatRecordCell(row.ski_days, 0, Boolean(row.ski_days_record))}</td>
+        <td>${isYtd ? '<span class="status-pill status-active">YTD</span>' : ""}</td>
+      </tr>
+    `;
+  }).join("");
+
+  document.getElementById("yearlyTable").innerHTML = `
+    <thead>
+      <tr>
+        <th>Year</th>
+        <th>Hours</th>
+        <th>Active Days</th>
+        <th>Cycling Distance</th>
+        <th>Total Elevation</th>
+        <th>Bike Elev.</th>
+        <th>Ride Count</th>
+        <th>Ski Days</th>
+        <th>Coverage</th>
+      </tr>
+    </thead>
+    <tbody>
+      ${rows}
+    </tbody>
+  `;
+}
+
+function renderYearlyMonthlyTable() {
+  const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  const rows = (window.AppState.yearlyMonthlyRows || []).map(row => {
+    const cells = monthNames.map((month, index) => {
+      const monthKey = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"][index];
+      const value = row[monthKey];
+      const record = Boolean(row[`${monthKey}_record`]);
+
+      return `
+        <td class="yearly-month-cell ${record ? "record-cell" : ""}">
+          ${value === null || value === undefined || value === "" ? "" : `${formatMonthlyHours(value)}${record ? '<span class="record-trophy" aria-label="Record">🏆</span>' : ""}`}
+        </td>
+      `;
+    }).join("");
+
+    return `
+      <tr>
+        <td>${safe(row.calendar_year)}</td>
+        ${cells}
+        <td>${row.total === null || row.total === undefined || row.total === "" ? "" : formatMonthlyHours(row.total)}</td>
+      </tr>
+    `;
+  }).join("");
+
+  document.getElementById("yearlyMonthlyTable").innerHTML = `
+    <thead>
+      <tr>
+        <th>Year</th>
+        ${monthNames.map(month => `<th>${month}</th>`).join("")}
+        <th>Total</th>
+      </tr>
+    </thead>
+    <tbody>
+      ${rows}
+    </tbody>
+  `;
+}
+
+async function loadYearly() {
+  try {
+    const response = await fetch("/api/yearly");
+    if (!response.ok) {
+      throw new Error(`Yearly endpoint failed: ${response.status}`);
+    }
+
+    const payload = await response.json();
+    const annualRows = Array.isArray(payload) ? payload : (payload.annual_metrics || []);
+    const monthlyRows = Array.isArray(payload.monthly_hours) ? payload.monthly_hours : [];
+    window.AppState.yearlyRows = annualRows;
+    window.AppState.yearlyMonthlyRows = monthlyRows;
+  } catch (error) {
+    console.error(error);
+    window.AppState.yearlyRows = [];
+    window.AppState.yearlyMonthlyRows = [];
+  }
+
+  renderYearlyTable();
+  renderYearlyMonthlyTable();
+  if (window.AppState.activeTab === "yearly") {
+    showYearlyView(window.AppState.yearlyView || "annual");
+  }
 }
 
 async function loadDaily() {
@@ -855,7 +1043,8 @@ async function loadData() {
     loadWeekly(),
     loadZones(),
     loadGear(),
-    loadComponents()
+    loadComponents(),
+    loadYearly()
   ]);
 
   renderHeaderSummary();

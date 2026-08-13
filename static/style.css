@@ -520,6 +520,102 @@ td {
   white-space: normal;
 }
 
+.yearly-subnav {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  padding: 10px 12px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.yearly-subtab {
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--muted);
+  border-radius: 999px;
+  padding: 6px 12px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.yearly-subtab.active {
+  background: var(--table-header-bg);
+  color: var(--text);
+  border-color: var(--line);
+}
+
+#yearlyPane .table-wrap {
+  width: max-content;
+  max-width: 100%;
+  min-width: 0;
+  display: block;
+}
+
+#yearlyTable {
+  width: max-content;
+  min-width: 0;
+  max-width: 100%;
+  table-layout: auto;
+}
+
+#yearlyTable th:nth-child(1),
+#yearlyTable td:nth-child(1) {
+  width: 80px;
+  min-width: 80px;
+  text-align: left;
+}
+
+#yearlyTable th:nth-child(n+2),
+#yearlyTable td:nth-child(n+2) {
+  width: 110px;
+  min-width: 110px;
+  text-align: right;
+}
+
+#yearlyTable th:nth-child(9),
+#yearlyTable td:nth-child(9) {
+  width: 110px;
+  min-width: 110px;
+  text-align: center;
+}
+
+#yearlyMonthlyTable {
+  width: max-content;
+  min-width: 0;
+  max-width: 100%;
+  table-layout: auto;
+}
+
+#yearlyMonthlyTable th,
+#yearlyMonthlyTable td {
+  min-width: 82px;
+  text-align: right;
+}
+
+#yearlyMonthlyTable th:nth-child(1),
+#yearlyMonthlyTable td:nth-child(1) {
+  width: 80px;
+  min-width: 80px;
+  text-align: left;
+}
+
+.yearly-month-cell {
+  white-space: nowrap;
+}
+
+.record-trophy {
+  display: inline-block;
+  margin-left: 6px;
+  color: #fbbf24;
+  font-size: 11px;
+  vertical-align: middle;
+}
+
+.record-cell {
+  background: rgba(251, 191, 36, 0.08);
+}
+
 .components-summary {
   display: flex;
   align-items: center;

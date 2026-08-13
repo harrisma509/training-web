@@ -26,6 +26,7 @@ from routes.weekly import router as weekly_router
 from routes.weekly_audit import router as weekly_audit_router
 from routes.zones import router as zones_router
 from routes.gear import router as gear_router
+from routes.yearly import router as yearly_router
 from routes.weekly_commentary import router as weekly_commentary_router
 from routes.status import router as status_router
 from routes.sync import router as sync_router
@@ -40,6 +41,7 @@ app.include_router(weekly_router)
 app.include_router(weekly_audit_router)
 app.include_router(zones_router)
 app.include_router(gear_router)
+app.include_router(yearly_router)
 app.include_router(weekly_commentary_router)
 app.include_router(status_router)
 app.include_router(sync_router)
