@@ -9,10 +9,11 @@ Owns a read-only endpoint that combines:
 - derived usage since latest service event
 """
 
-from datetime import date
+from datetime import date, timedelta
+from decimal import Decimal, InvalidOperation
 from typing import Optional
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Body, HTTPException
 from fastapi.responses import JSONResponse
 
 from db import db_conn, json_safe
@@ -20,6 +21,12 @@ from db import db_conn, json_safe
 router = APIRouter()
 
 DEFAULT_GEAR_ID = "b15895517"
+
+
+def _normalize_text(value):
+    if value is None:
+        return ""
+    return str(value).strip()
 
 
 def _normalize_display_part(value):
@@ -458,5 +465,238 @@ def api_gear_components(gear_id: Optional[str] = None):
                 }
                 for component in components
             ],
+        }
+    )
+
+
+@router.get("/api/components/{gear_component_id}/services")
+def api_component_services(gear_component_id: int):
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                    select
+                        gc.gear_component_id,
+                        gc.gear_id,
+                        gc.component_name,
+                        gc.component_group,
+                        gc.active,
+                        gc.track_service,
+                        g.gear_name,
+                        g.brand,
+                        g.model_year
+                    from gear_component gc
+                    join gear g on g.gear_id = gc.gear_id
+                    where gc.gear_component_id = %s
+                """,
+                (gear_component_id,),
+            )
+            component = cur.fetchone()
+            if not component:
+                raise HTTPException(status_code=404, detail="Component not found.")
+
+            cur.execute(
+                """
+                    select
+                        service_event_id,
+                        gear_component_id,
+                        gear_id,
+                        service_date,
+                        action,
+                        notes,
+                        cost,
+                        odometer_miles,
+                        odometer_hours,
+                        odometer_rides,
+                        performed_by,
+                        service_location,
+                        created_at,
+                        updated_at
+                    from gear_service_event
+                    where gear_component_id = %s
+                    order by service_date desc, service_event_id desc
+                """,
+                (gear_component_id,),
+            )
+            service_rows = cur.fetchall()
+
+    component_payload = {
+        "gear_component_id": component["gear_component_id"],
+        "gear_id": component["gear_id"],
+        "component_name": component["component_name"],
+        "component_group": component["component_group"],
+        "active": component["active"],
+        "track_service": component["track_service"],
+        "bike_name": component["gear_name"],
+        "brand": component["brand"],
+        "model_year": component["model_year"],
+    }
+
+    services = [
+        {
+            "service_event_id": row["service_event_id"],
+            "gear_component_id": row["gear_component_id"],
+            "gear_id": row["gear_id"],
+            "service_date": json_safe(row["service_date"]),
+            "service_type": row["action"],
+            "notes": row["notes"],
+            "cost": json_safe(row["cost"]),
+            "mileage_at_service": json_safe(row["odometer_miles"]),
+            "hours_at_service": json_safe(row["odometer_hours"]),
+            "rides_at_service": json_safe(row["odometer_rides"]),
+            "service_provider": row["performed_by"],
+            "service_location": row["service_location"],
+            "created_at": json_safe(row["created_at"]),
+            "updated_at": json_safe(row["updated_at"]),
+        }
+        for row in service_rows
+    ]
+
+    return JSONResponse({"component": component_payload, "services": services})
+
+
+@router.post("/api/components/{gear_component_id}/services")
+def api_create_component_service(gear_component_id: int, payload: dict | None = Body(default=None)):
+    if payload is None or not isinstance(payload, dict):
+        return JSONResponse({"detail": "Request body must be an object."}, status_code=400)
+
+    raw_service_date = payload.get("service_date")
+    try:
+        service_date = date.fromisoformat(str(raw_service_date)) if raw_service_date not in (None, "") else None
+    except ValueError:
+        return JSONResponse({"detail": "service_date must be a valid ISO date."}, status_code=400)
+
+    if service_date is None:
+        return JSONResponse({"detail": "service_date is required."}, status_code=400)
+
+    if service_date > date.today() + timedelta(days=365):
+        return JSONResponse({"detail": "service_date cannot be more than one year in the future."}, status_code=400)
+
+    service_type = _normalize_text(payload.get("service_type"))
+    if not service_type:
+        return JSONResponse({"detail": "service_type is required."}, status_code=400)
+
+    notes = _normalize_text(payload.get("notes"))
+    service_provider = _normalize_text(payload.get("service_provider"))
+    if service_provider == "null":
+        service_provider = ""
+
+    raw_cost = payload.get("service_cost")
+    cost = None
+    if raw_cost not in (None, "", "null", "None"):
+        try:
+            cost = Decimal(str(raw_cost))
+        except (InvalidOperation, TypeError, ValueError):
+            return JSONResponse({"detail": "service_cost must be a valid non-negative number."}, status_code=400)
+        if cost < 0:
+            return JSONResponse({"detail": "service_cost cannot be negative."}, status_code=400)
+
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                    select gear_id
+                    from gear_component
+                    where gear_component_id = %s
+                """,
+                (gear_component_id,),
+            )
+            component_row = cur.fetchone()
+            if not component_row:
+                raise HTTPException(status_code=404, detail="Component not found.")
+
+            gear_id = component_row["gear_id"]
+
+            cur.execute(
+                """
+                    select
+                        coalesce(sum(coalesce(sa.distance_mi, 0)), 0) as total_miles,
+                        coalesce(sum(coalesce(sa.moving_sec, 0)) / 3600.0, 0) as total_hours,
+                        count(sa.activity_id) filter (
+                            where lower(coalesce(sa.activity_category, '')) = 'ride'
+                                or lower(coalesce(sa.sport_type, '')) in (
+                                    'ride', 'road', 'gravel', 'mountain bike', 'mtb', 'e-bike', 'ebike',
+                                    'cycling', 'virtual ride', 'indoor cycle'
+                                )
+                                or lower(coalesce(sa.sport_type, '')) like '%%bike%%'
+                        ) as total_rides
+                    from strava_activities sa
+                    where sa.gear_id = %s
+                """,
+                (gear_id,),
+            )
+            usage_snapshot = cur.fetchone()
+
+            odometer_miles = float(usage_snapshot["total_miles"]) if usage_snapshot and usage_snapshot["total_miles"] is not None else None
+            odometer_hours = float(usage_snapshot["total_hours"]) if usage_snapshot and usage_snapshot["total_hours"] is not None else None
+            odometer_rides = int(usage_snapshot["total_rides"]) if usage_snapshot and usage_snapshot["total_rides"] is not None else None
+
+            cur.execute(
+                """
+                    insert into gear_service_event (
+                        gear_component_id,
+                        gear_id,
+                        service_date,
+                        action,
+                        notes,
+                        cost,
+                        odometer_miles,
+                        odometer_hours,
+                        odometer_rides,
+                        performed_by,
+                        service_location,
+                        source,
+                        source_reference
+                    )
+                    values (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 'app', %s)
+                    returning
+                        service_event_id,
+                        gear_component_id,
+                        gear_id,
+                        service_date,
+                        action,
+                        notes,
+                        cost,
+                        odometer_miles,
+                        odometer_hours,
+                        odometer_rides,
+                        performed_by,
+                        service_location,
+                        created_at,
+                        updated_at
+                """,
+                (
+                    gear_component_id,
+                    gear_id,
+                    service_date,
+                    service_type,
+                    notes or None,
+                    cost,
+                    odometer_miles,
+                    odometer_hours,
+                    odometer_rides,
+                    service_provider or None,
+                    payload.get("service_location") or None,
+                    f"component:{gear_component_id}",
+                ),
+            )
+            row = cur.fetchone()
+
+    return JSONResponse(
+        {
+            "service_event_id": row["service_event_id"],
+            "gear_component_id": row["gear_component_id"],
+            "gear_id": row["gear_id"],
+            "service_date": json_safe(row["service_date"]),
+            "service_type": row["action"],
+            "notes": row["notes"],
+            "cost": json_safe(row["cost"]),
+            "mileage_at_service": json_safe(row["odometer_miles"]),
+            "hours_at_service": json_safe(row["odometer_hours"]),
+            "rides_at_service": json_safe(row["odometer_rides"]),
+            "service_provider": row["performed_by"],
+            "service_location": row["service_location"],
+            "created_at": json_safe(row["created_at"]),
+            "updated_at": json_safe(row["updated_at"]),
         }
     )

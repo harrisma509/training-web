@@ -51,6 +51,28 @@
       return fetchJson(endpoint);
     },
 
+    async fetchComponentServices(gearComponentId) {
+      return fetchJson(`/api/components/${encodeURIComponent(gearComponentId)}/services`);
+    },
+
+    async createComponentService(gearComponentId, payload = {}) {
+      const response = await fetch(`/api/components/${encodeURIComponent(gearComponentId)}/services`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json",
+        },
+        body: JSON.stringify(payload || {}),
+      });
+
+      if (!response.ok) {
+        const detail = await response.json().catch(() => ({}));
+        throw new Error(detail.detail || `${response.status} ${response.statusText || "Save failed"}`);
+      }
+
+      return response.json();
+    },
+
     async fetchSyncStatus() {
       return fetchJson("/api/sync-status");
     },
