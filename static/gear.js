@@ -103,6 +103,43 @@ function renderGearTable() {
   `;
 }
 
+function bindGearFilterCheckboxes() {
+  const gearHideShoesCheckbox = document.getElementById("hideShoesCheckbox");
+  const gearHideRetiredCheckbox = document.getElementById("hideRetiredCheckbox");
+  const settingsHideShoesCheckbox = document.getElementById("settingsHideShoes");
+  const settingsHideRetiredCheckbox = document.getElementById("settingsHideRetired");
+
+  if (typeof window.syncFormCheckboxes === "function") {
+    window.syncFormCheckboxes();
+  }
+
+  if (gearHideShoesCheckbox && !gearHideShoesCheckbox.dataset.gearFilterBound) {
+    gearHideShoesCheckbox.dataset.gearFilterBound = "true";
+    gearHideShoesCheckbox.addEventListener("change", (event) => {
+      const checked = Boolean(event.target.checked);
+      window.AppState.hideShoes = checked;
+      if (settingsHideShoesCheckbox) {
+        settingsHideShoesCheckbox.checked = checked;
+      }
+      persistPreferences();
+      renderGearTable();
+    });
+  }
+
+  if (gearHideRetiredCheckbox && !gearHideRetiredCheckbox.dataset.gearFilterBound) {
+    gearHideRetiredCheckbox.dataset.gearFilterBound = "true";
+    gearHideRetiredCheckbox.addEventListener("change", (event) => {
+      const checked = Boolean(event.target.checked);
+      window.AppState.hideRetired = checked;
+      if (settingsHideRetiredCheckbox) {
+        settingsHideRetiredCheckbox.checked = checked;
+      }
+      persistPreferences();
+      renderGearTable();
+    });
+  }
+}
+
 async function loadGear() {
   const fixedLimit = 10000;
 
@@ -122,3 +159,5 @@ async function loadGear() {
     renderHeaderSummary();
   }
 }
+
+bindGearFilterCheckboxes();
