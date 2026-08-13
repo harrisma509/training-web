@@ -4,41 +4,6 @@
  * This file provides the app-wide settings and thresholds that other modules read; it is a stable data source
  * and not a place for rendering or feature logic.
  */
-window.APP_PREFERENCES_KEY = "training.preferences.v1";
-window.DEFAULT_PREFERENCES = Object.freeze({
-  appearance: "system",
-  activeTab: "daily",
-  rememberLastTab: true,
-  startupTab: "daily",
-  defaultBikeGearId: "",
-  componentsSelectedGearId: "",
-  hideShoes: true,
-  hideRetired: true,
-  dailyLimit: 60,
-  weeklyLimit: 60,
-  zonesLimit: 60,
-  yearlyView: "annual",
-  yearlyRows: [],
-  yearlyMonthlyRows: [],
-});
-
-window.AppState = window.AppState || {
-  dailyRows: [],
-  weeklyRows: [],
-  zonesRows: [],
-  gearRows: [],
-  yearlyRows: [],
-  yearlyMonthlyRows: [],
-  yearlyView: "annual",
-  componentsData: {
-    available_bikes: [],
-    selected_gear_id: null,
-    selected_bike: null,
-    components: [],
-  },
-  ...window.DEFAULT_PREFERENCES,
-};
-
 window.APP_CONSTANTS = Object.freeze({
   WEEKLY_HOURS_GREEN_MIN: 6,
   WEEKLY_HOURS_YELLOW_MIN: 4,
