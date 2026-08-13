@@ -1,3 +1,9 @@
+/*
+ * constants.js
+ * Shared constants and defaults used by the UI and state layer.
+ * This file provides the app-wide settings and thresholds that other modules read; it is a stable data source
+ * and not a place for rendering or feature logic.
+ */
 window.APP_PREFERENCES_KEY = "training.preferences.v1";
 window.DEFAULT_PREFERENCES = Object.freeze({
   appearance: "system",

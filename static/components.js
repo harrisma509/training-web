@@ -1,3 +1,9 @@
+/*
+ * components.js
+ * Component maintenance view and formatting helpers.
+ * This module owns the components table and its row formatting; it consumes AppState plus the API helper for
+ * fetches but does not own the global app shell or cross-feature preferences.
+ */
 function componentSafe(value, fallback = "") {
   if (value === null || value === undefined || value === "") {
     return fallback;
@@ -214,24 +220,26 @@ function renderComponentsTable() {
 
 async function loadComponents() {
   const selectedGearId = String(window.AppState.componentsSelectedGearId || window.AppState.defaultBikeGearId || "").trim();
-  const endpoint = selectedGearId
-    ? `/api/gear/components?gear_id=${encodeURIComponent(selectedGearId)}`
-    : "/api/gear/components";
 
   try {
-    const response = await fetch(endpoint);
-    if (!response.ok) {
-      if (response.status === 400 && selectedGearId) {
-        window.AppState.componentsSelectedGearId = "";
-        if (typeof persistPreferences === "function") {
-          persistPreferences();
-        }
-        return loadComponents();
-      }
-      throw new Error(`Components endpoint failed: ${response.status}`);
-    }
+    const payload = window.api && typeof window.api.fetchComponents === "function"
+      ? await window.api.fetchComponents(selectedGearId)
+      : await fetch(selectedGearId
+          ? `/api/gear/components?gear_id=${encodeURIComponent(selectedGearId)}`
+          : "/api/gear/components").then(async response => {
+            if (!response.ok) {
+              if (response.status === 400 && selectedGearId) {
+                window.AppState.componentsSelectedGearId = "";
+                if (typeof persistPreferences === "function") {
+                  persistPreferences();
+                }
+                return loadComponents();
+              }
+              throw new Error(`Components endpoint failed: ${response.status}`);
+            }
+            return response.json();
+          });
 
-    const payload = await response.json();
     window.AppState.componentsData = payload;
     window.AppState.componentsSelectedGearId = componentSafe(payload.selected_gear_id, "");
     if (typeof persistPreferences === "function") {

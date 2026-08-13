@@ -1,3 +1,9 @@
+/*
+ * api.js
+ * Shared API contract for the app shell and feature modules.
+ * Owns fetch boilerplate, JSON handling, and endpoint wrappers; feature files should call window.api.*
+ * instead of embedding raw fetch calls. The rendering/state code stays in each feature module, not here.
+ */
 (function () {
   async function fetchJson(url, options = {}) {
     const response = await fetch(url, {
@@ -36,6 +42,23 @@
 
     async fetchSystemStatus() {
       return fetchJson("/api/system-status");
+    },
+
+    async fetchComponents(selectedGearId = "") {
+      const endpoint = selectedGearId
+        ? `/api/gear/components?gear_id=${encodeURIComponent(selectedGearId)}`
+        : "/api/gear/components";
+      return fetchJson(endpoint);
+    },
+
+    async fetchSyncStatus() {
+      return fetchJson("/api/sync-status");
+    },
+
+    async requestSync() {
+      return fetchJson("/api/sync-request", {
+        method: "POST",
+      });
     },
 
     async fetchYearly() {

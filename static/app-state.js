@@ -1,3 +1,9 @@
+/*
+ * app-state.js
+ * Central source of truth for app preferences, row limits, and runtime state.
+ * This file initializes AppState and keeps default/sanitized values consistent so feature modules share
+ * one state model instead of each module managing its own config copy.
+ */
 (function () {
   window.APP_PREFERENCES_KEY = "training.preferences.v1";
   window.DEFAULT_PREFERENCES = Object.freeze({

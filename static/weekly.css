@@ -1,3 +1,9 @@
+/*
+ * weekly.css
+ * Weekly feature styling.
+ * This file owns the weekly comments, audit badges, drawer styling, and table-specific presentation details. It
+ * uses the shared design tokens from style.css and stays scoped to the weekly module.
+ */
 .weekly-status-dot {
   display: inline-block;
   width: 7px;

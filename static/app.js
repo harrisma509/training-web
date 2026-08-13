@@ -1,3 +1,9 @@
+/*
+ * app.js
+ * Shell/bootstrap layer for the dashboard.
+ * Owns tab switching, shared header behavior, and app-level wiring; it delegates feature data loading to
+ * module functions and relies on AppState plus the shared API layer for runtime state and fetch logic.
+ */
 const state = window.AppState;
 
 const dailyTab = document.getElementById("dailyTab");

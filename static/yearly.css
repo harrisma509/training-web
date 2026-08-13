@@ -1,3 +1,9 @@
+/*
+ * yearly.css
+ * Yearly feature styling.
+ * Handles the yearly subnav, annual/monthly tables, record chips, and maintenance widgets. It stays scoped to the
+ * yearly tab and inherits from the global token set in style.css rather than redefining the whole app theme.
+ */
 .yearly-subnav {
   display: flex;
   gap: 8px;

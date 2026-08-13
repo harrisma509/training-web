@@ -1,3 +1,9 @@
+/*
+ * sync.js
+ * Synchronization status feature.
+ * Owns the sync pill UI and request flow used by the header controls. It communicates through the app shell and
+ * the backend API while keeping the sync status rendering local to this module.
+ */
 function getSyncElements() {
   return {
     syncStatus: document.getElementById("syncStatus"),
@@ -31,7 +37,9 @@ async function loadSyncStatus() {
   const { syncStatus } = getSyncElements();
 
   try {
-    const data = await fetch("/api/sync-status").then(response => response.json());
+    const data = window.api && typeof window.api.fetchSyncStatus === "function"
+      ? await window.api.fetchSyncStatus()
+      : await fetch("/api/sync-status").then(response => response.json());
     renderSyncStatus(data);
   } catch (error) {
     syncStatus.className = "sync-pill sync-failed";
@@ -99,15 +107,16 @@ async function handleSyncNow() {
   syncNowBtn.textContent = "Requesting...";
 
   try {
-    const response = await fetch("/api/sync-request", {
-      method: "POST"
-    });
-
-    if (!response.ok) {
-      throw new Error("Sync request failed");
-    }
-
-    const result = await response.json();
+    const result = window.api && typeof window.api.requestSync === "function"
+      ? await window.api.requestSync()
+      : await fetch("/api/sync-request", {
+          method: "POST"
+        }).then(async response => {
+          if (!response.ok) {
+            throw new Error("Sync request failed");
+          }
+          return response.json();
+        });
 
     syncNowBtn.textContent = result.created ? "Requested" : "Already Queued";
 

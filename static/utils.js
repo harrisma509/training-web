@@ -1,3 +1,9 @@
+/*
+ * utils.js
+ * Shared helper utilities for safe rendering and formatting.
+ * This file exposes common text/HTML helpers used by multiple feature modules and keeps repeated string handling
+ * in one place so modules stay consistent without duplicating formatter logic.
+ */
 (function () {
   function safe(value) {
     if (value === null || value === undefined || value === "") {

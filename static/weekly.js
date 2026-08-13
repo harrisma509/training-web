@@ -1,3 +1,9 @@
+/*
+ * weekly.js
+ * Weekly dashboard feature module.
+ * Owns weekly row rendering, comment editor/drawer flows, and audit interactions. It works with AppState and the
+ * shared API abstraction while keeping all weekly presentation logic in this module.
+ */
 // Weekly module state
 const weeklyState = {
   currentDrawerWeek: null,

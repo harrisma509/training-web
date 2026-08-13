@@ -1,3 +1,9 @@
+/*
+ * yearly.js
+ * Yearly dashboard feature module.
+ * Owns the annual table, maintenance preview/calculate flows, and commentary drawer behavior. It reads AppState
+ * and uses the shared API layer for yearly requests without owning the app shell or shared preferences.
+ */
 const yearlyMaintenanceYear = document.getElementById("yearlyMaintenanceYear");
 const yearlyMaintenanceStatus = document.getElementById("yearlyMaintenanceStatus");
 const yearlyMaintenancePreviewSummary = document.getElementById("yearlyMaintenancePreviewSummary");

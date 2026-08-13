@@ -1,3 +1,9 @@
+/*
+ * zones.js
+ * Training zones feature module.
+ * Owns zone table rendering and the threshold-based highlighting logic. It reads AppState and fetches data via the
+ * shared API layer, while leaving the main tab shell and global theme styling elsewhere.
+ */
 function formatPercent(value) {
   if (value === null || value === undefined || value === "") {
     return "";

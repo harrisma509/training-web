@@ -1,3 +1,9 @@
+/*
+ * gear.js
+ * Gear dashboard feature module.
+ * Handles the Gear tab, row filtering, render logic, and fetch integration. It stays aligned with AppState and
+ * the shared API helper without owning global app behavior.
+ */
 function gearStatusBadge(row) {
   if (row.retired) {
     return `<span class="status-pill status-retired">Retired</span>`;

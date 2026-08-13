@@ -1,3 +1,9 @@
+/*
+ * daily.js
+ * Daily dashboard feature module.
+ * Owns daily-table rendering, health summaries, and the data-loading path for the Daily tab. It interacts with
+ * AppState and the shared API layer, but keeps the presentation logic local to this module.
+ */
 function formatCommaInt(value) {
   if (value === null || value === undefined || value === "") {
     return "";

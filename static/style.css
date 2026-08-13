@@ -1,3 +1,9 @@
+/*
+ * style.css
+ * Global design system and layout shell for the app.
+ * This file defines shared color tokens, spacing, table patterns, and core layout primitives used by every tab.
+ * Feature-specific styling lives in the module CSS files, so this remains the common baseline.
+ */
 :root {
   color-scheme: dark;
   --bg: #0f172a;

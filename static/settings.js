@@ -1,3 +1,9 @@
+/*
+ * settings.js
+ * Settings drawer and preferences controller.
+ * Owns the settings UI, tab behavior, checkbox sync, and status refresh behavior. It reads/writes AppState and
+ * keeps the drawer in sync with the rest of the app without embedding app-shell logic elsewhere.
+ */
 (function () {
   const settingsBtn = document.getElementById("settingsBtn");
   const settingsDrawer = document.getElementById("settingsDrawer");
@@ -172,12 +178,15 @@
     settingsStatusSummary.textContent = "Loading...";
 
     try {
-      const response = await fetch("/api/system-status");
-      if (!response.ok) {
-        throw new Error(`System status failed: ${response.status}`);
-      }
+      const data = window.api && typeof window.api.fetchSystemStatus === "function"
+        ? await window.api.fetchSystemStatus()
+        : await fetch("/api/system-status").then(async response => {
+            if (!response.ok) {
+              throw new Error(`System status failed: ${response.status}`);
+            }
+            return response.json();
+          });
 
-      const data = await response.json();
       renderSystemStatusSummary(data);
     } catch (error) {
       console.error(error);
