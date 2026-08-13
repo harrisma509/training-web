@@ -1,0 +1,262 @@
+.button-secondary {
+  background: var(--button-secondary-bg);
+  color: var(--text);
+}
+
+.settings-icon-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  min-width: 32px;
+  height: 32px;
+  padding: 0;
+  border-radius: 8px;
+  line-height: 1;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.settings-icon-button span {
+  display: inline-block;
+  line-height: 1;
+  transform: translateY(-1px);
+}
+
+.settings-drawer {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  background: var(--drawer-overlay);
+  display: grid;
+  place-items: start end;
+  z-index: 25;
+}
+
+.settings-drawer.hidden {
+  display: none;
+}
+
+.settings-panel {
+  width: min(90vw, 1000px);
+  max-height: 95vh;
+  background: var(--panel);
+  box-shadow: var(--shadow-elevated);
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  margin-left: auto;
+  overflow: hidden;
+}
+
+.settings-header {
+  padding: 20px 20px 0;
+  border-bottom: 1px solid var(--line);
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.settings-title {
+  font-size: 16px;
+  font-weight: 800;
+}
+
+.settings-subtitle {
+  color: var(--muted);
+  font-size: 13px;
+  margin-top: 4px;
+}
+
+.settings-body {
+  padding: 18px 20px 20px;
+  display: grid;
+  gap: 18px;
+  overflow-y: auto;
+  min-height: 0;
+}
+
+.settings-tab-list {
+  display: flex;
+  gap: 8px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--line);
+}
+
+.settings-tab {
+  appearance: none;
+  border: 1px solid var(--input-border);
+  background: transparent;
+  color: var(--muted);
+  border-radius: 999px;
+  padding: 8px 14px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.settings-tab.active {
+  background: var(--input-bg);
+  color: var(--text);
+  border-color: var(--line);
+}
+
+.settings-tab-panel {
+  display: grid;
+  gap: 18px;
+}
+
+.settings-general-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+}
+
+.settings-general-tile {
+  background: var(--input-bg);
+  border: 1px solid var(--input-border);
+  border-radius: 12px;
+  padding: 14px;
+}
+
+.settings-general-span-2 {
+  grid-column: 1 / -1;
+}
+
+.settings-section {
+  display: grid;
+  gap: 10px;
+}
+
+.yearly-section-card {
+  background: var(--input-bg);
+  border: 1px solid var(--input-border);
+  border-radius: 12px;
+  padding: 14px;
+}
+
+.settings-label {
+  font-size: 12px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+}
+
+.settings-choice-list {
+  display: grid;
+  gap: 8px;
+}
+
+.settings-choice {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text);
+  font-size: 14px;
+}
+
+.settings-control-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  color: var(--text);
+  font-size: 13px;
+}
+
+.settings-control-row label {
+  color: var(--text);
+}
+
+.settings-control-row select {
+  min-width: 112px;
+}
+
+.settings-row-limits {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px 12px;
+  align-items: center;
+}
+
+.settings-limit-item {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 8px;
+  min-width: 0;
+}
+
+.settings-limit-item label {
+  color: var(--text);
+  font-size: 13px;
+  white-space: nowrap;
+  margin-right: 2px;
+}
+
+.settings-limit-item select {
+  min-width: 84px;
+  width: auto;
+}
+
+.settings-status-summary {
+  margin: 0;
+  padding: 12px;
+  background: var(--input-bg);
+  border: 1px solid var(--input-border);
+  border-radius: 10px;
+  color: var(--text);
+  font-size: 12px;
+  line-height: 1.5;
+  min-height: 120px;
+}
+
+.settings-status-list {
+  display: grid;
+  gap: 8px;
+}
+
+.settings-status-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--text);
+}
+
+.settings-status-label {
+  color: var(--muted);
+}
+
+.settings-status-value {
+  text-align: right;
+  min-width: 0;
+}
+
+.settings-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+}
+
+@media (max-width: 900px) {
+  .settings-row-limits {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 1050px) {
+  .settings-general-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .settings-general-span-2 {
+    grid-column: auto;
+  }
+}
