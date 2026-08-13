@@ -149,7 +149,18 @@ function renderDailyTable() {
 
 async function loadDaily() {
   const limit = Number(window.AppState.dailyLimit);
-  window.AppState.dailyRows = await fetch(`/api/daily?limit=${limit}`).then(response => response.json());
+
+  try {
+    if (window.api && typeof window.api.fetchDaily === "function") {
+      window.AppState.dailyRows = await window.api.fetchDaily(limit);
+    } else {
+      window.AppState.dailyRows = await fetch(`/api/daily?limit=${limit}`).then(response => response.json());
+    }
+  } catch (error) {
+    console.error(error);
+    window.AppState.dailyRows = [];
+  }
+
   renderDailyTable();
 
   if (window.AppState.activeTab === "daily") {
