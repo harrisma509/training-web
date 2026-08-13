@@ -49,6 +49,20 @@ const settingsZonesLimit = document.getElementById("settingsZonesLimit");
 const appearanceInputs = Array.from(document.querySelectorAll('input[name="appearance"]'));
 const settingsHideShoes = document.getElementById("settingsHideShoes");
 const settingsHideRetired = document.getElementById("settingsHideRetired");
+const settingsTabButtons = Array.from(document.querySelectorAll(".settings-tab"));
+const settingsTabPanels = {
+  general: document.getElementById("settingsGeneralTab"),
+  yearly: document.getElementById("settingsYearlyTab"),
+};
+const yearlyMaintenanceYear = document.getElementById("yearlyMaintenanceYear");
+const yearlyMaintenancePreviewBtn = document.getElementById("yearlyMaintenancePreviewBtn");
+const yearlyMaintenanceCalculateBtn = document.getElementById("yearlyMaintenanceCalculateBtn");
+const yearlyMaintenanceStatus = document.getElementById("yearlyMaintenanceStatus");
+const yearlyMaintenancePreviewSummary = document.getElementById("yearlyMaintenancePreviewSummary");
+const yearlyMaintenanceWarnings = document.getElementById("yearlyMaintenanceWarnings");
+const yearlyMaintenanceComparisonWrap = document.getElementById("yearlyMaintenanceComparisonWrap");
+const yearlyMaintenanceComparisonBody = document.getElementById("yearlyMaintenanceComparisonBody");
+const yearlyMaintenanceResult = document.getElementById("yearlyMaintenanceResult");
 const settingsStatusSummary = document.getElementById("settingsStatusSummary");
 const refreshStatusBtn = document.getElementById("refreshStatusBtn");
 const copyDiagnosticsBtn = document.getElementById("copyDiagnosticsBtn");
@@ -259,6 +273,268 @@ function handleSystemAppearanceChange() {
   }
 }
 
+function formatYearlyMaintenanceValue(value) {
+  if (value === null || value === undefined || value === "") {
+    return "No entry recorded.";
+  }
+  if (typeof value === "string" && value.trim() === "") {
+    return "No entry recorded.";
+  }
+  return String(value);
+}
+
+function formatYearlyMaintenanceDifference(value) {
+  if (value === null || value === undefined || value === "") {
+    return "No entry recorded.";
+  }
+  if (typeof value === "string" && value.trim() === "") {
+    return "No entry recorded.";
+  }
+  return String(value);
+}
+
+function populateYearlyMaintenanceYearOptions() {
+  if (!yearlyMaintenanceYear) {
+    return;
+  }
+
+  const currentYear = new Date().getFullYear();
+  const years = [];
+  for (let year = 2013; year <= currentYear; year += 1) {
+    years.push(year);
+  }
+
+  yearlyMaintenanceYear.innerHTML = years.map(year => `<option value="${year}">${year}</option>`).join("");
+  yearlyMaintenanceYear.value = String(currentYear);
+  yearlyMaintenanceYear.disabled = years.length === 0;
+  yearlyMaintenanceCalculateBtn.disabled = true;
+}
+
+function renderYearlyMaintenancePreviewSummary(payload) {
+  if (!yearlyMaintenancePreviewSummary) {
+    return;
+  }
+
+  const status = payload?.coverage_status || "N/A";
+  const sourceStart = payload?.source_first_date || "No data";
+  const sourceEnd = payload?.source_last_date || "No data";
+  const missing = Array.isArray(payload?.missing_months) ? payload.missing_months : [];
+  const warnings = Array.isArray(payload?.warnings) ? payload.warnings : [];
+
+  const warningMarkup = warnings.length > 0
+    ? warnings.map(warning => `<li>${escapeHtml(String(warning))}</li>`).join("")
+    : "<li>No warnings.</li>";
+
+  const missingMarkup = missing.length > 0
+    ? missing.map(month => `<span class="yearly-maintenance-chip">${escapeHtml(String(month))}</span>`).join("")
+    : "<span class=\"yearly-maintenance-chip subtle\">None</span>";
+
+  yearlyMaintenancePreviewSummary.innerHTML = `
+    <div class="yearly-maintenance-stat-grid">
+      <div class="yearly-maintenance-stat-item"><span>Coverage Status</span><strong>${escapeHtml(String(status))}</strong></div>
+      <div class="yearly-maintenance-stat-item"><span>Activity Count</span><strong>${escapeHtml(String(payload?.activity_count ?? "0"))}</strong></div>
+      <div class="yearly-maintenance-stat-item"><span>Months With Activity</span><strong>${escapeHtml(String(payload?.months_with_activity ?? "0"))}</strong></div>
+      <div class="yearly-maintenance-stat-item"><span>Source Range</span><strong>${escapeHtml(String(sourceStart))} → ${escapeHtml(String(sourceEnd))}</strong></div>
+    </div>
+    <div class="yearly-maintenance-section-block">
+      <div class="yearly-maintenance-label">Missing Months</div>
+      <div class="yearly-maintenance-chip-list">${missingMarkup}</div>
+    </div>
+    <div class="yearly-maintenance-section-block yearly-maintenance-warning-group">
+      <div class="yearly-maintenance-label">Warnings</div>
+      <ul class="yearly-maintenance-warning-list">${warningMarkup}</ul>
+    </div>
+  `;
+
+  if (yearlyMaintenanceWarnings) {
+    yearlyMaintenanceWarnings.innerHTML = warnings.length > 0
+      ? `<ul class="yearly-maintenance-warning-list">${warningMarkup}</ul>`
+      : "<div class=\"yearly-maintenance-no-data\">No warnings yet.</div>";
+  }
+}
+
+function renderYearlyMaintenanceComparison(payload) {
+  if (!yearlyMaintenanceComparisonWrap || !yearlyMaintenanceComparisonBody) {
+    return;
+  }
+
+  const currentValues = payload?.current_values || {};
+  const proposedValues = payload?.proposed_annual_values || {};
+  const differences = payload?.differences || {};
+  const metricNames = Array.from(new Set([
+    ...Object.keys(currentValues),
+    ...Object.keys(proposedValues),
+    ...Object.keys(differences),
+  ])).sort();
+
+  if (metricNames.length === 0) {
+    yearlyMaintenanceComparisonWrap.classList.add("hidden");
+    yearlyMaintenanceComparisonBody.innerHTML = "";
+    return;
+  }
+
+  yearlyMaintenanceComparisonWrap.classList.remove("hidden");
+  yearlyMaintenanceComparisonBody.innerHTML = metricNames.map(metric => {
+    const storedValue = currentValues[metric];
+    const proposedValue = proposedValues[metric];
+    const differenceValue = differences[metric]?.difference;
+    return `
+      <tr>
+        <td>${escapeHtml(String(metric))}</td>
+        <td>${escapeHtml(formatYearlyMaintenanceValue(storedValue))}</td>
+        <td>${escapeHtml(formatYearlyMaintenanceValue(proposedValue))}</td>
+        <td>${escapeHtml(formatYearlyMaintenanceDifference(differenceValue))}</td>
+      </tr>
+    `;
+  }).join("");
+}
+
+function resetYearlyMaintenanceState(message = "Select a year to preview.") {
+  if (yearlyMaintenanceStatus) {
+    yearlyMaintenanceStatus.textContent = message;
+  }
+  if (yearlyMaintenancePreviewSummary) {
+    yearlyMaintenancePreviewSummary.innerHTML = "";
+  }
+  if (yearlyMaintenanceWarnings) {
+    yearlyMaintenanceWarnings.innerHTML = "No warnings yet.";
+  }
+  if (yearlyMaintenanceComparisonWrap) {
+    yearlyMaintenanceComparisonWrap.classList.add("hidden");
+  }
+  if (yearlyMaintenanceComparisonBody) {
+    yearlyMaintenanceComparisonBody.innerHTML = "";
+  }
+  if (yearlyMaintenanceResult) {
+    yearlyMaintenanceResult.innerHTML = "";
+  }
+  if (yearlyMaintenanceCalculateBtn) {
+    yearlyMaintenanceCalculateBtn.disabled = true;
+  }
+}
+
+async function handleYearlyMaintenancePreview() {
+  const selectedYear = Number(yearlyMaintenanceYear?.value);
+  if (!selectedYear || Number.isNaN(selectedYear)) {
+    resetYearlyMaintenanceState("Please select a valid year.");
+    return;
+  }
+
+  if (yearlyMaintenanceStatus) {
+    yearlyMaintenanceStatus.textContent = "Requesting preview...";
+  }
+  if (yearlyMaintenanceResult) {
+    yearlyMaintenanceResult.innerHTML = "";
+  }
+
+  try {
+    const response = await fetch("/api/yearly/calculate/preview", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ calendar_year: selectedYear }),
+    });
+
+    const payload = await response.json();
+    if (!response.ok) {
+      const detail = payload?.detail || `Preview failed: ${response.status}`;
+      resetYearlyMaintenanceState(detail);
+      return;
+    }
+
+    if (yearlyMaintenanceStatus) {
+      yearlyMaintenanceStatus.textContent = "Preview completed successfully.";
+    }
+    renderYearlyMaintenancePreviewSummary(payload);
+    renderYearlyMaintenanceComparison(payload);
+    if (yearlyMaintenanceCalculateBtn) {
+      yearlyMaintenanceCalculateBtn.disabled = false;
+    }
+  } catch (error) {
+    console.error(error);
+    resetYearlyMaintenanceState("Unable to preview yearly data. Please try again.");
+  }
+}
+
+async function handleYearlyMaintenanceCalculate() {
+  const selectedYear = Number(yearlyMaintenanceYear?.value);
+  if (!selectedYear || Number.isNaN(selectedYear)) {
+    if (yearlyMaintenanceResult) {
+      yearlyMaintenanceResult.innerHTML = "<div class=\"yearly-maintenance-error\">Select a valid year.</div>";
+    }
+    return;
+  }
+
+  if (yearlyMaintenanceCalculateBtn) {
+    yearlyMaintenanceCalculateBtn.disabled = true;
+  }
+  if (yearlyMaintenanceStatus) {
+    yearlyMaintenanceStatus.textContent = "Calculating year...";
+  }
+
+  try {
+    const response = await fetch("/api/yearly/calculate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ calendar_year: selectedYear }),
+    });
+
+    const payload = await response.json();
+    if (!response.ok) {
+      const detail = payload?.detail || `Calculation failed: ${response.status}`;
+      if (yearlyMaintenanceResult) {
+        yearlyMaintenanceResult.innerHTML = `<div class="yearly-maintenance-error">${escapeHtml(String(detail))}</div>`;
+      }
+      if (yearlyMaintenanceStatus) {
+        yearlyMaintenanceStatus.textContent = "Calculation failed.";
+      }
+      if (yearlyMaintenanceCalculateBtn) {
+        yearlyMaintenanceCalculateBtn.disabled = false;
+      }
+      return;
+    }
+
+    const warnings = Array.isArray(payload?.warnings) ? payload.warnings : [];
+    const warningMarkup = warnings.length > 0
+      ? warnings.map(warning => `<li>${escapeHtml(String(warning))}</li>`).join("")
+      : "<li>No warnings.</li>";
+
+    if (yearlyMaintenanceResult) {
+      yearlyMaintenanceResult.innerHTML = `
+        <div class="yearly-maintenance-success-row">
+          <span class="yearly-maintenance-success-badge">Success</span>
+          <span>Run ID: ${escapeHtml(String(payload?.training_year_run_id ?? "N/A"))}</span>
+        </div>
+        <div class="yearly-maintenance-stat-grid small-grid">
+          <div class="yearly-maintenance-stat-item"><span>Coverage Status</span><strong>${escapeHtml(String(payload?.coverage_status ?? "N/A"))}</strong></div>
+          <div class="yearly-maintenance-stat-item"><span>Activity Count</span><strong>${escapeHtml(String(payload?.activity_count ?? "0"))}</strong></div>
+          <div class="yearly-maintenance-stat-item"><span>Months With Activity</span><strong>${escapeHtml(String(payload?.months_with_activity ?? "0"))}</strong></div>
+        </div>
+        <div class="yearly-maintenance-section-block">
+          <div class="yearly-maintenance-label">Warnings</div>
+          <ul class="yearly-maintenance-warning-list">${warningMarkup}</ul>
+        </div>
+      `;
+    }
+    if (yearlyMaintenanceStatus) {
+      yearlyMaintenanceStatus.textContent = "Calculation completed successfully.";
+    }
+    if (yearlyMaintenanceCalculateBtn) {
+      yearlyMaintenanceCalculateBtn.disabled = false;
+    }
+  } catch (error) {
+    console.error(error);
+    if (yearlyMaintenanceResult) {
+      yearlyMaintenanceResult.innerHTML = '<div class="yearly-maintenance-error">Unable to calculate yearly data.</div>';
+    }
+    if (yearlyMaintenanceStatus) {
+      yearlyMaintenanceStatus.textContent = "Calculation failed.";
+    }
+    if (yearlyMaintenanceCalculateBtn) {
+      yearlyMaintenanceCalculateBtn.disabled = false;
+    }
+  }
+}
+
 function restorePreferences() {
   const saved = loadSavedPreferences();
   Object.assign(window.AppState, saved);
@@ -268,6 +544,7 @@ function restorePreferences() {
   applyAppearancePreference();
   syncLimitSelects();
   syncFormCheckboxes();
+  populateYearlyMaintenanceYearOptions();
   if (appearanceInputs.length > 0) {
     appearanceInputs.forEach(input => {
       input.checked = input.value === window.AppState.appearance;
@@ -357,6 +634,27 @@ settingsCloseBtn?.addEventListener("click", () => {
   settingsDrawer?.classList.add("hidden");
   settingsDrawer?.setAttribute("aria-hidden", "true");
 });
+settingsTabButtons.forEach(button => {
+  button.addEventListener("click", () => {
+    const selectedTab = button.dataset.settingsTab;
+    if (!selectedTab || !settingsTabPanels[selectedTab]) {
+      return;
+    }
+
+    settingsTabButtons.forEach(tabButton => {
+      const isActive = tabButton === button;
+      tabButton.classList.toggle("active", isActive);
+      tabButton.setAttribute("aria-selected", String(isActive));
+    });
+
+    Object.entries(settingsTabPanels).forEach(([tabName, panel]) => {
+      if (!panel) {
+        return;
+      }
+      panel.classList.toggle("hidden", tabName !== selectedTab);
+    });
+  });
+});
 settingsDrawer?.addEventListener("click", event => {
   if (event.target === settingsDrawer) {
     settingsCloseBtn?.click();
@@ -412,6 +710,11 @@ settingsHideRetired?.addEventListener("change", event => {
   persistPreferences();
   renderGearTable();
 });
+yearlyMaintenanceYear?.addEventListener("change", () => {
+  resetYearlyMaintenanceState("Select a year to preview.");
+});
+yearlyMaintenancePreviewBtn?.addEventListener("click", handleYearlyMaintenancePreview);
+yearlyMaintenanceCalculateBtn?.addEventListener("click", handleYearlyMaintenanceCalculate);
 refreshStatusBtn?.addEventListener("click", loadSystemStatus);
 copyDiagnosticsBtn?.addEventListener("click", copySystemDiagnostics);
 syncNowBtn.addEventListener("click", handleSyncNow);
@@ -748,12 +1051,112 @@ function formatRecordCell(value, digits = 0, isRecord = false) {
   return `${formatted}<span class="record-trophy" aria-label="Record">🏆</span>`;
 }
 
+function getYearlyCommentText(value) {
+  if (value === null || value === undefined || value === "") {
+    return "No entry recorded.";
+  }
+  return String(value);
+}
+
+function ensureYearlyCommentaryDrawer() {
+  let drawer = document.getElementById("yearlyCommentaryDrawer");
+  if (drawer) {
+    return drawer;
+  }
+
+  drawer = document.createElement("div");
+  drawer.id = "yearlyCommentaryDrawer";
+  drawer.className = "yearly-commentary-drawer hidden";
+  drawer.setAttribute("aria-hidden", "true");
+  drawer.innerHTML = `
+    <div class="yearly-commentary-panel">
+      <div class="yearly-commentary-header">
+        <div>
+          <div class="drawer-title">Yearly Commentary</div>
+          <div class="drawer-subtitle">Annual notes for the selected year</div>
+        </div>
+        <button type="button" class="drawer-close-button" aria-label="Close yearly commentary drawer">×</button>
+      </div>
+      <div class="yearly-commentary-body">
+        <div class="yearly-commentary-section">
+          <div class="yearly-commentary-label">Year</div>
+          <div id="yearlyCommentaryYear" class="yearly-commentary-value"></div>
+        </div>
+        <div class="yearly-commentary-section">
+          <div class="yearly-commentary-label">✅ Good</div>
+          <div id="yearlyCommentaryGood" class="yearly-commentary-value"></div>
+        </div>
+        <div class="yearly-commentary-section">
+          <div class="yearly-commentary-label">⚠ Bad</div>
+          <div id="yearlyCommentaryBad" class="yearly-commentary-value"></div>
+        </div>
+        <div class="yearly-commentary-section">
+          <div class="yearly-commentary-label">📝 Annual Summary</div>
+          <div id="yearlyCommentaryAnnual" class="yearly-commentary-value"></div>
+        </div>
+      </div>
+    </div>
+  `;
+
+  drawer.addEventListener("click", event => {
+    if (event.target === drawer) {
+      drawer.classList.add("hidden");
+      drawer.setAttribute("aria-hidden", "true");
+    }
+  });
+
+  const closeButton = drawer.querySelector(".drawer-close-button");
+  closeButton.addEventListener("click", () => {
+    drawer.classList.add("hidden");
+    drawer.setAttribute("aria-hidden", "true");
+  });
+
+  document.body.appendChild(drawer);
+  return drawer;
+}
+
+async function openYearlyCommentaryDrawer(calendarYear) {
+  const drawer = ensureYearlyCommentaryDrawer();
+  const yearNode = document.getElementById("yearlyCommentaryYear");
+  const goodNode = document.getElementById("yearlyCommentaryGood");
+  const badNode = document.getElementById("yearlyCommentaryBad");
+  const annualNode = document.getElementById("yearlyCommentaryAnnual");
+
+  yearNode.textContent = String(calendarYear);
+  goodNode.textContent = "Loading...";
+  badNode.textContent = "Loading...";
+  annualNode.textContent = "Loading...";
+  drawer.classList.remove("hidden");
+  drawer.setAttribute("aria-hidden", "false");
+
+  try {
+    const response = await fetch(`/api/yearly/commentary/${calendarYear}`);
+    if (!response.ok) {
+      const detail = response.status === 404 ? "No commentary exists for this year." : `Request failed: ${response.status}`;
+      goodNode.textContent = detail;
+      badNode.textContent = "No entry recorded.";
+      annualNode.textContent = "No entry recorded.";
+      return;
+    }
+
+    const payload = await response.json();
+    goodNode.textContent = getYearlyCommentText(payload.good_summary);
+    badNode.textContent = getYearlyCommentText(payload.bad_summary);
+    annualNode.textContent = getYearlyCommentText(payload.annual_summary);
+  } catch (error) {
+    console.error(error);
+    goodNode.textContent = "No entry recorded.";
+    badNode.textContent = "No entry recorded.";
+    annualNode.textContent = "No entry recorded.";
+  }
+}
+
 function renderYearlyTable() {
   const rows = (window.AppState.yearlyRows || []).map(row => {
     const isYtd = row.is_ytd === true || row.is_ytd === "true" || row.is_ytd === 1 || row.is_ytd === "1";
 
     return `
-      <tr>
+      <tr data-calendar-year="${safe(row.calendar_year)}" class="yearly-metric-row" tabindex="0" aria-label="View commentary for ${safe(row.calendar_year)}">
         <td>${safe(row.calendar_year)}</td>
         <td>${formatRecordCell(row.training_hours, 1, Boolean(row.training_hours_record))}</td>
         <td>${formatRecordCell(row.active_days, 0, Boolean(row.active_days_record))}</td>
@@ -785,6 +1188,18 @@ function renderYearlyTable() {
       ${rows}
     </tbody>
   `;
+
+  document.querySelectorAll("#yearlyTable tbody tr[data-calendar-year]").forEach(row => {
+    row.addEventListener("click", () => {
+      openYearlyCommentaryDrawer(row.dataset.calendarYear);
+    });
+    row.addEventListener("keydown", event => {
+      if (event.key === "Enter" || event.key === " ") {
+        event.preventDefault();
+        openYearlyCommentaryDrawer(row.dataset.calendarYear);
+      }
+    });
+  });
 }
 
 function renderYearlyMonthlyTable() {

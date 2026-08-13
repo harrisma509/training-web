@@ -1046,6 +1046,61 @@ tr:hover td {
   font-size: 13px;
 }
 
+.yearly-commentary-drawer {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 460px;
+  max-width: 100%;
+  background: var(--panel);
+  box-shadow: var(--shadow-elevated);
+  z-index: 30;
+  display: grid;
+  grid-template-rows: auto 1fr;
+}
+
+.yearly-commentary-drawer.hidden {
+  display: none;
+}
+
+.yearly-commentary-panel {
+  display: grid;
+  grid-template-rows: auto 1fr;
+  height: 100%;
+}
+
+.yearly-commentary-header {
+  padding: 20px 20px 0;
+  border-bottom: 1px solid var(--line);
+  background: var(--panel);
+}
+
+.yearly-commentary-body {
+  padding: 16px 20px 20px;
+  display: grid;
+  gap: 18px;
+  overflow-y: auto;
+}
+
+.yearly-commentary-section {
+  display: grid;
+  gap: 8px;
+}
+
+.yearly-commentary-label {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--muted);
+}
+
+.yearly-commentary-value {
+  white-space: pre-wrap;
+  word-break: break-word;
+  line-height: 1.6;
+  font-size: 14px;
+}
+
 .weekly-drawer {
   position: fixed;
   top: 0;
@@ -1190,13 +1245,14 @@ tr:hover td {
 }
 
 .settings-panel {
-  width: 100%;
-  max-width: 440px;
+  width: min(90vw, 1000px);
+  max-height: 85vh;
   background: var(--panel);
   box-shadow: var(--shadow-elevated);
   display: grid;
-  grid-template-rows: auto 1fr;
+  grid-template-rows: auto minmax(0, 1fr);
   margin-left: auto;
+  overflow: hidden;
 }
 
 .settings-header {
@@ -1224,11 +1280,66 @@ tr:hover td {
   display: grid;
   gap: 18px;
   overflow-y: auto;
+  min-height: 0;
+}
+
+.settings-tab-list {
+  display: flex;
+  gap: 8px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--line);
+}
+
+.settings-tab {
+  appearance: none;
+  border: 1px solid var(--input-border);
+  background: transparent;
+  color: var(--muted);
+  border-radius: 999px;
+  padding: 8px 14px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.settings-tab.active {
+  background: var(--input-bg);
+  color: var(--text);
+  border-color: var(--line);
+}
+
+.settings-tab-panel {
+  display: grid;
+  gap: 18px;
+}
+
+.settings-general-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+}
+
+.settings-general-tile {
+  background: var(--input-bg);
+  border: 1px solid var(--input-border);
+  border-radius: 12px;
+  padding: 14px;
+}
+
+.settings-general-span-2 {
+  grid-column: 1 / -1;
 }
 
 .settings-section {
   display: grid;
   gap: 10px;
+}
+
+.yearly-section-card {
+  background: var(--input-bg);
+  border: 1px solid var(--input-border);
+  border-radius: 12px;
+  padding: 14px;
 }
 
 .settings-label {
@@ -1267,6 +1378,189 @@ tr:hover td {
 
 .settings-control-row select {
   min-width: 112px;
+}
+
+.yearly-maintenance-actions {
+  justify-content: space-between;
+  flex-wrap: wrap;
+}
+
+.yearly-maintenance-status {
+  font-size: 12px;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.yearly-maintenance-warning-panel {
+  background: var(--panel);
+  border: 1px solid var(--input-border);
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-size: 12px;
+  color: var(--text);
+  min-height: 52px;
+}
+
+.yearly-maintenance-preview-summary {
+  display: grid;
+  gap: 12px;
+}
+
+.yearly-maintenance-stat-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.yearly-maintenance-stat-grid.small-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.yearly-maintenance-stat-item {
+  display: grid;
+  gap: 4px;
+  padding: 8px 10px;
+  border: 1px solid var(--input-border);
+  border-radius: 8px;
+  background: var(--input-bg);
+}
+
+.yearly-maintenance-stat-item span {
+  color: var(--muted);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.yearly-maintenance-stat-item strong {
+  font-size: 12px;
+  line-height: 1.5;
+  word-break: break-word;
+}
+
+.yearly-maintenance-section-block {
+  display: grid;
+  gap: 8px;
+}
+
+.yearly-maintenance-warning-group {
+  padding-top: 2px;
+}
+
+.yearly-maintenance-label {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.secondary-label {
+  margin-top: 2px;
+}
+
+.yearly-maintenance-chip-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.yearly-maintenance-chip {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 4px 8px;
+  font-size: 11px;
+  background: rgba(59, 130, 246, 0.12);
+  color: var(--text);
+}
+
+.yearly-maintenance-chip.subtle {
+  background: rgba(148, 163, 184, 0.12);
+  color: var(--muted);
+}
+
+.yearly-maintenance-warning-list {
+  margin: 0;
+  padding-left: 18px;
+  display: grid;
+  gap: 4px;
+  color: var(--text);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.yearly-maintenance-comparison-wrap {
+  display: grid;
+  gap: 8px;
+  overflow-x: auto;
+}
+
+.yearly-maintenance-table {
+  width: 100%;
+  min-width: 620px;
+  border-collapse: collapse;
+  font-size: 12px;
+  table-layout: fixed;
+}
+
+.yearly-maintenance-table th,
+.yearly-maintenance-table td {
+  padding: 8px 6px;
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+  vertical-align: top;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.yearly-maintenance-table th:nth-child(1),
+.yearly-maintenance-table td:nth-child(1) { width: 22%; }
+.yearly-maintenance-table th:nth-child(2),
+.yearly-maintenance-table td:nth-child(2) { width: 26%; }
+.yearly-maintenance-table th:nth-child(3),
+.yearly-maintenance-table td:nth-child(3) { width: 26%; }
+.yearly-maintenance-table th:nth-child(4),
+.yearly-maintenance-table td:nth-child(4) { width: 26%; }
+
+.yearly-maintenance-table th {
+  color: var(--muted);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.yearly-maintenance-result {
+  display: grid;
+  gap: 10px;
+}
+
+.yearly-maintenance-success-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  font-size: 12px;
+  color: var(--text);
+}
+
+.yearly-maintenance-success-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  padding: 4px 8px;
+  font-size: 11px;
+  font-weight: 700;
+  background: rgba(34, 197, 94, 0.16);
+  color: var(--green);
+}
+
+.yearly-maintenance-error {
+  color: var(--red);
+  font-size: 12px;
+  line-height: 1.5;
 }
 
 .settings-status-summary {
@@ -1327,6 +1621,14 @@ tr:hover td {
     margin-left: 0;
     flex-wrap: wrap;
     justify-content: flex-start;
+  }
+
+  .settings-general-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .settings-general-span-2 {
+    grid-column: auto;
   }
 
   .control-group {

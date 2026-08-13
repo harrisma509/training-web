@@ -93,83 +93,142 @@
     </div>
 
     <div class="settings-body">
-      <div class="settings-section">
-        <div class="settings-label">Appearance</div>
-        <div class="settings-choice-list">
-          <label class="settings-choice"><input id="appearanceSystem" type="radio" name="appearance" value="system"> System</label>
-          <label class="settings-choice"><input id="appearanceLight" type="radio" name="appearance" value="light"> Light</label>
-          <label class="settings-choice"><input id="appearanceDark" type="radio" name="appearance" value="dark"> Dark</label>
+      <div class="settings-tab-list" role="tablist" aria-label="Settings tabs">
+        <button class="settings-tab active" type="button" data-settings-tab="general" role="tab" aria-selected="true">General</button>
+        <button class="settings-tab" type="button" data-settings-tab="yearly" role="tab" aria-selected="false">Yearly</button>
+      </div>
+
+      <div id="settingsGeneralTab" class="settings-tab-panel">
+        <div class="settings-general-grid">
+          <div class="settings-section settings-general-tile">
+            <div class="settings-label">Appearance</div>
+            <div class="settings-choice-list">
+              <label class="settings-choice"><input id="appearanceSystem" type="radio" name="appearance" value="system"> System</label>
+              <label class="settings-choice"><input id="appearanceLight" type="radio" name="appearance" value="light"> Light</label>
+              <label class="settings-choice"><input id="appearanceDark" type="radio" name="appearance" value="dark"> Dark</label>
+            </div>
+          </div>
+
+          <div class="settings-section settings-general-tile">
+            <div class="settings-label">App Preferences</div>
+            <div class="settings-choice-list">
+              <label class="settings-choice"><input id="rememberLastTab" type="checkbox" checked> Remember last selected tab</label>
+            </div>
+            <div id="startupTabRow" class="settings-control-row hidden">
+              <label for="startupTab">Startup tab</label>
+              <select id="startupTab">
+                <option value="daily">Daily</option>
+                <option value="weekly">Weekly</option>
+                <option value="zones">Zones</option>
+                <option value="gear">Gear</option>
+                <option value="components">Components</option>
+                <option value="yearly">Yearly</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="settings-section settings-general-tile">
+            <div class="settings-label">Gear filters</div>
+            <div class="settings-choice-list">
+              <label class="settings-choice"><input id="settingsHideShoes" type="checkbox"> Hide shoes</label>
+              <label class="settings-choice"><input id="settingsHideRetired" type="checkbox"> Hide retired</label>
+            </div>
+          </div>
+
+          <div class="settings-section settings-general-tile">
+            <div class="settings-label">Default bike</div>
+            <div class="settings-control-row">
+              <label for="settingsDefaultBike">Default bike</label>
+              <select id="settingsDefaultBike">
+                <option value="">Loading bikes...</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="settings-section settings-general-tile settings-general-span-2">
+            <div class="settings-label">Row limits</div>
+            <div class="settings-control-row">
+              <label for="settingsDailyLimit">Daily rows</label>
+              <select id="settingsDailyLimit">
+                <option value="60">60</option>
+                <option value="90">90</option>
+                <option value="365">365</option>
+                <option value="1000">1000</option>
+              </select>
+            </div>
+            <div class="settings-control-row">
+              <label for="settingsWeeklyLimit">Weekly rows</label>
+              <select id="settingsWeeklyLimit">
+                <option value="26">26</option>
+                <option value="60">60</option>
+                <option value="260">260</option>
+              </select>
+            </div>
+            <div class="settings-control-row">
+              <label for="settingsZonesLimit">Zones rows</label>
+              <select id="settingsZonesLimit">
+                <option value="26">26</option>
+                <option value="60">60</option>
+                <option value="260">260</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="settings-section settings-general-tile settings-general-span-2">
+            <div class="settings-label">System status</div>
+            <div id="settingsStatusSummary" class="settings-status-summary" aria-live="polite">Loading...</div>
+            <div class="settings-actions">
+              <button id="refreshStatusBtn" type="button" class="button-secondary">Refresh Status</button>
+              <button id="copyDiagnosticsBtn" type="button" class="button-primary">Copy Diagnostics</button>
+            </div>
+          </div>
         </div>
       </div>
 
-      <div class="settings-section">
-        <div class="settings-label">App Preferences</div>
-        <div class="settings-choice-list">
-          <label class="settings-choice"><input id="rememberLastTab" type="checkbox" checked> Remember last selected tab</label>
-        </div>
-        <div id="startupTabRow" class="settings-control-row hidden">
-          <label for="startupTab">Startup tab</label>
-          <select id="startupTab">
-            <option value="daily">Daily</option>
-            <option value="weekly">Weekly</option>
-            <option value="zones">Zones</option>
-            <option value="gear">Gear</option>
-            <option value="components">Components</option>
-            <option value="yearly">Yearly</option>
-          </select>
+      <div id="settingsYearlyTab" class="settings-tab-panel hidden">
+        <div class="settings-section yearly-section-card">
+          <div class="settings-label">Year Selection</div>
+          <div class="settings-control-row yearly-control-row">
+            <label for="yearlyMaintenanceYear">Year</label>
+            <select id="yearlyMaintenanceYear"></select>
+          </div>
+          <div class="settings-actions yearly-maintenance-actions">
+            <button id="yearlyMaintenancePreviewBtn" type="button" class="button-secondary">Preview Calculation</button>
+            <button id="yearlyMaintenanceCalculateBtn" type="button" class="button-primary" disabled>Calculate Year</button>
+          </div>
         </div>
 
-        <div class="settings-control-row">
-          <label for="settingsDefaultBike">Default bike</label>
-          <select id="settingsDefaultBike">
-            <option value="">Loading bikes...</option>
-          </select>
+        <div class="settings-section yearly-section-card">
+          <div class="settings-label">Preview Results</div>
+          <div id="yearlyMaintenanceStatus" class="yearly-maintenance-status">Select a year to preview.</div>
+          <div id="yearlyMaintenancePreviewSummary" class="yearly-maintenance-preview-summary"></div>
         </div>
 
-        <div class="settings-control-row">
-          <label for="settingsDailyLimit">Daily rows</label>
-          <select id="settingsDailyLimit">
-            <option value="60">60</option>
-            <option value="90">90</option>
-            <option value="365">365</option>
-            <option value="1000">1000</option>
-          </select>
+        <div class="settings-section yearly-section-card">
+          <div class="settings-label">Warnings</div>
+          <div id="yearlyMaintenanceWarnings" class="yearly-maintenance-warning-panel">No warnings yet.</div>
         </div>
 
-        <div class="settings-control-row">
-          <label for="settingsWeeklyLimit">Weekly rows</label>
-          <select id="settingsWeeklyLimit">
-            <option value="26">26</option>
-            <option value="60">60</option>
-            <option value="260">260</option>
-          </select>
+        <div class="settings-section yearly-section-card">
+          <div class="settings-label">Difference Review</div>
+          <div id="yearlyMaintenanceComparisonWrap" class="yearly-maintenance-comparison-wrap hidden">
+            <table class="yearly-maintenance-table">
+              <thead>
+                <tr>
+                  <th>Metric</th>
+                  <th>Stored</th>
+                  <th>Preview</th>
+                  <th>Difference</th>
+                </tr>
+              </thead>
+              <tbody id="yearlyMaintenanceComparisonBody"></tbody>
+            </table>
+          </div>
         </div>
 
-        <div class="settings-control-row">
-          <label for="settingsZonesLimit">Zones rows</label>
-          <select id="settingsZonesLimit">
-            <option value="26">26</option>
-            <option value="60">60</option>
-            <option value="260">260</option>
-          </select>
-        </div>
-
-      </div>
-
-      <div class="settings-section">
-        <div class="settings-label">Gear filters</div>
-        <div class="settings-choice-list">
-          <label class="settings-choice"><input id="settingsHideShoes" type="checkbox"> Hide shoes</label>
-          <label class="settings-choice"><input id="settingsHideRetired" type="checkbox"> Hide retired</label>
-        </div>
-      </div>
-
-      <div class="settings-section">
-        <div class="settings-label">System status</div>
-        <div id="settingsStatusSummary" class="settings-status-summary" aria-live="polite">Loading...</div>
-        <div class="settings-actions">
-          <button id="refreshStatusBtn" type="button" class="button-secondary">Refresh Status</button>
-          <button id="copyDiagnosticsBtn" type="button" class="button-primary">Copy Diagnostics</button>
+        <div class="settings-section yearly-section-card">
+          <div class="settings-label">Calculation Status</div>
+          <div id="yearlyMaintenanceResult" class="yearly-maintenance-result"></div>
         </div>
       </div>
     </div>

@@ -172,6 +172,38 @@ def api_yearly():
     })
 
 
+@router.get("/api/yearly/commentary/{calendar_year}")
+def api_yearly_commentary(calendar_year: int):
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                select
+                    calendar_year,
+                    good_summary,
+                    bad_summary,
+                    annual_summary,
+                    source
+                from public.training_year_commentary
+                where calendar_year = %s
+                """,
+                (calendar_year,),
+            )
+            row = cur.fetchone()
+
+    if row is None:
+        return JSONResponse({"detail": f"No commentary exists for year {calendar_year}."}, status_code=404)
+
+    payload = {
+        "calendar_year": row.get("calendar_year"),
+        "good_summary": row.get("good_summary"),
+        "bad_summary": row.get("bad_summary"),
+        "annual_summary": row.get("annual_summary"),
+        "source": row.get("source"),
+    }
+    return JSONResponse(_json_safe_payload(payload))
+
+
 def _calculate_year_preview(calendar_year):
     current_year = datetime.now(timezone.utc).year
 
