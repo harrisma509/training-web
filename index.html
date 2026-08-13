@@ -7,6 +7,7 @@
   <link rel="icon" href="/static/favicon.ico" type="image/x-icon">
   <link rel="shortcut icon" href="/static/favicon.ico" type="image/x-icon">
   <link rel="stylesheet" href="/static/style.css">
+  <link rel="stylesheet" href="/static/yearly.css">
 </head>
 <body>
 <header class="app-header">
@@ -76,8 +77,10 @@
         <span>Sync status loading...</span>
       </div>
 
-      <button id="settingsBtn" type="button" class="button-secondary">Settings</button>
       <button id="syncNowBtn" type="button" class="sync-button">Sync Now</button>
+      <button id="settingsBtn" type="button" class="button-secondary settings-icon-button" aria-label="Settings" title="Settings">
+        <span aria-hidden="true">⚙</span>
+      </button>
     </div>
   </div>
 </header>
@@ -87,7 +90,7 @@
     <div class="settings-header">
       <div>
         <div class="settings-title">Settings</div>
-        <div class="settings-subtitle">Dashboard preferences</div>
+        <div class="settings-subtitle">Preferences and data maintenance</div>
       </div>
       <button id="settingsCloseBtn" type="button" class="drawer-close-button" aria-label="Close settings">×</button>
     </div>
@@ -188,27 +191,32 @@
       </div>
 
       <div id="settingsYearlyTab" class="settings-tab-panel hidden">
-        <div class="settings-section yearly-section-card">
-          <div class="settings-label">Year Selection</div>
-          <div class="settings-control-row yearly-control-row">
-            <label for="yearlyMaintenanceYear">Year</label>
-            <select id="yearlyMaintenanceYear"></select>
-          </div>
-          <div class="settings-actions yearly-maintenance-actions">
-            <button id="yearlyMaintenancePreviewBtn" type="button" class="button-secondary">Preview Calculation</button>
-            <button id="yearlyMaintenanceCalculateBtn" type="button" class="button-primary" disabled>Calculate Year</button>
-          </div>
-        </div>
+        <div class="yearly-settings-grid">
+          <div class="yearly-settings-left-column">
+            <div class="settings-section yearly-section-card">
+              <div class="settings-label">Year Selection</div>
+              <div class="settings-control-row yearly-control-row">
+                <label for="yearlyMaintenanceYear">Year</label>
+                <select id="yearlyMaintenanceYear"></select>
+              </div>
+              <div class="settings-actions yearly-maintenance-actions">
+                <button id="yearlyMaintenancePreviewBtn" type="button" class="button-secondary">Preview Calculation</button>
+                <button id="yearlyMaintenanceCalculateBtn" type="button" class="button-primary" disabled>Calculate Year</button>
+              </div>
+            </div>
 
-        <div class="settings-section yearly-section-card">
-          <div class="settings-label">Preview Results</div>
-          <div id="yearlyMaintenanceStatus" class="yearly-maintenance-status">Select a year to preview.</div>
-          <div id="yearlyMaintenancePreviewSummary" class="yearly-maintenance-preview-summary"></div>
-        </div>
+            <div class="settings-section yearly-section-card yearly-status-card">
+              <div class="settings-label">Calculation Status</div>
+              <div id="yearlyMaintenanceResult" class="yearly-maintenance-result"></div>
+            </div>
+          </div>
 
-        <div class="settings-section yearly-section-card">
-          <div class="settings-label">Warnings</div>
-          <div id="yearlyMaintenanceWarnings" class="yearly-maintenance-warning-panel">No warnings yet.</div>
+          <div class="settings-section yearly-section-card">
+            <div class="settings-label">Preview Results</div>
+            <div id="yearlyMaintenanceStatus" class="yearly-maintenance-status">Select a year to preview.</div>
+            <div id="yearlyMaintenancePreviewSummary" class="yearly-maintenance-preview-summary"></div>
+            <div id="yearlyMaintenanceWarnings" class="yearly-maintenance-warning-panel">No warnings yet.</div>
+          </div>
         </div>
 
         <div class="settings-section yearly-section-card">
@@ -226,11 +234,6 @@
               <tbody id="yearlyMaintenanceComparisonBody"></tbody>
             </table>
           </div>
-        </div>
-
-        <div class="settings-section yearly-section-card">
-          <div class="settings-label">Calculation Status</div>
-          <div id="yearlyMaintenanceResult" class="yearly-maintenance-result"></div>
         </div>
       </div>
     </div>
@@ -335,6 +338,7 @@
 <script src="/static/gear.js"></script>
 <script src="/static/components.js"></script>
 <script src="/static/sync.js"></script>
+<script src="/static/yearly.js"></script>
 <script src="/static/app.js"></script>
 </body>
 </html>
