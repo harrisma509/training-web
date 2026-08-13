@@ -227,17 +227,19 @@ function createWeeklyCommentEditor(cell) {
 
     cell.classList.add("saving");
     try {
-      const response = await fetch(`/api/weekly-commentary/${weekStart}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ weekly_comment: newValue }),
-      });
+      const result = window.api && typeof window.api.saveWeeklyCommentary === "function"
+        ? await window.api.saveWeeklyCommentary(weekStart, { weekly_comment: newValue })
+        : await fetch(`/api/weekly-commentary/${weekStart}`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ weekly_comment: newValue }),
+          }).then(response => {
+            if (!response.ok) {
+              throw new Error(`Save failed: ${response.status}`);
+            }
+            return response.json();
+          });
 
-      if (!response.ok) {
-        throw new Error(`Save failed: ${response.status}`);
-      }
-
-      const result = await response.json();
       updateWeeklyRowComment(weekStart, result.weekly_comment);
       renderWeeklyCommentDisplay(cell, result.weekly_comment || "");
       attachWeeklyCommentHandlers(cell);
@@ -353,13 +355,16 @@ function openWeeklyAuditDrawer(weekStart) {
   weeklyAuditDrawer.classList.remove("hidden");
   weeklyAuditDrawer.setAttribute("aria-hidden", "false");
 
-  fetch(`/api/weekly-audit/${weekStart}/items`)
-    .then(response => {
-      if (!response.ok) {
-        throw new Error(`Unable to load audit details: ${response.status}`);
-      }
-      return response.json();
-    })
+  const loadAuditItems = window.api && typeof window.api.fetchWeeklyAuditItems === "function"
+    ? window.api.fetchWeeklyAuditItems(weekStart)
+    : fetch(`/api/weekly-audit/${weekStart}/items`).then(response => {
+        if (!response.ok) {
+          throw new Error(`Unable to load audit details: ${response.status}`);
+        }
+        return response.json();
+      });
+
+  loadAuditItems
     .then(items => {
       auditDrawerLoading.classList.add("hidden");
       const body = document.getElementById("auditDetailTableBody");
@@ -598,18 +603,20 @@ async function saveWeeklyDrawer() {
   drawerCloseBtn.disabled = true;
 
   try {
-    const response = await fetch(`/api/weekly-commentary/${weeklyState.currentDrawerWeek}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
+    const result = window.api && typeof window.api.saveWeeklyCommentary === "function"
+      ? await window.api.saveWeeklyCommentary(weeklyState.currentDrawerWeek, payload)
+      : await fetch(`/api/weekly-commentary/${weeklyState.currentDrawerWeek}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        }).then(async response => {
+          if (!response.ok) {
+            const errorText = await response.text();
+            throw new Error(errorText || `Save failed: ${response.status}`);
+          }
+          return response.json();
+        });
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(errorText || `Save failed: ${response.status}`);
-    }
-
-    const result = await response.json();
     const row = window.AppState.weeklyRows.find(r => r.week_start === weeklyState.currentDrawerWeek);
     if (row) {
       Object.assign(row, result);
@@ -631,7 +638,18 @@ async function saveWeeklyDrawer() {
 
 async function loadWeekly() {
   const limit = Number(window.AppState.weeklyLimit);
-  window.AppState.weeklyRows = await fetch(`/api/weekly?limit=${limit}`).then(response => response.json());
+
+  try {
+    if (window.api && typeof window.api.fetchWeekly === "function") {
+      window.AppState.weeklyRows = await window.api.fetchWeekly(limit);
+    } else {
+      window.AppState.weeklyRows = await fetch(`/api/weekly?limit=${limit}`).then(response => response.json());
+    }
+  } catch (error) {
+    console.error(error);
+    window.AppState.weeklyRows = [];
+  }
+
   renderWeeklyTable();
 
   if (window.AppState.activeTab === "weekly") {

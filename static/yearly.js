@@ -159,18 +159,21 @@ async function handleYearlyMaintenancePreview() {
   }
 
   try {
-    const response = await fetch("/api/yearly/calculate/preview", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ calendar_year: selectedYear }),
-    });
-
-    const payload = await response.json();
-    if (!response.ok) {
-      const detail = payload?.detail || `Preview failed: ${response.status}`;
-      resetYearlyMaintenanceState(detail);
-      return;
-    }
+    const payload = window.api && typeof window.api.previewYearlyCalculation === "function"
+      ? await window.api.previewYearlyCalculation({ calendar_year: selectedYear })
+      : await fetch("/api/yearly/calculate/preview", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ calendar_year: selectedYear }),
+        }).then(async response => {
+          const json = await response.json();
+          if (!response.ok) {
+            const detail = json?.detail || `Preview failed: ${response.status}`;
+            resetYearlyMaintenanceState(detail);
+            throw new Error(detail);
+          }
+          return json;
+        });
 
     if (yearlyMaintenanceStatus) {
       yearlyMaintenanceStatus.textContent = "Preview completed successfully.";
@@ -203,26 +206,29 @@ async function handleYearlyMaintenanceCalculate() {
   }
 
   try {
-    const response = await fetch("/api/yearly/calculate", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ calendar_year: selectedYear }),
-    });
-
-    const payload = await response.json();
-    if (!response.ok) {
-      const detail = payload?.detail || `Calculation failed: ${response.status}`;
-      if (yearlyMaintenanceResult) {
-        yearlyMaintenanceResult.innerHTML = `<div class="yearly-maintenance-error">${escapeHtml(String(detail))}</div>`;
-      }
-      if (yearlyMaintenanceStatus) {
-        yearlyMaintenanceStatus.textContent = "Calculation failed.";
-      }
-      if (yearlyMaintenanceCalculateBtn) {
-        yearlyMaintenanceCalculateBtn.disabled = false;
-      }
-      return;
-    }
+    const payload = window.api && typeof window.api.calculateYearly === "function"
+      ? await window.api.calculateYearly({ calendar_year: selectedYear })
+      : await fetch("/api/yearly/calculate", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ calendar_year: selectedYear }),
+        }).then(async response => {
+          const json = await response.json();
+          if (!response.ok) {
+            const detail = json?.detail || `Calculation failed: ${response.status}`;
+            if (yearlyMaintenanceResult) {
+              yearlyMaintenanceResult.innerHTML = `<div class="yearly-maintenance-error">${escapeHtml(String(detail))}</div>`;
+            }
+            if (yearlyMaintenanceStatus) {
+              yearlyMaintenanceStatus.textContent = "Calculation failed.";
+            }
+            if (yearlyMaintenanceCalculateBtn) {
+              yearlyMaintenanceCalculateBtn.disabled = false;
+            }
+            throw new Error(detail);
+          }
+          return json;
+        });
 
     const warnings = Array.isArray(payload?.warnings) ? payload.warnings : [];
     const warningMarkup = warnings.length > 0
@@ -390,16 +396,19 @@ async function openYearlyCommentaryDrawer(calendarYear) {
   drawer.setAttribute("aria-hidden", "false");
 
   try {
-    const response = await fetch(`/api/yearly/commentary/${calendarYear}`);
-    if (!response.ok) {
-      const detail = response.status === 404 ? "No commentary exists for this year." : `Request failed: ${response.status}`;
-      goodNode.textContent = detail;
-      badNode.textContent = "No entry recorded.";
-      annualNode.textContent = "No entry recorded.";
-      return;
-    }
+    const payload = window.api && typeof window.api.fetchYearlyCommentary === "function"
+      ? await window.api.fetchYearlyCommentary(calendarYear)
+      : await fetch(`/api/yearly/commentary/${calendarYear}`).then(async response => {
+          if (!response.ok) {
+            const detail = response.status === 404 ? "No commentary exists for this year." : `Request failed: ${response.status}`;
+            goodNode.textContent = detail;
+            badNode.textContent = "No entry recorded.";
+            annualNode.textContent = "No entry recorded.";
+            throw new Error(detail);
+          }
+          return response.json();
+        });
 
-    const payload = await response.json();
     goodNode.textContent = getYearlyCommentText(payload.good_summary);
     badNode.textContent = getYearlyCommentText(payload.bad_summary);
     annualNode.textContent = getYearlyCommentText(payload.annual_summary);
@@ -502,12 +511,15 @@ function renderYearlyMonthlyTable() {
 
 async function loadYearly() {
   try {
-    const response = await fetch("/api/yearly");
-    if (!response.ok) {
-      throw new Error(`Yearly endpoint failed: ${response.status}`);
-    }
+    const payload = window.api && typeof window.api.fetchYearly === "function"
+      ? await window.api.fetchYearly()
+      : await fetch("/api/yearly").then(async response => {
+          if (!response.ok) {
+            throw new Error(`Yearly endpoint failed: ${response.status}`);
+          }
+          return response.json();
+        });
 
-    const payload = await response.json();
     const annualRows = Array.isArray(payload) ? payload : (payload.annual_metrics || []);
     const monthlyRows = Array.isArray(payload.monthly_hours) ? payload.monthly_hours : [];
     window.AppState.yearlyRows = annualRows;

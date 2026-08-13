@@ -270,16 +270,19 @@ async function openYearlyCommentaryDrawer(calendarYear) {
   drawer.setAttribute("aria-hidden", "false");
 
   try {
-    const response = await fetch(`/api/yearly/commentary/${calendarYear}`);
-    if (!response.ok) {
-      const detail = response.status === 404 ? "No commentary exists for this year." : `Request failed: ${response.status}`;
-      goodNode.textContent = detail;
-      badNode.textContent = "No entry recorded.";
-      annualNode.textContent = "No entry recorded.";
-      return;
-    }
+    const payload = window.api && typeof window.api.fetchYearlyCommentary === "function"
+      ? await window.api.fetchYearlyCommentary(calendarYear)
+      : await fetch(`/api/yearly/commentary/${calendarYear}`).then(async response => {
+          if (!response.ok) {
+            const detail = response.status === 404 ? "No commentary exists for this year." : `Request failed: ${response.status}`;
+            goodNode.textContent = detail;
+            badNode.textContent = "No entry recorded.";
+            annualNode.textContent = "No entry recorded.";
+            throw new Error(detail);
+          }
+          return response.json();
+        });
 
-    const payload = await response.json();
     goodNode.textContent = getYearlyCommentText(payload.good_summary);
     badNode.textContent = getYearlyCommentText(payload.bad_summary);
     annualNode.textContent = getYearlyCommentText(payload.annual_summary);
@@ -382,12 +385,15 @@ function renderYearlyMonthlyTable() {
 
 async function loadYearly() {
   try {
-    const response = await fetch("/api/yearly");
-    if (!response.ok) {
-      throw new Error(`Yearly endpoint failed: ${response.status}`);
-    }
+    const payload = window.api && typeof window.api.fetchYearly === "function"
+      ? await window.api.fetchYearly()
+      : await fetch("/api/yearly").then(async response => {
+          if (!response.ok) {
+            throw new Error(`Yearly endpoint failed: ${response.status}`);
+          }
+          return response.json();
+        });
 
-    const payload = await response.json();
     const annualRows = Array.isArray(payload) ? payload : (payload.annual_metrics || []);
     const monthlyRows = Array.isArray(payload.monthly_hours) ? payload.monthly_hours : [];
     window.AppState.yearlyRows = annualRows;

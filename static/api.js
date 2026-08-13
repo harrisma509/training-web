@@ -42,9 +42,17 @@
       return fetchJson("/api/yearly");
     },
 
+    async fetchWeeklyAuditItems(weekStart) {
+      return fetchJson(`/api/weekly-audit/${encodeURIComponent(weekStart)}/items`);
+    },
+
+    async fetchWeeklyCommentary(weekStart) {
+      return fetchJson(`/api/weekly-commentary/${encodeURIComponent(weekStart)}`);
+    },
+
     async saveWeeklyComment(weekStart, payload) {
-      const response = await fetch(`/api/weekly/commentary/${encodeURIComponent(weekStart)}`, {
-        method: "POST",
+      const response = await fetch(`/api/weekly-commentary/${encodeURIComponent(weekStart)}`, {
+        method: "PATCH",
         headers: {
           "Content-Type": "application/json",
           Accept: "application/json",
@@ -57,6 +65,36 @@
       }
 
       return response.json();
+    },
+
+    async saveWeeklyCommentary(weekStart, payload) {
+      return this.saveWeeklyComment(weekStart, payload);
+    },
+
+    async fetchYearlyCommentary(calendarYear) {
+      return fetchJson(`/api/yearly/commentary/${encodeURIComponent(calendarYear)}`);
+    },
+
+    async previewYearlyCalculation(payload = {}) {
+      return fetchJson("/api/yearly/calculate/preview", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json",
+        },
+        body: JSON.stringify(payload),
+      });
+    },
+
+    async calculateYearly(payload = {}) {
+      return fetchJson("/api/yearly/calculate", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json",
+        },
+        body: JSON.stringify(payload),
+      });
     },
   };
 

@@ -50,7 +50,18 @@ function zoneHeaderLabel(metric, title) {
 
 async function loadZones() {
   const limit = Number(window.AppState.zonesLimit);
-  window.AppState.zonesRows = await fetch(`/api/zones?limit=${limit}`).then(response => response.json());
+
+  try {
+    if (window.api && typeof window.api.fetchZones === "function") {
+      window.AppState.zonesRows = await window.api.fetchZones(limit);
+    } else {
+      window.AppState.zonesRows = await fetch(`/api/zones?limit=${limit}`).then(response => response.json());
+    }
+  } catch (error) {
+    console.error(error);
+    window.AppState.zonesRows = [];
+  }
+
   renderZonesTable();
 
   if (window.AppState.activeTab === "zones") {
