@@ -59,6 +59,14 @@ def _safe_float(value):
         return None
 
 
+def _is_completed_month_for_record(year, month, current_year, current_month, through_month=None):
+    if year != current_year:
+        return True
+    if through_month is not None and month > through_month:
+        return False
+    return month < current_month
+
+
 def _json_safe_payload(value):
     if isinstance(value, dict):
         return {key: _json_safe_payload(inner_value) for key, inner_value in value.items()}
@@ -125,12 +133,16 @@ def api_yearly():
         for row in annual_rows
     }
 
+    current_year = datetime.now(timezone.utc).year
+    current_month = datetime.now(timezone.utc).month
+
     month_values_by_year = {}
     month_record_max = {month: [] for month in range(1, 13)}
     for row in monthly_rows:
         year = int(row["calendar_year"])
         month = int(row["calendar_month"])
         year_row = year_meta.get(year)
+        through_month = None
         if year_row and year_row.get("is_ytd") is True and year_row.get("through_date"):
             through_month = date.fromisoformat(year_row["through_date"]).month
             if month > through_month:
@@ -139,8 +151,7 @@ def api_yearly():
         month_values_by_year.setdefault(year, {})[month] = row.get("training_hours")
         if (
             row.get("training_hours") is not None
-            and year_row is not None
-            and year_row.get("is_ytd") is False
+            and _is_completed_month_for_record(year, month, current_year, current_month, through_month)
         ):
             month_record_max[month].append(float(row["training_hours"]))
 
@@ -158,7 +169,7 @@ def api_yearly():
             record_max = max(month_record_max[month_index]) if month_record_max[month_index] else None
             year_row[f"{key}_record"] = bool(
                 value is not None
-                and year_meta.get(year, {}).get("is_ytd") is False
+                and _is_completed_month_for_record(year, month_index, current_year, current_month)
                 and _value_is_record(value, record_max)
             )
 
@@ -716,6 +727,7 @@ def api_yearly_calculate(payload: dict | None = Body(default=None)):
                             %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
                         )
                         on conflict (calendar_year) do update set
+                            training_hours = EXCLUDED.training_hours,
                             strava_activity_hours = EXCLUDED.strava_activity_hours,
                             active_days = EXCLUDED.active_days,
                             activity_count = EXCLUDED.activity_count,
@@ -739,9 +751,14 @@ def api_yearly_calculate(payload: dict | None = Body(default=None)):
                             calculated_at = EXCLUDED.calculated_at,
                             updated_at = now()
                         """
+                    annual_training_hours = (
+                        annual_values.get("training_hours")
+                        if calendar_year >= 2013
+                        else annual_existing.get("training_hours")
+                    )
                     annual_row = (
                         calendar_year,
-                        annual_existing.get("training_hours"),
+                        annual_training_hours,
                         annual_values.get("strava_activity_hours"),
                         annual_values.get("active_days"),
                         annual_values.get("activity_count"),
@@ -784,7 +801,12 @@ def api_yearly_calculate(payload: dict | None = Body(default=None)):
                             (calendar_year, month_index),
                         )
                         existing_month = cur.fetchone()
-                        existing_training_hours = existing_month[0] if existing_month else None
+                        existing_training_hours = existing_month.get("training_hours") if existing_month else None
+                        month_training_hours = (
+                            month_bucket.get("strava_activity_hours")
+                            if calendar_year >= 2013
+                            else existing_training_hours
+                        )
                         cur.execute(
                             """
                             insert into public.training_year_month (
@@ -810,6 +832,7 @@ def api_yearly_calculate(payload: dict | None = Body(default=None)):
                                 %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
                             )
                             on conflict (calendar_year, calendar_month) do update set
+                                training_hours = EXCLUDED.training_hours,
                                 strava_activity_hours = EXCLUDED.strava_activity_hours,
                                 active_days = EXCLUDED.active_days,
                                 activity_count = EXCLUDED.activity_count,
@@ -829,7 +852,7 @@ def api_yearly_calculate(payload: dict | None = Body(default=None)):
                             (
                                 calendar_year,
                                 month_index,
-                                existing_training_hours,
+                                month_training_hours,
                                 month_bucket.get("strava_activity_hours"),
                                 month_bucket.get("active_days"),
                                 month_bucket.get("activity_count"),

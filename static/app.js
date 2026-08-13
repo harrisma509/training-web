@@ -1048,7 +1048,7 @@ function formatRecordCell(value, digits = 0, isRecord = false) {
   if (!isRecord) {
     return formatted;
   }
-  return `${formatted}<span class="record-trophy" aria-label="Record">🏆</span>`;
+  return `<span class="record-trophy" aria-label="Record">🏆</span> ${formatted}`;
 }
 
 function getYearlyCommentText(value) {
@@ -1212,7 +1212,7 @@ function renderYearlyMonthlyTable() {
 
       return `
         <td class="yearly-month-cell ${record ? "record-cell" : ""}">
-          ${value === null || value === undefined || value === "" ? "" : `${formatMonthlyHours(value)}${record ? '<span class="record-trophy" aria-label="Record">🏆</span>' : ""}`}
+          ${value === null || value === undefined || value === "" ? "" : `${record ? '<span class="record-trophy" aria-label="Record">🏆</span> ' : ""}${formatMonthlyHours(value)}`}
         </td>
       `;
     }).join("");
