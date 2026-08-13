@@ -24,12 +24,6 @@
   const hideRetiredCheckbox = document.getElementById("hideRetiredCheckbox");
   const systemThemeMedia = window.matchMedia ? window.matchMedia("(prefers-color-scheme: light)") : null;
 
-  const VALID_ROW_LIMITS = {
-    daily: [60, 90, 365, 1000],
-    weekly: [26, 60, 260],
-    zones: [26, 60, 260],
-  };
-
   function escapeHtml(value) {
     return String(value)
       .replace(/&/g, "&amp;")
@@ -37,80 +31,6 @@
       .replace(/>/g, "&gt;")
       .replace(/\"/g, "&quot;")
       .replace(/'/g, "&#39;");
-  }
-
-  function normalizeStoredPreference(value, fallback, allowedValues) {
-    if (value === null || value === undefined || value === "") {
-      return fallback;
-    }
-
-    const asString = String(value).trim();
-    if (allowedValues && allowedValues.length > 0) {
-      const parsed = Number(asString);
-      if (Number.isInteger(parsed) && allowedValues.includes(parsed)) {
-        return parsed;
-      }
-      return fallback;
-    }
-
-    return fallback;
-  }
-
-  function sanitizePreferences(rawPreferences = {}) {
-    const fallbackPreferences = window.DEFAULT_PREFERENCES || {};
-    const next = { ...fallbackPreferences, ...(rawPreferences || {}) };
-
-    next.appearance = ["system", "light", "dark"].includes(next.appearance) ? next.appearance : "system";
-    next.activeTab = ["daily", "weekly", "zones", "gear", "components", "yearly"].includes(next.activeTab) ? next.activeTab : "daily";
-    next.rememberLastTab = next.rememberLastTab !== false;
-    next.startupTab = ["daily", "weekly", "zones", "gear", "components", "yearly"].includes(next.startupTab) ? next.startupTab : "daily";
-    next.yearlyView = ["annual", "monthly"].includes(next.yearlyView) ? next.yearlyView : "annual";
-    next.defaultBikeGearId = next.defaultBikeGearId == null ? "" : String(next.defaultBikeGearId).trim();
-    next.componentsSelectedGearId = next.componentsSelectedGearId == null ? "" : String(next.componentsSelectedGearId).trim();
-    next.hideShoes = Boolean(next.hideShoes);
-    next.hideRetired = Boolean(next.hideRetired);
-    next.dailyLimit = normalizeStoredPreference(next.dailyLimit, 60, VALID_ROW_LIMITS.daily);
-    next.weeklyLimit = normalizeStoredPreference(next.weeklyLimit, 60, VALID_ROW_LIMITS.weekly);
-    next.zonesLimit = normalizeStoredPreference(next.zonesLimit, 60, VALID_ROW_LIMITS.zones);
-    delete next.gearLimit;
-
-    return next;
-  }
-
-  function loadSavedPreferences() {
-    try {
-      const storageValue = window.localStorage.getItem(window.APP_PREFERENCES_KEY);
-      if (!storageValue) {
-        return sanitizePreferences();
-      }
-      const parsed = JSON.parse(storageValue);
-      return sanitizePreferences(parsed);
-    } catch (error) {
-      return sanitizePreferences();
-    }
-  }
-
-  function persistPreferences() {
-    const snapshot = {
-      appearance: window.AppState.appearance,
-      activeTab: window.AppState.activeTab,
-      rememberLastTab: window.AppState.rememberLastTab,
-      startupTab: window.AppState.startupTab,
-      defaultBikeGearId: window.AppState.defaultBikeGearId,
-      componentsSelectedGearId: window.AppState.componentsSelectedGearId,
-      hideShoes: window.AppState.hideShoes,
-      hideRetired: window.AppState.hideRetired,
-      dailyLimit: window.AppState.dailyLimit,
-      weeklyLimit: window.AppState.weeklyLimit,
-      zonesLimit: window.AppState.zonesLimit,
-      yearlyView: window.AppState.yearlyView,
-    };
-
-    try {
-      window.localStorage.setItem(window.APP_PREFERENCES_KEY, JSON.stringify(snapshot));
-    } catch (error) {
-      console.warn("Unable to persist preferences.", error);
-    }
   }
 
   function syncFormCheckboxes() {
@@ -208,25 +128,6 @@
     const shouldHide = window.AppState.rememberLastTab !== false;
     startupTabRow.classList.toggle("hidden", shouldHide);
     rememberLastTab.checked = window.AppState.rememberLastTab !== false;
-  }
-
-  function applyAppearancePreference() {
-    if (!document.documentElement) {
-      return;
-    }
-
-    if (window.AppState.appearance === "light") {
-      document.documentElement.setAttribute("data-theme", "light");
-      return;
-    }
-
-    if (window.AppState.appearance === "dark") {
-      document.documentElement.setAttribute("data-theme", "dark");
-      return;
-    }
-
-    const prefersDark = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
-    document.documentElement.setAttribute("data-theme", prefersDark ? "dark" : "light");
   }
 
   function handleSystemAppearanceChange() {
@@ -363,7 +264,7 @@
   }
 
   function updateLimitPreference(key, value, reloadFn) {
-    const allowedValues = VALID_ROW_LIMITS[key.replace(/Limit$/, "")];
+    const allowedValues = window.APP_ROW_LIMITS?.[key.replace(/Limit$/, "")];
     if (!allowedValues || !Number.isInteger(value) || !allowedValues.includes(value)) {
       return;
     }
