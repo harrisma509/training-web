@@ -1,77 +1,9 @@
-function getWeeklyCommentText(weekStart) {
-  const row = window.AppState.weeklyRows.find(r => r.week_start === weekStart);
-  return row && row.weekly_comment != null ? String(row.weekly_comment) : "";
-}
-
-function createWeeklyCommentEditor(cell) {
-  const weekStart = cell.dataset.weekStart;
-  const originalText = getWeeklyCommentText(weekStart);
-  const textarea = document.createElement("textarea");
-  textarea.className = "weekly-comment-input";
-  textarea.value = originalText;
-  textarea.rows = 4;
-  textarea.addEventListener("keydown", event => {
-    if (event.key === "Escape") {
-      event.preventDefault();
-      cell.classList.remove("editing");
-      cell.innerHTML = `<div class="weekly-comment-display" title="${escapeHtml(originalText)}">${escapeHtml(truncateText(originalText, 100))}</div>`;
-      attachWeeklyCommentHandlers(cell);
-    }
-  });
-
-  textarea.addEventListener("blur", async () => {
-    const newValue = textarea.value;
-    if (newValue === originalText) {
-      cell.classList.remove("editing");
-      cell.innerHTML = `<div class="weekly-comment-display" title="${escapeHtml(originalText)}">${escapeHtml(truncateText(originalText, 100))}</div>`;
-      attachWeeklyCommentHandlers(cell);
-      return;
-    }
-
-    cell.classList.add("saving");
-    try {
-      const response = await fetch(`/api/weekly-commentary/${weekStart}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ weekly_comment: newValue }),
-      });
-
-      if (!response.ok) {
-        throw new Error(`Save failed: ${response.status}`);
-      }
-
-      const result = await response.json();
-      updateWeeklyRowComment(weekStart, result.weekly_comment);
-      cell.classList.remove("editing", "error");
-      cell.innerHTML = `<div class="weekly-comment-display" title="${escapeHtml(result.weekly_comment || "")}">${escapeHtml(truncateText(result.weekly_comment || "", 100))}</div>`;
-      attachWeeklyCommentHandlers(cell);
-    } catch (error) {
-      console.error(error);
-      cell.classList.add("error");
-      // Leave textarea visible so user can retry or correct
-    } finally {
-      cell.classList.remove("saving");
-    }
-  });
-
-  cell.classList.add("editing");
-  cell.innerHTML = "";
-  cell.appendChild(textarea);
-  textarea.focus();
-  textarea.setSelectionRange(textarea.value.length, textarea.value.length);
-}
-
-function attachWeeklyCommentHandlers(cell) {
-  cell.addEventListener("click", () => {
-    if (!cell.classList.contains("editing")) {
-      createWeeklyCommentEditor(cell);
-    }
-  }, { once: true });
-}
-
-let currentDrawerWeek = null;
-let drawerInitialValues = null;
-let drawerDirty = false;
+// Weekly module state
+const weeklyState = {
+  currentDrawerWeek: null,
+  drawerInitialValues: null,
+  drawerDirty: false,
+};
 
 const weeklyDrawer = document.getElementById("weeklyDrawer");
 const weeklyDrawerContent = document.getElementById("weeklyDrawerContent");
@@ -86,59 +18,16 @@ const auditDrawerTitle = document.getElementById("auditDrawerTitle");
 const auditDrawerScore = document.getElementById("auditDrawerScore");
 const auditDrawerSummary = document.getElementById("auditDrawerSummary");
 const auditDrawerNextAction = document.getElementById("auditDrawerNextAction");
-const auditDrawerBody = document.getElementById("auditDrawerBody");
 const auditDrawerLoading = document.getElementById("auditDrawerLoading");
 const auditDrawerError = document.getElementById("auditDrawerError");
 const auditDrawerNoItems = document.getElementById("auditDrawerNoItems");
 
-function createWeeklyAuditDrawer() {
-  const markup = `
-    <div id="weeklyAuditDrawer" class="audit-drawer hidden" aria-hidden="true">
-      <div class="audit-drawer-panel">
-        <div class="audit-drawer-header">
-          <div>
-            <div id="auditDrawerTitle" class="audit-drawer-title">Weekly Audit</div>
-            <div id="auditDrawerSubtitle" class="audit-drawer-subtitle">Audit details for the selected week</div>
-          </div>
-          <button id="auditDrawerCloseBtn" type="button" class="drawer-close-button" aria-label="Close audit drawer">×</button>
-        </div>
-        <div class="audit-drawer-body">
-          <div id="auditDrawerScore" class="audit-score-summary"></div>
-          <div id="auditDrawerSummary" class="audit-summary"></div>
-          <div id="auditDrawerNextAction" class="audit-next-action"></div>
-          <div id="auditDrawerError" class="audit-error hidden"></div>
-          <div id="auditDrawerLoading" class="audit-loading">Loading audit details...</div>
-          <div id="auditDrawerNoItems" class="audit-no-items hidden">No audit details found for this week.</div>
-          <div class="audit-detail-table-wrap hidden">
-            <table id="auditDetailTable" class="audit-detail-table">
-              <thead>
-                <tr>
-                  <th>Item</th>
-                  <th>Status</th>
-                  <th>Summary</th>
-                </tr>
-              </thead>
-              <tbody id="auditDetailTableBody"></tbody>
-            </table>
-          </div>
-        </div>
-      </div>
-    </div>
-  `;
-  document.body.insertAdjacentHTML("beforeend", markup);
-  const drawer = document.getElementById("weeklyAuditDrawer");
-  drawer.addEventListener("click", event => {
-    if (event.target === drawer) {
-      closeWeeklyAuditDrawer();
-    }
-  });
-  return drawer;
-}
-
+// Weekly formatting helpers
 function formatAuditScoreString(row) {
   if (!row.audit_grade) {
     return "";
   }
+
   const green = row.audit_green_count == null ? 0 : row.audit_green_count;
   const yellow = row.audit_yellow_count == null ? 0 : row.audit_yellow_count;
   const red = row.audit_red_count == null ? 0 : row.audit_red_count;
@@ -188,10 +77,12 @@ function formatWeeklyFixed(value, digits = 1) {
   if (value === null || value === undefined || value === "") {
     return "";
   }
+
   const parsed = Number(value);
   if (!Number.isFinite(parsed)) {
     return "";
   }
+
   return parsed.toFixed(digits);
 }
 
@@ -199,10 +90,12 @@ function formatWeeklyAcRatio(value) {
   if (value === null || value === undefined || value === "") {
     return "";
   }
+
   const parsed = Number(value);
   if (!Number.isFinite(parsed)) {
     return "";
   }
+
   const rounded = Number(parsed.toFixed(2));
   return rounded % 1 === 0 ? rounded.toFixed(0) : rounded.toString();
 }
@@ -254,10 +147,12 @@ function formatWeeklyInt(value) {
   if (value === null || value === undefined || value === "") {
     return "";
   }
+
   const parsed = Number(value);
   if (!Number.isFinite(parsed)) {
     return "";
   }
+
   return new Intl.NumberFormat("en-US").format(Math.round(parsed));
 }
 
@@ -294,6 +189,136 @@ function renderWeeklyHoursCell(hoursValue) {
   return `<span class="weekly-hours-value ${status.cssClass}"><span class="weekly-status-dot ${colorName}" title="${escapeHtml(status.title)}"></span>${valueText}</span>`;
 }
 
+// Inline comment editor
+function getWeeklyCommentText(weekStart) {
+  const row = window.AppState.weeklyRows.find(r => r.week_start === weekStart);
+  return row && row.weekly_comment != null ? String(row.weekly_comment) : "";
+}
+
+function renderWeeklyCommentDisplay(cell, text) {
+  cell.classList.remove("editing", "error", "saving");
+  cell.innerHTML = `<div class="weekly-comment-display" title="${escapeHtml(text || "")}">${escapeHtml(truncateText(text || "", 100))}</div>`;
+}
+
+function createWeeklyCommentEditor(cell) {
+  const weekStart = cell.dataset.weekStart;
+  const originalText = getWeeklyCommentText(weekStart);
+  const textarea = document.createElement("textarea");
+
+  textarea.className = "weekly-comment-input";
+  textarea.value = originalText;
+  textarea.rows = 4;
+
+  textarea.addEventListener("keydown", event => {
+    if (event.key === "Escape") {
+      event.preventDefault();
+      renderWeeklyCommentDisplay(cell, originalText);
+      attachWeeklyCommentHandlers(cell);
+    }
+  });
+
+  textarea.addEventListener("blur", async () => {
+    const newValue = textarea.value;
+    if (newValue === originalText) {
+      renderWeeklyCommentDisplay(cell, originalText);
+      attachWeeklyCommentHandlers(cell);
+      return;
+    }
+
+    cell.classList.add("saving");
+    try {
+      const response = await fetch(`/api/weekly-commentary/${weekStart}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ weekly_comment: newValue }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`Save failed: ${response.status}`);
+      }
+
+      const result = await response.json();
+      updateWeeklyRowComment(weekStart, result.weekly_comment);
+      renderWeeklyCommentDisplay(cell, result.weekly_comment || "");
+      attachWeeklyCommentHandlers(cell);
+    } catch (error) {
+      console.error(error);
+      cell.classList.add("error");
+    } finally {
+      cell.classList.remove("saving");
+    }
+  });
+
+  cell.classList.add("editing");
+  cell.innerHTML = "";
+  cell.appendChild(textarea);
+  textarea.focus();
+  textarea.setSelectionRange(textarea.value.length, textarea.value.length);
+}
+
+function attachWeeklyCommentHandlers(cell) {
+  cell.addEventListener("click", () => {
+    if (!cell.classList.contains("editing")) {
+      createWeeklyCommentEditor(cell);
+    }
+  }, { once: true });
+}
+
+function updateWeeklyRowComment(weekStart, comment) {
+  const row = window.AppState.weeklyRows.find(r => r.week_start === weekStart);
+  if (row) {
+    row.weekly_comment = comment;
+  }
+}
+
+// Weekly audit drawer
+function createWeeklyAuditDrawer() {
+  const markup = `
+    <div id="weeklyAuditDrawer" class="audit-drawer hidden" aria-hidden="true">
+      <div class="audit-drawer-panel">
+        <div class="audit-drawer-header">
+          <div>
+            <div id="auditDrawerTitle" class="audit-drawer-title">Weekly Audit</div>
+            <div id="auditDrawerSubtitle" class="audit-drawer-subtitle">Audit details for the selected week</div>
+          </div>
+          <button id="auditDrawerCloseBtn" type="button" class="drawer-close-button" aria-label="Close audit drawer">×</button>
+        </div>
+        <div class="audit-drawer-body">
+          <div id="auditDrawerScore" class="audit-score-summary"></div>
+          <div id="auditDrawerSummary" class="audit-summary"></div>
+          <div id="auditDrawerNextAction" class="audit-next-action"></div>
+          <div id="auditDrawerError" class="audit-error hidden"></div>
+          <div id="auditDrawerLoading" class="audit-loading">Loading audit details...</div>
+          <div id="auditDrawerNoItems" class="audit-no-items hidden">No audit details found for this week.</div>
+          <div class="audit-detail-table-wrap hidden">
+            <table id="auditDetailTable" class="audit-detail-table">
+              <thead>
+                <tr>
+                  <th>Item</th>
+                  <th>Status</th>
+                  <th>Summary</th>
+                </tr>
+              </thead>
+              <tbody id="auditDetailTableBody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+
+  document.body.insertAdjacentHTML("beforeend", markup);
+
+  const drawer = document.getElementById("weeklyAuditDrawer");
+  drawer.addEventListener("click", event => {
+    if (event.target === drawer) {
+      closeWeeklyAuditDrawer();
+    }
+  });
+
+  return drawer;
+}
+
 function openWeeklyAuditDrawer(weekStart) {
   const row = window.AppState.weeklyRows.find(r => r.week_start === weekStart);
   if (!row) {
@@ -303,6 +328,7 @@ function openWeeklyAuditDrawer(weekStart) {
   auditDrawerTitle.textContent = `Weekly Audit - ${safe(row.week_start)}`;
   auditDrawerScore.innerHTML = formatAuditScoreString(row);
   auditDrawerScore.className = `audit-score-summary ${auditScoreClass(row)}`;
+
   if (row.audit_summary) {
     auditDrawerSummary.textContent = row.audit_summary;
     auditDrawerSummary.classList.remove("hidden");
@@ -310,6 +336,7 @@ function openWeeklyAuditDrawer(weekStart) {
     auditDrawerSummary.textContent = "";
     auditDrawerSummary.classList.add("hidden");
   }
+
   if (row.audit_next_week_action) {
     auditDrawerNextAction.textContent = row.audit_next_week_action;
     auditDrawerNextAction.classList.remove("hidden");
@@ -373,32 +400,34 @@ function attachAuditScoreHandlers() {
   });
 }
 
+// Commentary drawer
 function openWeeklyDrawer(weekStart) {
   const row = window.AppState.weeklyRows.find(r => r.week_start === weekStart);
   if (!row) {
     return;
   }
 
-  currentDrawerWeek = weekStart;
-  drawerInitialValues = getDrawerFormValues(row);
-  drawerDirty = false;
+  weeklyState.currentDrawerWeek = weekStart;
+  weeklyState.drawerInitialValues = getDrawerFormValues(row);
+  weeklyState.drawerDirty = false;
   renderDrawerContext(row);
-  renderDrawerForm(drawerInitialValues);
+  renderDrawerForm(weeklyState.drawerInitialValues);
   weeklyDrawer.classList.remove("hidden");
   weeklyDrawer.setAttribute("aria-hidden", "false");
 }
 
 function closeWeeklyDrawer(force = false) {
-  if (!weeklyDrawer.classList.contains("hidden") && drawerDirty && !force) {
+  if (!weeklyDrawer.classList.contains("hidden") && weeklyState.drawerDirty && !force) {
     if (!confirm("Discard unsaved changes?")) {
       return;
     }
   }
+
   weeklyDrawer.classList.add("hidden");
   weeklyDrawer.setAttribute("aria-hidden", "true");
-  currentDrawerWeek = null;
-  drawerInitialValues = null;
-  drawerDirty = false;
+  weeklyState.currentDrawerWeek = null;
+  weeklyState.drawerInitialValues = null;
+  weeklyState.drawerDirty = false;
 }
 
 function renderDrawerContext(row) {
@@ -495,7 +524,7 @@ function renderDrawerForm(values) {
   const fields = weeklyDrawerContent.querySelectorAll("input, textarea");
   fields.forEach(field => {
     field.addEventListener("input", () => {
-      drawerDirty = true;
+      weeklyState.drawerDirty = true;
       const error = document.getElementById("drawerError");
       if (error) {
         error.classList.add("hidden");
@@ -515,6 +544,7 @@ function getDrawerFormPayload() {
     if (!element) {
       return null;
     }
+
     const value = element.value.trim();
     return value === "" ? null : Number(value);
   };
@@ -551,12 +581,14 @@ function setDrawerError(message) {
   if (!error) {
     return;
   }
+
   error.textContent = message;
   error.classList.remove("hidden");
 }
 
+// Weekly API calls
 async function saveWeeklyDrawer() {
-  if (!currentDrawerWeek) {
+  if (!weeklyState.currentDrawerWeek) {
     return;
   }
 
@@ -566,7 +598,7 @@ async function saveWeeklyDrawer() {
   drawerCloseBtn.disabled = true;
 
   try {
-    const response = await fetch(`/api/weekly-commentary/${currentDrawerWeek}`, {
+    const response = await fetch(`/api/weekly-commentary/${weeklyState.currentDrawerWeek}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
@@ -578,14 +610,14 @@ async function saveWeeklyDrawer() {
     }
 
     const result = await response.json();
-    const row = window.AppState.weeklyRows.find(r => r.week_start === currentDrawerWeek);
+    const row = window.AppState.weeklyRows.find(r => r.week_start === weeklyState.currentDrawerWeek);
     if (row) {
       Object.assign(row, result);
     }
 
-    updateWeeklyRowComment(currentDrawerWeek, result.weekly_comment);
+    updateWeeklyRowComment(weeklyState.currentDrawerWeek, result.weekly_comment);
     renderWeeklyTable();
-    drawerDirty = false;
+    weeklyState.drawerDirty = false;
     closeWeeklyDrawer(true);
   } catch (error) {
     console.error(error);
@@ -607,6 +639,7 @@ async function loadWeekly() {
   }
 }
 
+// Weekly table rendering
 function renderWeeklyTable() {
   const rows = window.AppState.weeklyRows.map(row => `
     <tr>
@@ -685,22 +718,23 @@ function renderWeeklyTable() {
       event.stopPropagation();
     });
   });
+
   attachAuditScoreHandlers();
 }
 
-function updateWeeklyRowComment(weekStart, comment) {
-  const row = window.AppState.weeklyRows.find(r => r.week_start === weekStart);
-  if (row) {
-    row.weekly_comment = comment;
-  }
+// Initialization and public interface
+function registerWeeklyEventHandlers() {
+  drawerCloseBtn.addEventListener("click", () => closeWeeklyDrawer());
+  drawerCancelBtn.addEventListener("click", () => closeWeeklyDrawer());
+  drawerSaveBtn.addEventListener("click", saveWeeklyDrawer);
+  auditDrawerCloseBtn.addEventListener("click", () => closeWeeklyAuditDrawer());
+
+  weeklyDrawer.addEventListener("click", event => {
+    if (event.target === weeklyDrawer) {
+      closeWeeklyDrawer();
+    }
+  });
 }
 
-drawerCloseBtn.addEventListener("click", () => closeWeeklyDrawer());
-drawerCancelBtn.addEventListener("click", () => closeWeeklyDrawer());
-drawerSaveBtn.addEventListener("click", saveWeeklyDrawer);
-auditDrawerCloseBtn.addEventListener("click", () => closeWeeklyAuditDrawer());
-weeklyDrawer.addEventListener("click", event => {
-  if (event.target === weeklyDrawer) {
-    closeWeeklyDrawer();
-  }
-});
+registerWeeklyEventHandlers();
+window.loadWeekly = loadWeekly;
