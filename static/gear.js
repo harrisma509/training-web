@@ -144,11 +144,15 @@ async function loadGear() {
   const fixedLimit = 10000;
 
   try {
-    const response = await fetch(`/api/gear/dashboard?limit=${fixedLimit}`);
-    if (!response.ok) {
-      throw new Error(`Gear endpoint failed: ${response.status}`);
+    if (window.api && typeof window.api.fetchGearDashboard === "function") {
+      window.AppState.gearRows = await window.api.fetchGearDashboard(fixedLimit);
+    } else {
+      const response = await fetch(`/api/gear/dashboard?limit=${fixedLimit}`);
+      if (!response.ok) {
+        throw new Error(`Gear endpoint failed: ${response.status}`);
+      }
+      window.AppState.gearRows = await response.json();
     }
-    window.AppState.gearRows = await response.json();
   } catch (error) {
     console.error(error);
     window.AppState.gearRows = [];
