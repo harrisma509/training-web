@@ -4,6 +4,7 @@ window.DEFAULT_PREFERENCES = Object.freeze({
   activeTab: "daily",
   rememberLastTab: true,
   startupTab: "daily",
+  defaultBikeGearId: "",
   componentsSelectedGearId: "",
   hideShoes: true,
   hideRetired: true,

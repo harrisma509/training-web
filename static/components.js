@@ -213,7 +213,7 @@ function renderComponentsTable() {
 }
 
 async function loadComponents() {
-  const selectedGearId = String(window.AppState.componentsSelectedGearId || "").trim();
+  const selectedGearId = String(window.AppState.componentsSelectedGearId || window.AppState.defaultBikeGearId || "").trim();
   const endpoint = selectedGearId
     ? `/api/gear/components?gear_id=${encodeURIComponent(selectedGearId)}`
     : "/api/gear/components";
@@ -248,6 +248,9 @@ async function loadComponents() {
   }
 
   renderComponentsBikeSelect();
+  if (typeof window.syncDefaultBikeSelect === "function") {
+    window.syncDefaultBikeSelect();
+  }
   renderComponentsSummary();
   renderComponentsTable();
 

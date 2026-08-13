@@ -34,6 +34,7 @@ const settingsCloseBtn = document.getElementById("settingsCloseBtn");
 const rememberLastTab = document.getElementById("rememberLastTab");
 const startupTab = document.getElementById("startupTab");
 const startupTabRow = document.getElementById("startupTabRow");
+const settingsDefaultBike = document.getElementById("settingsDefaultBike");
 const settingsDailyLimit = document.getElementById("settingsDailyLimit");
 const settingsWeeklyLimit = document.getElementById("settingsWeeklyLimit");
 const settingsZonesLimit = document.getElementById("settingsZonesLimit");
@@ -77,6 +78,7 @@ function sanitizePreferences(rawPreferences = {}) {
   next.activeTab = ["daily", "weekly", "zones", "gear", "components"].includes(next.activeTab) ? next.activeTab : "daily";
   next.rememberLastTab = next.rememberLastTab !== false;
   next.startupTab = ["daily", "weekly", "zones", "gear", "components"].includes(next.startupTab) ? next.startupTab : "daily";
+  next.defaultBikeGearId = next.defaultBikeGearId == null ? "" : String(next.defaultBikeGearId).trim();
   next.componentsSelectedGearId = next.componentsSelectedGearId == null ? "" : String(next.componentsSelectedGearId).trim();
   next.hideShoes = Boolean(next.hideShoes);
   next.hideRetired = Boolean(next.hideRetired);
@@ -107,6 +109,7 @@ function persistPreferences() {
     activeTab: state.activeTab,
     rememberLastTab: state.rememberLastTab,
     startupTab: state.startupTab,
+    defaultBikeGearId: state.defaultBikeGearId,
     componentsSelectedGearId: state.componentsSelectedGearId,
     hideShoes: state.hideShoes,
     hideRetired: state.hideRetired,
@@ -140,6 +143,39 @@ function syncFormCheckboxes() {
   }
 }
 
+function syncDefaultBikeSelect() {
+  if (!settingsDefaultBike) {
+    return;
+  }
+
+  const bikes = Array.isArray(window.AppState.componentsData?.available_bikes) ? window.AppState.componentsData.available_bikes : [];
+  const value = String(window.AppState.defaultBikeGearId || "").trim();
+
+  if (bikes.length === 0) {
+    settingsDefaultBike.innerHTML = '<option value="">No bikes</option>';
+    settingsDefaultBike.value = "";
+    settingsDefaultBike.disabled = true;
+    return;
+  }
+
+  const options = bikes.map(bike => {
+    const bikeId = String(bike?.gear_id ?? "").trim();
+    const label = String(bike?.display_name || bike?.gear_name || bikeId || "Bike").trim();
+    return `<option value="${bikeId}">${label}</option>`;
+  }).join("");
+
+  settingsDefaultBike.innerHTML = `<option value="">Use last selected bike</option>${options}`;
+  settingsDefaultBike.disabled = false;
+
+  if (value && bikes.some(bike => String(bike?.gear_id ?? "").trim() === value)) {
+    settingsDefaultBike.value = value;
+  } else {
+    settingsDefaultBike.value = "";
+  }
+}
+
+window.syncDefaultBikeSelect = syncDefaultBikeSelect;
+
 function syncLimitSelects() {
   const selects = {
     dailyLimit: window.AppState.dailyLimit,
@@ -155,6 +191,9 @@ function syncLimitSelects() {
     select.value = String(value);
   });
 
+  if (settingsDefaultBike) {
+    syncDefaultBikeSelect();
+  }
   if (settingsDailyLimit) {
     settingsDailyLimit.value = String(window.AppState.dailyLimit);
   }
@@ -265,6 +304,17 @@ componentsBikeSelect?.addEventListener("change", event => {
   window.AppState.componentsSelectedGearId = selectedGearId;
   persistPreferences();
   loadComponents();
+});
+settingsDefaultBike?.addEventListener("change", event => {
+  const selectedGearId = String(event.target.value || "").trim();
+  window.AppState.defaultBikeGearId = selectedGearId;
+  if (selectedGearId) {
+    window.AppState.componentsSelectedGearId = selectedGearId;
+  }
+  persistPreferences();
+  if (selectedGearId) {
+    loadComponents();
+  }
 });
 hideShoesCheckbox?.addEventListener("change", event => {
   const checked = event.target.checked;
