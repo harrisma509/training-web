@@ -108,6 +108,10 @@
   gap: 18px;
 }
 
+.settings-tab-panel.hidden {
+  display: none;
+}
+
 .settings-general-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));

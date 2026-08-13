@@ -1,3 +1,13 @@
+const yearlyMaintenanceYear = document.getElementById("yearlyMaintenanceYear");
+const yearlyMaintenanceStatus = document.getElementById("yearlyMaintenanceStatus");
+const yearlyMaintenancePreviewSummary = document.getElementById("yearlyMaintenancePreviewSummary");
+const yearlyMaintenanceWarnings = document.getElementById("yearlyMaintenanceWarnings");
+const yearlyMaintenanceComparisonWrap = document.getElementById("yearlyMaintenanceComparisonWrap");
+const yearlyMaintenanceComparisonBody = document.getElementById("yearlyMaintenanceComparisonBody");
+const yearlyMaintenanceResult = document.getElementById("yearlyMaintenanceResult");
+const yearlyMaintenancePreviewBtn = document.getElementById("yearlyMaintenancePreviewBtn");
+const yearlyMaintenanceCalculateBtn = document.getElementById("yearlyMaintenanceCalculateBtn");
+
 function formatYearlyMaintenanceValue(value) {
   if (value === null || value === undefined || value === "") {
     return "No entry recorded.";
@@ -514,3 +524,20 @@ async function loadYearly() {
     showYearlyView(window.AppState.yearlyView || "annual");
   }
 }
+
+(function () {
+  function initializeYearlyMaintenanceSettings() {
+    if (!yearlyMaintenanceYear) {
+      return;
+    }
+
+    if (typeof populateYearlyMaintenanceYearOptions === "function") {
+      populateYearlyMaintenanceYearOptions();
+    }
+
+    yearlyMaintenancePreviewBtn?.addEventListener("click", handleYearlyMaintenancePreview);
+    yearlyMaintenanceCalculateBtn?.addEventListener("click", handleYearlyMaintenanceCalculate);
+  }
+
+  initializeYearlyMaintenanceSettings();
+})();

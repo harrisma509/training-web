@@ -308,21 +308,25 @@
   }
 
   function setSettingsTab(selectedTab) {
-    if (!selectedTab || !settingsTabPanels[selectedTab]) {
+    const validTabs = Object.keys(settingsTabPanels);
+    if (!selectedTab || !validTabs.includes(selectedTab)) {
       return;
     }
 
     settingsTabButtons.forEach((tabButton) => {
-      const isActive = tabButton === settingsTabButtons.find((button) => button.dataset.settingsTab === selectedTab);
+      const isActive = tabButton.dataset.settingsTab === selectedTab;
       tabButton.classList.toggle("active", isActive);
       tabButton.setAttribute("aria-selected", String(isActive));
+      tabButton.tabIndex = isActive ? 0 : -1;
     });
 
     Object.entries(settingsTabPanels).forEach(([tabName, panel]) => {
       if (!panel) {
         return;
       }
-      panel.classList.toggle("hidden", tabName !== selectedTab);
+      const isVisible = tabName === selectedTab;
+      panel.classList.toggle("hidden", !isVisible);
+      panel.setAttribute("aria-hidden", String(!isVisible));
     });
   }
 
@@ -463,7 +467,8 @@
       if (settingsHideRetired) {
         settingsHideRetired.checked = window.AppState.hideRetired;
       }
-      attachSettingsEventListeners();
+        attachSettingsEventListeners();
+      setSettingsTab("general");
     },
   };
 
