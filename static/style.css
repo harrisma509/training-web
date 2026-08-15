@@ -464,17 +464,13 @@ main {
 }
 
 #dailyPane {
-  display: flex;
-  flex-direction: column;
   min-height: 0;
-  height: calc(100vh - 82px);
 }
 
 #dailyPane .table-wrap {
-  flex: 1 1 auto;
   min-height: 0;
-  max-height: none;
-  height: auto;
+  max-height: calc(100dvh - 48px);
+  height: calc(100dvh - 48px);
 }
 
 .table-wrap {
