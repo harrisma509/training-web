@@ -16,6 +16,10 @@
     hideShoes: true,
     hideRetired: true,
     dailyLimit: 60,
+    dailyDraftQuery: "",
+    dailyAppliedQuery: "",
+    dailySearchMatchCount: 0,
+    dailySearchTotalCount: 0,
     weeklyLimit: 60,
     zonesLimit: 60,
     yearlyView: "annual",
@@ -31,6 +35,10 @@
 
   window.AppState = window.AppState || {
     dailyRows: [],
+    dailyDraftQuery: "",
+    dailyAppliedQuery: "",
+    dailySearchMatchCount: 0,
+    dailySearchTotalCount: 0,
     weeklyRows: [],
     zonesRows: [],
     gearRows: [],

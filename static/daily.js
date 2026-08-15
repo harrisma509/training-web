@@ -69,24 +69,28 @@ function hasOtherActivity(row) {
   return Boolean(otherActivityNames);
 }
 
+function renderRideLinkFromFields(name, rideId) {
+  const safeName = safe(name);
+  if (!safeName) {
+    return "";
+  }
+
+  const cleanedRideId = rideId == null ? "" : String(rideId).trim();
+  const escapedName = escapeHtml(safeName);
+
+  if (/^[0-9]+$/.test(cleanedRideId)) {
+    return `<a class="activity-link" href="https://www.strava.com/activities/${cleanedRideId}" target="_blank" rel="noopener noreferrer">${escapedName}</a>`;
+  }
+
+  return escapedName;
+}
+
 function renderMainRideCell(row) {
   if (!hasMainRide(row)) {
     return "";
   }
 
-  const name = safe(row.main_ride_name);
-  if (!name) {
-    return "";
-  }
-
-  const rideId = row.main_ride_id == null ? "" : String(row.main_ride_id).trim();
-  const escapedName = escapeHtml(name);
-
-  if (/^[0-9]+$/.test(rideId)) {
-    return `<a class="activity-link" href="https://www.strava.com/activities/${rideId}" target="_blank" rel="noopener noreferrer">${escapedName}</a>`;
-  }
-
-  return escapedName;
+  return renderRideLinkFromFields(row.main_ride_name, row.main_ride_id);
 }
 
 function formatHrZones(value) {
@@ -153,21 +157,351 @@ function renderDailyTable() {
   `;
 }
 
+let dailySearchRequestId = 0;
+let dailySearchDebounceTimer = null;
+let dailySearchResultItems = [];
+let dailySearchSelectedIndex = -1;
+
+function hideDailySearchResults() {
+  const results = document.getElementById("dailySearchResults");
+  if (!results) {
+    return;
+  }
+  results.classList.add("hidden");
+  results.innerHTML = "";
+  dailySearchResultItems = [];
+  dailySearchSelectedIndex = -1;
+}
+
+function showDailySearchResults() {
+  const results = document.getElementById("dailySearchResults");
+  if (!results) {
+    return;
+  }
+  results.classList.remove("hidden");
+}
+
+function formatSearchCount(value) {
+  if (!Number.isFinite(Number(value))) {
+    return "0";
+  }
+  return new Intl.NumberFormat("en-US").format(Number(value));
+}
+
+function updateDailySearchControls() {
+  const input = document.getElementById("dailySearch");
+  const applyBtn = document.getElementById("dailySearchApply");
+  const dailyLimit = document.getElementById("dailyLimit");
+  const searchStatus = document.getElementById("dailySearchStatusWrap");
+  const statusText = document.getElementById("dailySearchStatusText");
+  const appliedQuery = String(window.AppState.dailyAppliedQuery || "").trim();
+  const rawDraftQuery = String(window.AppState.dailyDraftQuery || "");
+  const draftQuery = rawDraftQuery.trim();
+  const displayedCount = Number(window.AppState.dailySearchMatchCount || 0);
+  const totalCount = Number(window.AppState.dailySearchTotalCount || 0);
+
+  if (input) {
+    input.value = rawDraftQuery;
+  }
+  if (applyBtn) {
+    applyBtn.disabled = draftQuery.length < 2;
+  }
+  if (dailyLimit) {
+    dailyLimit.disabled = Boolean(appliedQuery);
+  }
+  if (searchStatus) {
+    searchStatus.classList.toggle("hidden", !appliedQuery);
+  }
+  if (statusText) {
+    if (!appliedQuery) {
+      statusText.textContent = "";
+    } else if (totalCount > 0 && displayedCount < totalCount) {
+      statusText.textContent = `Showing ${formatSearchCount(displayedCount)} of ${formatSearchCount(totalCount)} matching days across all history for '${appliedQuery}'`;
+    } else {
+      statusText.textContent = `Showing ${formatSearchCount(displayedCount)} matching days across all history for '${appliedQuery}'`;
+    }
+  }
+}
+
+function renderDailySearchResults(payload = { rows: [], total_count: 0 }, query = "") {
+  const results = document.getElementById("dailySearchResults");
+  if (!results) {
+    return;
+  }
+
+  const rows = Array.isArray(payload && payload.rows) ? payload.rows : [];
+  const totalCount = Number(payload && payload.total_count) || 0;
+  results.innerHTML = "";
+  dailySearchResultItems = [];
+  dailySearchSelectedIndex = -1;
+
+  if (!query || String(query).trim().length < 2) {
+    hideDailySearchResults();
+    return;
+  }
+
+  if (!rows.length) {
+    showDailySearchResults();
+    const empty = document.createElement("div");
+    empty.className = "daily-search-empty";
+    empty.textContent = "No matching rides found.";
+    results.appendChild(empty);
+    return;
+  }
+
+  const summary = document.createElement("div");
+  summary.className = "daily-search-header";
+  const dayWord = totalCount === 1 ? "day" : "days";
+  const summaryText = totalCount > rows.length
+    ? `${totalCount} matching ${dayWord} across all history`
+    : `${totalCount} matching ${dayWord} across all history`;
+  summary.textContent = summaryText;
+  results.appendChild(summary);
+
+  rows.slice(0, 5).forEach((row, index) => {
+    const item = document.createElement("div");
+    item.className = "daily-search-preview-item";
+    item.setAttribute("role", "option");
+    item.setAttribute("tabindex", "0");
+    item.dataset.index = String(index);
+
+    const topRow = document.createElement("div");
+    topRow.className = "daily-search-preview-top";
+
+    const dateCell = document.createElement("div");
+    dateCell.className = "daily-search-date";
+    dateCell.textContent = row.date || "";
+
+    const nameCell = document.createElement("div");
+    nameCell.className = "daily-search-name";
+    nameCell.innerHTML = renderRideLinkFromFields(row.main_ride_name, row.main_ride_id);
+
+    topRow.append(dateCell, nameCell);
+
+    const bikeCell = document.createElement("div");
+    bikeCell.className = "daily-search-preview-bike";
+    bikeCell.textContent = row.main_ride_bike_name || "";
+
+    item.append(topRow, bikeCell);
+    item.addEventListener("click", () => {
+      const anchor = item.querySelector("a.activity-link");
+      if (anchor) {
+        anchor.click();
+      }
+    });
+    item.addEventListener("keydown", (event) => {
+      if (event.key === "Enter" || event.key === " ") {
+        event.preventDefault();
+        const anchor = item.querySelector("a.activity-link");
+        if (anchor) {
+          anchor.click();
+        }
+      }
+    });
+    results.appendChild(item);
+    dailySearchResultItems.push(item);
+  });
+
+  showDailySearchResults();
+}
+
+async function searchDailyRides(query) {
+  const cleanedQuery = (query || "").trim();
+  const results = document.getElementById("dailySearchResults");
+  if (!results) {
+    return;
+  }
+
+  if (!cleanedQuery || cleanedQuery.length < 2) {
+    hideDailySearchResults();
+    return;
+  }
+
+  const requestId = ++dailySearchRequestId;
+  results.classList.remove("hidden");
+  results.innerHTML = '<div class="daily-search-status">Searching...</div>';
+  dailySearchResultItems = [];
+  dailySearchSelectedIndex = -1;
+
+  try {
+    const payload = await window.api.fetchRideSearch(cleanedQuery, 5);
+    if (requestId !== dailySearchRequestId) {
+      return;
+    }
+    const totalCount = Number(payload && payload.total_count) || 0;
+    window.AppState.dailySearchTotalCount = totalCount;
+    renderDailySearchResults(payload, cleanedQuery);
+  } catch (error) {
+    console.error("Ride search failed", error);
+    if (requestId !== dailySearchRequestId) {
+      return;
+    }
+    window.AppState.dailySearchTotalCount = 0;
+    results.innerHTML = '<div class="daily-search-error">Search failed. Please try again.</div>';
+    results.classList.remove("hidden");
+  }
+}
+
+function handleDailySearchInput(event) {
+  const query = String(event.target.value || "");
+  window.AppState.dailyDraftQuery = query;
+  updateDailySearchControls();
+
+  if (dailySearchDebounceTimer) {
+    window.clearTimeout(dailySearchDebounceTimer);
+  }
+
+  const trimmed = query.trim();
+  if (!trimmed || trimmed.length < 2) {
+    hideDailySearchResults();
+    return;
+  }
+
+  dailySearchDebounceTimer = window.setTimeout(() => {
+    searchDailyRides(trimmed);
+  }, 300);
+}
+
+function applyDailySearch() {
+  const trimmed = String(window.AppState.dailyDraftQuery || "").trim();
+  if (trimmed.length < 2) {
+    return;
+  }
+
+  window.AppState.dailyAppliedQuery = trimmed;
+  hideDailySearchResults();
+  updateDailySearchControls();
+  loadDaily();
+}
+
+function clearAppliedDailySearch() {
+  window.AppState.dailyAppliedQuery = "";
+  window.AppState.dailyDraftQuery = "";
+  window.AppState.dailySearchMatchCount = 0;
+  window.AppState.dailySearchTotalCount = 0;
+  hideDailySearchResults();
+  const input = document.getElementById("dailySearch");
+  if (input) {
+    input.value = "";
+  }
+  updateDailySearchControls();
+  loadDaily();
+}
+
+function handleDailySearchKeydown(event) {
+  const results = document.getElementById("dailySearchResults");
+  const hasOpenResults = results && !results.classList.contains("hidden") && dailySearchResultItems.length > 0;
+  const targetTag = event.target && event.target.tagName ? event.target.tagName.toUpperCase() : "";
+  const isEditableTarget = ["INPUT", "TEXTAREA", "SELECT", "BUTTON"].includes(targetTag) || (event.target && event.target.isContentEditable);
+
+  if (isEditableTarget && !["Enter", "Escape", "ArrowDown", "ArrowUp"].includes(event.key)) {
+    return;
+  }
+
+  if (event.key === "Enter") {
+    event.preventDefault();
+    event.stopPropagation();
+    if (hasOpenResults && dailySearchSelectedIndex >= 0) {
+      const anchor = dailySearchResultItems[dailySearchSelectedIndex].querySelector("a.activity-link");
+      if (anchor) {
+        anchor.click();
+      }
+      return;
+    }
+    applyDailySearch();
+    return;
+  }
+
+  if (!hasOpenResults) {
+    return;
+  }
+
+  if (event.key === "Escape") {
+    hideDailySearchResults();
+    return;
+  }
+
+  if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+    event.preventDefault();
+    const delta = event.key === "ArrowDown" ? 1 : -1;
+    const nextIndex = Math.max(0, Math.min(dailySearchResultItems.length - 1, dailySearchSelectedIndex + delta));
+    if (nextIndex === dailySearchSelectedIndex) {
+      return;
+    }
+    dailySearchSelectedIndex = nextIndex;
+    dailySearchResultItems.forEach((item, index) => item.classList.toggle("active", index === dailySearchSelectedIndex));
+  }
+}
+
+function attachDailySearch() {
+  const input = document.getElementById("dailySearch");
+  const results = document.getElementById("dailySearchResults");
+  const applyBtn = document.getElementById("dailySearchApply");
+  const clearBtn = document.getElementById("dailyClearSearch");
+  if (!input || !results) {
+    return;
+  }
+
+  input.addEventListener("input", handleDailySearchInput);
+  input.addEventListener("keydown", handleDailySearchKeydown);
+  input.addEventListener("focus", () => {
+    const trimmed = input.value.trim();
+    if (trimmed.length >= 2) {
+      dailySearchDebounceTimer = window.setTimeout(() => searchDailyRides(trimmed), 300);
+    }
+  });
+  applyBtn?.addEventListener("click", applyDailySearch);
+  clearBtn?.addEventListener("click", clearAppliedDailySearch);
+
+  document.addEventListener("click", (event) => {
+    const isInside = input.contains(event.target) || results.contains(event.target);
+    if (!isInside) {
+      hideDailySearchResults();
+    }
+  });
+
+  updateDailySearchControls();
+}
+
+attachDailySearch();
+
 async function loadDaily() {
-  const limit = Number(window.AppState.dailyLimit);
+  const query = String(window.AppState.dailyAppliedQuery || "").trim();
+  const limit = query ? 1000 : Number(window.AppState.dailyLimit);
 
   try {
     if (window.api && typeof window.api.fetchDaily === "function") {
-      window.AppState.dailyRows = await window.api.fetchDaily(limit);
+      const payload = await window.api.fetchDaily(limit, query);
+      const rows = Array.isArray(payload) ? payload : (payload && Array.isArray(payload.rows) ? payload.rows : []);
+      const totalCount = query ? Number((payload && payload.total_count) || rows.length) : 0;
+      window.AppState.dailyRows = rows;
+      window.AppState.dailySearchTotalCount = query ? totalCount : 0;
     } else {
-      window.AppState.dailyRows = await fetch(`/api/daily?limit=${limit}`).then(response => response.json());
+      const params = new URLSearchParams({ limit: String(limit) });
+      if (query) {
+        params.set("q", query);
+      }
+      const payload = await fetch(`/api/daily?${params.toString()}`).then(response => response.json());
+      const rows = Array.isArray(payload) ? payload : (payload && Array.isArray(payload.rows) ? payload.rows : []);
+      const totalCount = query ? Number((payload && payload.total_count) || rows.length) : 0;
+      window.AppState.dailyRows = rows;
+      window.AppState.dailySearchTotalCount = query ? totalCount : 0;
     }
   } catch (error) {
     console.error(error);
     window.AppState.dailyRows = [];
+    window.AppState.dailySearchTotalCount = 0;
+  }
+
+  if (query) {
+    window.AppState.dailySearchMatchCount = Array.isArray(window.AppState.dailyRows) ? window.AppState.dailyRows.length : 0;
+  } else {
+    window.AppState.dailySearchMatchCount = 0;
+    window.AppState.dailySearchTotalCount = 0;
   }
 
   renderDailyTable();
+  updateDailySearchControls();
 
   if (window.AppState.activeTab === "daily") {
     renderHeaderSummary();

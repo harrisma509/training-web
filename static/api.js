@@ -28,8 +28,28 @@
       return fetchJson(`/api/gear/dashboard?limit=${limit}`);
     },
 
-    async fetchDaily(limit = 60) {
-      return fetchJson(`/api/daily?limit=${limit}`);
+    async fetchDaily(limit = 60, q = "") {
+      const trimmedQuery = typeof q === "string" ? q.trim() : "";
+      const effectiveLimit = trimmedQuery ? 1000 : Math.max(1, Number(limit) || 60);
+      const params = new URLSearchParams({ limit: String(effectiveLimit) });
+      if (trimmedQuery) {
+        params.set("q", trimmedQuery);
+      }
+      const payload = await fetchJson(`/api/daily?${params.toString()}`);
+      if (trimmedQuery && payload && typeof payload === "object" && Array.isArray(payload.rows)) {
+        return payload;
+      }
+      return payload;
+    },
+
+    async fetchRideSearch(query, limit = 5) {
+      const q = typeof query === "string" ? query.trim() : "";
+      if (!q || q.length < 2) {
+        return { rows: [], total_count: 0 };
+      }
+
+      const safeLimit = Math.min(Math.max(Number(limit) || 5, 1), 5);
+      return fetchJson(`/api/rides/search?q=${encodeURIComponent(q)}&limit=${safeLimit}`);
     },
 
     async fetchWeekly(limit = 60) {

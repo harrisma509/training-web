@@ -15,7 +15,7 @@
 <header class="app-header">
   <div class="header-top">
     <div class="brand">
-      <h1>Training Intelligence Platform</h1>
+      <h1>Training Intelligence</h1>
       <div class="subtitle">Training Tracking</div>
     </div>
 
@@ -30,6 +30,12 @@
 
     <div class="header-actions">
       <div id="dailyControls" class="control-group">
+        <div class="daily-search-wrap">
+          <label class="daily-search-label" for="dailySearch">Search rides</label>
+          <input id="dailySearch" type="search" placeholder="Search rides..." aria-label="Search rides" autocomplete="off" spellcheck="false">
+          <button id="dailySearchApply" type="button" class="button-secondary" disabled>Search</button>
+          <div id="dailySearchResults" class="daily-search-results hidden" role="listbox" aria-live="polite"></div>
+        </div>
         <label for="dailyLimit">Daily rows</label>
         <select id="dailyLimit">
           <option value="60" selected>60</option>
@@ -244,6 +250,10 @@
 
   <main>
     <section id="dailyPane">
+      <div id="dailySearchStatusWrap" class="daily-search-status-wrap hidden">
+        <div id="dailySearchStatusText" class="daily-search-status-text"></div>
+        <button id="dailyClearSearch" type="button" class="button-secondary">Clear search</button>
+      </div>
       <div class="table-wrap">
         <table id="dailyTable"></table>
       </div>
