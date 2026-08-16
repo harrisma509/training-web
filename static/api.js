@@ -157,6 +157,24 @@
       return response.json();
     },
 
+    async updateComponentService(gearComponentId, serviceEventId, payload = {}) {
+      const response = await fetch(`/api/components/${encodeURIComponent(gearComponentId)}/services/${encodeURIComponent(serviceEventId)}`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json",
+        },
+        body: JSON.stringify(payload || {}),
+      });
+
+      if (!response.ok) {
+        const detail = await response.json().catch(() => ({}));
+        throw new Error(detail.detail || `${response.status} ${response.statusText || "Update failed"}`);
+      }
+
+      return response.json();
+    },
+
     async fetchSyncStatus() {
       return fetchJson("/api/sync-status");
     },

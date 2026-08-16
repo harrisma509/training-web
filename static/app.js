@@ -147,6 +147,8 @@ function showYearlyView(view) {
   }
 }
 
+window.showYearlyView = showYearlyView;
+
 function showTab(tab) {
   state.activeTab = tab;
   persistPreferences();

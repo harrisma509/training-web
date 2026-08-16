@@ -1161,6 +1161,7 @@ function ensureComponentHistoryDrawer() {
         <div id="componentHistoryError" class="components-history-error hidden" role="alert"></div>
         <div id="componentHistoryEmpty" class="components-history-empty hidden">No service events have been recorded for this component.</div>
         <div id="componentHistoryList" class="components-history-list"></div>
+        <div id="componentHistoryEventEditor" class="components-history-editor hidden"></div>
       </div>
       <div class="components-history-footer">
         <button type="button" id="componentHistoryRetryBtn" class="button-secondary hidden">Retry</button>
@@ -1249,6 +1250,7 @@ function renderComponentHistoryList(services = []) {
     const manufacturer = displayText(service.manufacturer);
     const model = displayText(service.model);
     const costText = formatComponentHistoryCost(service.cost);
+    const eventId = service.service_event_id;
 
     const snapshotParts = [];
     if (service.mileage_at_service != null && service.mileage_at_service !== "") {
@@ -1278,10 +1280,13 @@ function renderComponentHistoryList(services = []) {
     const secondaryMeta = [provider || location ? [provider, location].filter(Boolean).join(" • ") : null].filter(Boolean);
 
     return `
-      <article class="components-history-item">
+      <article class="components-history-item" data-service-event-id="${componentEscapeHtml(String(eventId || ""))}">
         <div class="components-history-head">
           <div class="components-history-date">${componentEscapeHtml(formatServiceHistoryDate(service.service_date))}</div>
-          <span class="components-history-type">${componentEscapeHtml(serviceType)}</span>
+          <div class="components-history-head-actions">
+            <span class="components-history-type">${componentEscapeHtml(serviceType)}</span>
+            <button type="button" class="components-history-edit-button" data-service-event-id="${componentEscapeHtml(String(eventId || ""))}" data-component-id="${componentEscapeHtml(String(service.gear_component_id || ""))}" aria-label="Edit ${componentEscapeHtml(serviceType)} on ${componentEscapeHtml(formatServiceHistoryDate(service.service_date))}">Edit</button>
+          </div>
         </div>
         ${productMarkup.length ? `<div class="components-history-product-group">${productMarkup.join("")}</div>` : ""}
         ${snapshotParts.length ? `<div class="components-history-field"><span class="components-history-field-label">Bike snapshot at event</span><span>${componentEscapeHtml(snapshotParts.join(" · "))}</span></div>` : ""}
@@ -1293,6 +1298,20 @@ function renderComponentHistoryList(services = []) {
   }).join("");
 
   listEl.innerHTML = items;
+
+  listEl.querySelectorAll(".components-history-edit-button").forEach(button => {
+    button.addEventListener("click", async event => {
+      const serviceEventId = String(event.currentTarget.dataset.serviceEventId || "").trim();
+      const componentId = String(event.currentTarget.dataset.componentId || "").trim();
+      if (!serviceEventId || !componentId) {
+        return;
+      }
+      const drawer = document.getElementById("componentHistoryDrawer");
+      const eventData = Array.isArray(window.AppState.componentHistoryEvents) ? window.AppState.componentHistoryEvents.find(item => String(item.service_event_id) === serviceEventId) : null;
+      await openComponentHistoryEventEditor(componentId, serviceEventId, eventData || {});
+      drawer.dataset.returnFocus = event.currentTarget.id || "";
+    });
+  });
 }
 
 async function loadComponentHistory(componentId, options = {}) {
@@ -1336,6 +1355,7 @@ async function loadComponentHistory(componentId, options = {}) {
     const services = Array.isArray(payload && payload.services) ? payload.services : [];
     const componentArchived = component.active === false;
     drawer.dataset.componentArchived = componentArchived ? "true" : "false";
+    window.AppState.componentHistoryEvents = services;
 
     if (subtitleEl) {
       subtitleEl.textContent = formatComponentHistoryHeaderMetadata(component);
@@ -1396,6 +1416,7 @@ function closeComponentHistoryDrawer() {
   delete drawer.dataset.componentName;
   delete drawer.dataset.componentArchived;
   delete drawer.dataset.historyRequestId;
+  delete drawer.dataset.historyEditorMode;
 
   const focusTarget = drawer.dataset.returnFocus || "";
   if (focusTarget) {
@@ -1405,6 +1426,256 @@ function closeComponentHistoryDrawer() {
     }
   }
   delete drawer.dataset.returnFocus;
+}
+
+function closeComponentHistoryEditor() {
+  const drawer = document.getElementById("componentHistoryDrawer");
+  if (!drawer) {
+    return;
+  }
+
+  const listEl = drawer.querySelector("#componentHistoryList");
+  const editorEl = drawer.querySelector("#componentHistoryEventEditor");
+  if (listEl) {
+    listEl.classList.remove("hidden");
+  }
+  if (editorEl) {
+    editorEl.classList.add("hidden");
+    editorEl.innerHTML = "";
+  }
+  drawer.dataset.historyEditorMode = "history";
+}
+
+function formatHistoryInputValue(value) {
+  if (value === null || value === undefined || value === "") {
+    return "";
+  }
+  return String(value);
+}
+
+async function openComponentHistoryEventEditor(componentId, serviceEventId, eventData = {}) {
+  const drawer = document.getElementById("componentHistoryDrawer");
+  if (!drawer) {
+    return;
+  }
+
+  const listEl = drawer.querySelector("#componentHistoryList");
+  const editorEl = drawer.querySelector("#componentHistoryEventEditor");
+  if (!editorEl) {
+    setComponentHistoryStatus("The editor container is unavailable. Please reopen the History drawer.", "error");
+    return;
+  }
+
+  if (!componentId || !serviceEventId) {
+    setComponentHistoryStatus("Select a valid service event before editing.", "error");
+    return;
+  }
+
+  const component = (window.AppState.componentsData && Array.isArray(window.AppState.componentsData.components))
+    ? window.AppState.componentsData.components.find(item => String(item.gear_component_id) === String(componentId)) || null
+    : null;
+  if (!component) {
+    setComponentHistoryStatus("The selected component could not be loaded.", "error");
+    return;
+  }
+
+  const eventMatch = Array.isArray(window.AppState.componentHistoryEvents)
+    ? window.AppState.componentHistoryEvents.find(item => String(item.service_event_id) === String(serviceEventId) && String(item.gear_component_id || componentId) === String(componentId))
+    : null;
+  const historyData = eventMatch || eventData || {};
+  if (!eventMatch && !eventData) {
+    setComponentHistoryStatus("That service event could not be loaded.", "error");
+    return;
+  }
+
+  const currentBike = window.AppState.componentsData && window.AppState.componentsData.selected_bike ? window.AppState.componentsData.selected_bike : {};
+  const normalizedHistoryData = {
+    service_event_id: serviceEventId,
+    gear_component_id: componentId,
+    service_date: historyData.service_date || historyData.serviceDate || "",
+    service_type: historyData.service_type || historyData.action || "",
+    product_name: historyData.product_name || "",
+    manufacturer: historyData.manufacturer || "",
+    model: historyData.model || "",
+    notes: historyData.notes || "",
+    cost: historyData.cost ?? "",
+    service_provider: historyData.service_provider || historyData.performed_by || "",
+    service_location: historyData.service_location || "",
+    mileage_at_service: historyData.mileage_at_service ?? historyData.odometer_miles ?? "",
+    hours_at_service: historyData.hours_at_service ?? historyData.odometer_hours ?? "",
+    rides_at_service: historyData.rides_at_service ?? historyData.odometer_rides ?? "",
+    elevation_at_service: historyData.elevation_at_service ?? historyData.odometer_elevation_ft ?? "",
+  };
+
+  if (listEl) {
+    listEl.classList.add("hidden");
+  }
+  if (!editorEl) {
+    return;
+  }
+
+  editorEl.classList.remove("hidden");
+  editorEl.innerHTML = `
+    <div class="components-history-editor-shell" role="dialog" aria-modal="false" aria-labelledby="componentHistoryEditorTitle">
+      <div class="components-history-editor-header">
+        <div>
+          <div id="componentHistoryEditorTitle" class="components-history-title">Edit Service Event</div>
+          <div class="components-history-subtitle">${componentEscapeHtml(component.component_name || "Component")} · ${componentEscapeHtml(component.component_group || "Service")}</div>
+        </div>
+      </div>
+      <div id="componentHistoryEditorStatus" class="components-history-status hidden" aria-live="polite"></div>
+      <form id="componentHistoryEventForm" class="components-history-editor-form">
+        <div class="components-history-editor-grid">
+          <div class="components-history-editor-block">
+            <div class="drawer-section-title">Context</div>
+            <div class="components-history-context-pair"><strong>Bike</strong><span>${componentEscapeHtml(currentBike.display_name || currentBike.gear_name || "Unknown bike")}</span></div>
+            <div class="components-history-context-pair"><strong>Component</strong><span>${componentEscapeHtml(component.component_name || "Component")}</span></div>
+            <div class="components-history-context-pair"><strong>Group</strong><span>${componentEscapeHtml(component.component_group || "-")}</span></div>
+            <div class="components-history-context-pair"><strong>Position</strong><span>${componentEscapeHtml(component.position || "-")}</span></div>
+            <div class="components-history-context-pair"><strong>Event ID</strong><span>#${componentEscapeHtml(String(serviceEventId || ""))}</span></div>
+          </div>
+          <div class="components-history-editor-block">
+            <div class="drawer-section-title">Service details</div>
+            <div class="drawer-field-group">
+              <label for="historyEditorDate">Service date</label>
+              <input id="historyEditorDate" name="service_date" type="date" value="${componentEscapeHtml(formatHistoryInputValue(normalizedHistoryData.service_date))}" required>
+            </div>
+            <div class="drawer-field-group">
+              <label for="historyEditorAction">Action</label>
+              <input id="historyEditorAction" name="action" type="text" value="${componentEscapeHtml(formatHistoryInputValue(normalizedHistoryData.service_type))}" required>
+            </div>
+            <div class="drawer-field-group">
+              <label for="historyEditorProduct">Product name</label>
+              <input id="historyEditorProduct" name="product_name" type="text" value="${componentEscapeHtml(formatHistoryInputValue(normalizedHistoryData.product_name))}">
+            </div>
+            <div class="drawer-field-group">
+              <label for="historyEditorManufacturer">Manufacturer</label>
+              <input id="historyEditorManufacturer" name="manufacturer" type="text" value="${componentEscapeHtml(formatHistoryInputValue(normalizedHistoryData.manufacturer))}">
+            </div>
+            <div class="drawer-field-group">
+              <label for="historyEditorModel">Model</label>
+              <input id="historyEditorModel" name="model" type="text" value="${componentEscapeHtml(formatHistoryInputValue(normalizedHistoryData.model))}">
+            </div>
+          </div>
+          <div class="components-history-editor-block">
+            <div class="drawer-section-title">Snapshot</div>
+            <div class="drawer-field-group">
+              <label for="historyEditorMileage">Mileage</label>
+              <input id="historyEditorMileage" name="odometer_miles" type="number" min="0" step="0.1" value="${componentEscapeHtml(formatHistoryInputValue(normalizedHistoryData.mileage_at_service))}">
+            </div>
+            <div class="drawer-field-group">
+              <label for="historyEditorHours">Hours</label>
+              <input id="historyEditorHours" name="odometer_hours" type="number" min="0" step="0.1" value="${componentEscapeHtml(formatHistoryInputValue(normalizedHistoryData.hours_at_service))}">
+            </div>
+            <div class="drawer-field-group">
+              <label for="historyEditorRides">Rides</label>
+              <input id="historyEditorRides" name="odometer_rides" type="number" min="0" step="1" value="${componentEscapeHtml(formatHistoryInputValue(normalizedHistoryData.rides_at_service))}">
+            </div>
+            <div class="drawer-field-group">
+              <label for="historyEditorElevation">Elevation (ft)</label>
+              <input id="historyEditorElevation" name="odometer_elevation_ft" type="number" min="0" step="1" value="${componentEscapeHtml(formatHistoryInputValue(normalizedHistoryData.elevation_at_service))}">
+            </div>
+            <div class="drawer-field-group">
+              <label for="historyEditorCost">Cost</label>
+              <input id="historyEditorCost" name="cost" type="number" min="0" step="0.01" value="${componentEscapeHtml(formatHistoryInputValue(normalizedHistoryData.cost))}">
+            </div>
+          </div>
+          <div class="components-history-editor-block">
+            <div class="drawer-section-title">Service provider</div>
+            <div class="drawer-field-group">
+              <label for="historyEditorProvider">Provider</label>
+              <input id="historyEditorProvider" name="service_provider" type="text" value="${componentEscapeHtml(formatHistoryInputValue(normalizedHistoryData.service_provider))}">
+            </div>
+            <div class="drawer-field-group">
+              <label for="historyEditorLocation">Service location</label>
+              <input id="historyEditorLocation" name="service_location" type="text" value="${componentEscapeHtml(formatHistoryInputValue(normalizedHistoryData.service_location))}">
+            </div>
+            <div class="drawer-field-group">
+              <label for="historyEditorNotes">Notes</label>
+              <textarea id="historyEditorNotes" name="notes" rows="5">${componentEscapeHtml(formatHistoryInputValue(normalizedHistoryData.notes))}</textarea>
+            </div>
+          </div>
+        </div>
+        <div class="components-history-editor-footer">
+          <button type="button" id="componentHistoryEditorCancelBtn" class="button-secondary">Cancel</button>
+          <button type="submit" id="componentHistoryEditorSaveBtn" class="button-primary">Save</button>
+        </div>
+      </form>
+    </div>
+  `;
+
+  const statusEl = editorEl.querySelector("#componentHistoryEditorStatus");
+  const form = editorEl.querySelector("#componentHistoryEventForm");
+  const cancelBtn = editorEl.querySelector("#componentHistoryEditorCancelBtn");
+  const saveBtn = editorEl.querySelector("#componentHistoryEditorSaveBtn");
+
+  const setStatus = (message, kind = "info") => {
+    if (!statusEl) {
+      return;
+    }
+    statusEl.textContent = message;
+    statusEl.classList.remove("hidden", "status-error", "status-success", "status-info");
+    statusEl.classList.add(kind === "error" ? "status-error" : kind === "success" ? "status-success" : "status-info");
+  };
+
+  const finish = () => {
+    if (saveBtn) {
+      saveBtn.disabled = false;
+    }
+  };
+
+  cancelBtn.addEventListener("click", () => {
+    closeComponentHistoryEditor();
+    const titleEl = drawer.querySelector("#componentHistoryTitle");
+    if (titleEl) {
+      titleEl.textContent = component.component_name ? `Service History: ${component.component_name}` : "Service History";
+    }
+  });
+
+  form.addEventListener("submit", async event => {
+    event.preventDefault();
+    if (!saveBtn) {
+      return;
+    }
+    saveBtn.disabled = true;
+    setStatus("Saving service event…", "info");
+
+    const formData = new FormData(form);
+    const payload = {
+      service_date: String(formData.get("service_date") || "").trim(),
+      action: String(formData.get("action") || "").trim(),
+      product_name: String(formData.get("product_name") || "").trim() || null,
+      manufacturer: String(formData.get("manufacturer") || "").trim() || null,
+      model: String(formData.get("model") || "").trim() || null,
+      notes: String(formData.get("notes") || "").trim() || null,
+      cost: formData.get("cost") === "" ? null : String(formData.get("cost") || ""),
+      service_provider: String(formData.get("service_provider") || "").trim() || null,
+      service_location: String(formData.get("service_location") || "").trim() || null,
+      odometer_miles: formData.get("odometer_miles") === "" ? null : String(formData.get("odometer_miles") || ""),
+      odometer_hours: formData.get("odometer_hours") === "" ? null : String(formData.get("odometer_hours") || ""),
+      odometer_rides: formData.get("odometer_rides") === "" ? null : String(formData.get("odometer_rides") || ""),
+      odometer_elevation_ft: formData.get("odometer_elevation_ft") === "" ? null : String(formData.get("odometer_elevation_ft") || ""),
+    };
+
+    try {
+      const response = await window.api.updateComponentService(componentId, serviceEventId, payload);
+      setStatus("Service event updated.", "success");
+      await loadComponentHistory(componentId, { componentName: component.component_name || "" });
+      closeComponentHistoryEditor();
+      await loadComponents();
+      drawer.dataset.returnFocus = "";
+    } catch (error) {
+      setStatus(error.message || "Unable to update service event.", "error");
+    } finally {
+      finish();
+    }
+  });
+
+  drawer.dataset.historyEditorMode = "editor";
+  const closeBtn = drawer.querySelector("#componentHistoryCloseBtn");
+  if (closeBtn) {
+    closeBtn.focus();
+  }
 }
 
 async function loadComponents() {

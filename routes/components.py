@@ -1280,3 +1280,224 @@ def api_create_component_service(gear_component_id: int, payload: dict | None = 
             "updated_at": json_safe(row["updated_at"]),
         }
     )
+
+
+@router.patch("/api/components/{gear_component_id}/services/{service_event_id}")
+def api_update_component_service(gear_component_id: int, service_event_id: int, payload: dict | None = Body(default=None)):
+    if payload is None or not isinstance(payload, dict):
+        return JSONResponse({"detail": "Request body must be an object."}, status_code=400)
+
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                    select
+                        gc.gear_component_id,
+                        gc.gear_id,
+                        gc.component_name,
+                        gc.component_group,
+                        gc.position,
+                        gc.active,
+                        gc.track_service
+                    from gear_component gc
+                    where gc.gear_component_id = %s
+                """,
+                (gear_component_id,),
+            )
+            component = cur.fetchone()
+            if component is None:
+                raise HTTPException(status_code=404, detail="Component not found.")
+
+            cur.execute(
+                """
+                    select
+                        service_event_id,
+                        gear_component_id,
+                        gear_id,
+                        service_date,
+                        action,
+                        product_name,
+                        manufacturer,
+                        model,
+                        notes,
+                        cost,
+                        odometer_miles,
+                        odometer_hours,
+                        odometer_rides,
+                        odometer_elevation_ft,
+                        performed_by,
+                        service_location,
+                        source,
+                        source_reference,
+                        created_at,
+                        updated_at
+                    from gear_service_event
+                    where service_event_id = %s and gear_component_id = %s
+                """,
+                (service_event_id, gear_component_id),
+            )
+            existing = cur.fetchone()
+            if existing is None:
+                raise HTTPException(status_code=404, detail="Service event not found for this component.")
+
+            raw_service_date = payload.get("service_date")
+            if raw_service_date in (None, ""):
+                service_date = existing["service_date"]
+            else:
+                try:
+                    service_date = date.fromisoformat(str(raw_service_date))
+                except ValueError:
+                    return JSONResponse({"detail": "service_date must be a valid ISO date."}, status_code=400)
+                if service_date > date.today() + timedelta(days=365):
+                    return JSONResponse({"detail": "service_date cannot be more than one year in the future."}, status_code=400)
+
+            raw_action = payload.get("action")
+            if raw_action in (None, ""):
+                action = existing["action"]
+            else:
+                action = _normalize_text(raw_action)
+                if not action:
+                    return JSONResponse({"detail": "action is required."}, status_code=400)
+
+            def _resolve_optional_text(field_name, current_value):
+                value = payload.get(field_name)
+                if value is None:
+                    return current_value
+                normalized = _normalize_text(value)
+                if normalized in {"", "null", "none", "undefined"}:
+                    return None
+                return normalized
+
+            def _resolve_optional_numeric(field_name, current_value):
+                raw_value = payload.get(field_name)
+                if raw_value in (None, ""):
+                    return current_value
+                if raw_value in ("null", "None", "none", "undefined"):
+                    return None
+                if isinstance(raw_value, str):
+                    raw_value = raw_value.strip()
+                    if raw_value == "":
+                        return current_value
+                try:
+                    numeric = float(raw_value)
+                except (TypeError, ValueError):
+                    return JSONResponse({"detail": f"{field_name} must be a valid number."}, status_code=400)
+                if numeric < 0:
+                    return JSONResponse({"detail": f"{field_name} cannot be negative."}, status_code=400)
+                return numeric
+
+            product_name = _resolve_optional_text("product_name", existing["product_name"])
+            manufacturer = _resolve_optional_text("manufacturer", existing["manufacturer"])
+            model = _resolve_optional_text("model", existing["model"])
+            notes = _resolve_optional_text("notes", existing["notes"])
+            service_provider = _resolve_optional_text("service_provider", existing["performed_by"])
+            service_location = _resolve_optional_text("service_location", existing["service_location"])
+
+            raw_cost = payload.get("cost")
+            if raw_cost in (None, ""):
+                cost = existing["cost"]
+            else:
+                if str(raw_cost).strip().lower() in {"null", "none", "undefined"}:
+                    cost = None
+                else:
+                    try:
+                        cost = Decimal(str(raw_cost))
+                    except (InvalidOperation, TypeError, ValueError):
+                        return JSONResponse({"detail": "cost must be a valid non-negative number."}, status_code=400)
+                    if cost < 0:
+                        return JSONResponse({"detail": "cost cannot be negative."}, status_code=400)
+
+            odometer_miles = _resolve_optional_numeric("odometer_miles", existing["odometer_miles"])
+            odometer_hours = _resolve_optional_numeric("odometer_hours", existing["odometer_hours"])
+            odometer_rides = _resolve_optional_numeric("odometer_rides", existing["odometer_rides"])
+            odometer_elevation_ft = _resolve_optional_numeric("odometer_elevation_ft", existing["odometer_elevation_ft"])
+
+            if isinstance(odometer_rides, (float, int)):
+                odometer_rides = int(odometer_rides)
+            if isinstance(odometer_miles, (float, int)) and not isinstance(odometer_miles, bool):
+                odometer_miles = float(odometer_miles)
+            if isinstance(odometer_hours, (float, int)) and not isinstance(odometer_hours, bool):
+                odometer_hours = float(odometer_hours)
+            if isinstance(odometer_elevation_ft, (float, int)) and not isinstance(odometer_elevation_ft, bool):
+                odometer_elevation_ft = float(odometer_elevation_ft)
+
+            cur.execute(
+                """
+                    update gear_service_event
+                    set service_date = %s,
+                        action = %s,
+                        product_name = %s,
+                        manufacturer = %s,
+                        model = %s,
+                        notes = %s,
+                        cost = %s,
+                        odometer_miles = %s,
+                        odometer_hours = %s,
+                        odometer_rides = %s,
+                        odometer_elevation_ft = %s,
+                        performed_by = %s,
+                        service_location = %s,
+                        updated_at = now()
+                    where service_event_id = %s and gear_component_id = %s
+                    returning
+                        service_event_id,
+                        gear_component_id,
+                        gear_id,
+                        service_date,
+                        action,
+                        product_name,
+                        manufacturer,
+                        model,
+                        notes,
+                        cost,
+                        odometer_miles,
+                        odometer_hours,
+                        odometer_rides,
+                        odometer_elevation_ft,
+                        performed_by,
+                        service_location,
+                        created_at,
+                        updated_at
+                """,
+                (
+                    service_date,
+                    action,
+                    product_name,
+                    manufacturer,
+                    model,
+                    notes,
+                    cost,
+                    odometer_miles,
+                    odometer_hours,
+                    odometer_rides,
+                    odometer_elevation_ft,
+                    service_provider,
+                    service_location,
+                    service_event_id,
+                    gear_component_id,
+                ),
+            )
+            row = cur.fetchone()
+
+    return JSONResponse(
+        {
+            "service_event_id": row["service_event_id"],
+            "gear_component_id": row["gear_component_id"],
+            "gear_id": row["gear_id"],
+            "service_date": json_safe(row["service_date"]),
+            "service_type": row["action"],
+            "product_name": row["product_name"],
+            "manufacturer": row["manufacturer"],
+            "model": row["model"],
+            "notes": row["notes"],
+            "cost": json_safe(row["cost"]),
+            "mileage_at_service": json_safe(row["odometer_miles"]),
+            "hours_at_service": json_safe(row["odometer_hours"]),
+            "rides_at_service": json_safe(row["odometer_rides"]),
+            "elevation_at_service": json_safe(row["odometer_elevation_ft"]),
+            "service_provider": row["performed_by"],
+            "service_location": row["service_location"],
+            "created_at": json_safe(row["created_at"]),
+            "updated_at": json_safe(row["updated_at"]),
+        }
+    )
