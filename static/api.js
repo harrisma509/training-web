@@ -75,6 +75,70 @@
       return fetchJson(`/api/components/${encodeURIComponent(gearComponentId)}/services`);
     },
 
+    async createComponent(payload = {}) {
+      const response = await fetch("/api/gear/components", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json",
+        },
+        body: JSON.stringify(payload || {}),
+      });
+
+      if (!response.ok) {
+        const detail = await response.json().catch(() => ({}));
+        throw new Error(detail.detail || `${response.status} ${response.statusText || "Create failed"}`);
+      }
+
+      return response.json();
+    },
+
+    async updateComponent(gearComponentId, payload = {}) {
+      const response = await fetch(`/api/components/${encodeURIComponent(gearComponentId)}`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json",
+        },
+        body: JSON.stringify(payload || {}),
+      });
+
+      if (!response.ok) {
+        const detail = await response.json().catch(() => ({}));
+        throw new Error(detail.detail || `${response.status} ${response.statusText || "Update failed"}`);
+      }
+
+      return response.json();
+    },
+
+    async archiveComponent(gearComponentId) {
+      const response = await fetch(`/api/components/${encodeURIComponent(gearComponentId)}/archive`, {
+        method: "POST",
+        headers: { Accept: "application/json" },
+      });
+
+      if (!response.ok) {
+        const detail = await response.json().catch(() => ({}));
+        throw new Error(detail.detail || `${response.status} ${response.statusText || "Archive failed"}`);
+      }
+
+      return response.json();
+    },
+
+    async restoreComponent(gearComponentId) {
+      const response = await fetch(`/api/components/${encodeURIComponent(gearComponentId)}/restore`, {
+        method: "POST",
+        headers: { Accept: "application/json" },
+      });
+
+      if (!response.ok) {
+        const detail = await response.json().catch(() => ({}));
+        throw new Error(detail.detail || `${response.status} ${response.statusText || "Restore failed"}`);
+      }
+
+      return response.json();
+    },
+
     async createComponentService(gearComponentId, payload = {}) {
       const response = await fetch(`/api/components/${encodeURIComponent(gearComponentId)}/services`, {
         method: "POST",

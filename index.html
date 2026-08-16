@@ -298,11 +298,16 @@
         <div class="gear-header-row">
           <div class="gear-header-main">
             <div class="gear-title">Components</div>
-            <div class="gear-subtitle">Read-only component usage and latest service recency by bike.</div>
+            <div class="gear-subtitle">Track component configuration and service recency by bike.</div>
           </div>
-          <div id="componentsSummary" class="components-summary"></div>
+          <div class="components-toolbar">
+            <div id="componentsSummary" class="components-summary"></div>
+            <button id="componentsAddButton" type="button" class="button-secondary">Add Component</button>
+          </div>
         </div>
-        <table id="componentsTable"></table>
+        <div id="componentsTableWrap" class="components-table-wrap">
+          <table id="componentsTable"></table>
+        </div>
       </div>
     </section>
 

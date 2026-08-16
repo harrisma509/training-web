@@ -9,6 +9,7 @@ Owns a read-only endpoint that combines:
 - derived usage since latest service event
 """
 
+import re
 from datetime import date, timedelta
 from decimal import Decimal, InvalidOperation
 from typing import Optional
@@ -61,6 +62,44 @@ def _clamp_non_negative(value):
     if value is None:
         return None
     return max(float(value), 0.0)
+
+
+def _normalize_component_key(value, fallback=""):
+    raw = (value or fallback or "").strip()
+    if not raw:
+        return "component"
+
+    clean = re.sub(r"[^a-z0-9]+", "-", raw.lower()).strip("-")
+    if not clean:
+        return "component"
+    return clean
+
+
+def _format_bike_display_name(row):
+    if not row:
+        return "Unknown bike"
+
+    parts = [
+        _normalize_display_part(row.get("model_year")),
+        _normalize_display_part(row.get("brand")),
+        _normalize_display_part(row.get("gear_name")),
+    ]
+    bike_name = " ".join(part for part in parts if part)
+    if bike_name:
+        return bike_name
+    return _normalize_display_part(row.get("gear_name")) or "Unknown bike"
+
+
+def _coerce_optional_decimal(value):
+    if value is None or value == "":
+        return None
+    if value in ("null", "None", "none"):
+        return None
+    try:
+        numeric = Decimal(str(value))
+    except (InvalidOperation, TypeError, ValueError):
+        return None
+    return numeric
 
 
 @router.get("/api/gear/components")
@@ -453,6 +492,64 @@ def api_gear_components(gear_id: Optional[str] = None):
 
         components.append(component_payload)
 
+    archived_components = []
+    archived_sql = """
+        select
+            gc.gear_component_id,
+            gc.gear_id,
+            gc.component_key,
+            gc.component_name,
+            gc.component_group,
+            gc."position",
+            gc.track_life,
+            gc.track_service,
+            gc.preferred_metric,
+            gc.service_interval_miles,
+            gc.service_interval_hours,
+            gc.service_interval_days,
+            gc.service_interval_rides,
+            gc.warning_percent,
+            gc.display_order,
+            gc.active,
+            gc.notes
+        from gear_component gc
+        where gc.gear_id = %s
+          and coalesce(gc.active, true) = false
+        order by
+            coalesce(gc.display_order, 999999),
+            lower(coalesce(gc.component_group, '')),
+            lower(coalesce(gc.component_name, '')),
+            gc.gear_component_id
+    """
+
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(archived_sql, (selected_gear_id,))
+            archived_rows = cur.fetchall()
+
+    for row in archived_rows:
+        archived_components.append(
+            {
+                "gear_component_id": row["gear_component_id"],
+                "gear_id": row["gear_id"],
+                "component_key": row["component_key"],
+                "component_name": row["component_name"],
+                "component_group": row["component_group"],
+                "position": row["position"],
+                "track_life": row["track_life"],
+                "track_service": row["track_service"],
+                "preferred_metric": row["preferred_metric"],
+                "service_interval_miles": row["service_interval_miles"],
+                "service_interval_hours": row["service_interval_hours"],
+                "service_interval_days": row["service_interval_days"],
+                "service_interval_rides": row["service_interval_rides"],
+                "warning_percent": row["warning_percent"],
+                "display_order": row["display_order"],
+                "active": row["active"],
+                "notes": row["notes"],
+            }
+        )
+
     return JSONResponse(
         {
             "available_bikes": bike_options,
@@ -465,8 +562,480 @@ def api_gear_components(gear_id: Optional[str] = None):
                 }
                 for component in components
             ],
+            "archived_components": [
+                {
+                    key: json_safe(value)
+                    for key, value in component.items()
+                }
+                for component in archived_components
+            ],
         }
     )
+
+
+@router.post("/api/gear/components")
+def api_add_component(payload: dict | None = Body(default=None)):
+    if payload is None or not isinstance(payload, dict):
+        return JSONResponse({"detail": "Request body must be an object."}, status_code=400)
+
+    gear_id = _normalize_text(payload.get("gear_id"))
+    if not gear_id:
+        return JSONResponse({"detail": "gear_id is required."}, status_code=400)
+
+    if isinstance(payload.get("component"), dict):
+        payload = {**payload["component"], **payload.get("component", {})}
+    if isinstance(payload.get("baseline"), dict):
+        baseline = payload["baseline"]
+        payload["baseline_mode"] = payload.get("baseline_mode", baseline.get("mode"))
+        payload["baseline_service_date"] = payload.get("baseline_service_date", baseline.get("service_date"))
+
+    baseline_mode = _normalize_text(payload.get("baseline_mode")) or "current_snapshot"
+    if baseline_mode not in {"current_snapshot", "custom", "original"}:
+        return JSONResponse({"detail": "baseline_mode must be current_snapshot, custom, or original."}, status_code=400)
+
+    baseline_service_date = _normalize_text(payload.get("baseline_service_date"))
+    try:
+        service_date = date.fromisoformat(baseline_service_date) if baseline_service_date else date.today()
+    except ValueError:
+        return JSONResponse({"detail": "baseline_service_date must be a valid ISO date."}, status_code=400)
+
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute("select gear_id from gear where gear_id = %s and coalesce(active, true) = true", (gear_id,))
+            if cur.fetchone() is None:
+                return JSONResponse({"detail": "Invalid or inactive gear_id."}, status_code=400)
+
+            component_name = _normalize_text(payload.get("component_name"))
+            component_group = _normalize_text(payload.get("component_group"))
+            if not component_name:
+                return JSONResponse({"detail": "component_name is required."}, status_code=400)
+            if not component_group:
+                return JSONResponse({"detail": "component_group is required."}, status_code=400)
+
+            component_key = _normalize_component_key(payload.get("component_key"), component_name)
+            position = _normalize_text(payload.get("position")) or None
+            track_life = bool(payload.get("track_life", False))
+            track_service = bool(payload.get("track_service", True))
+            preferred_metric = _normalize_text(payload.get("preferred_metric")) or "mixed"
+            if preferred_metric not in {"miles", "hours", "days", "rides", "mixed", "inspection"}:
+                return JSONResponse({"detail": "preferred_metric is invalid."}, status_code=400)
+
+            warning_percent = _coerce_optional_decimal(payload.get("warning_percent", 80))
+            if warning_percent is None:
+                warning_percent = Decimal("80.00")
+            if warning_percent <= 0 or warning_percent > 100:
+                return JSONResponse({"detail": "warning_percent must be between 0 and 100."}, status_code=400)
+
+            display_order = payload.get("display_order")
+            try:
+                display_order = int(display_order) if display_order not in (None, "", "null") else 100
+            except (TypeError, ValueError):
+                return JSONResponse({"detail": "display_order must be an integer."}, status_code=400)
+
+            service_interval_miles = _coerce_optional_decimal(payload.get("service_interval_miles"))
+            service_interval_hours = _coerce_optional_decimal(payload.get("service_interval_hours"))
+            service_interval_days = payload.get("service_interval_days")
+            service_interval_rides = payload.get("service_interval_rides")
+
+            for value_name, value in {
+                "service_interval_days": service_interval_days,
+                "service_interval_rides": service_interval_rides,
+            }.items():
+                if value in (None, "", "null"):
+                    continue
+                try:
+                    numeric = int(value)
+                except (TypeError, ValueError):
+                    return JSONResponse({"detail": f"{value_name} must be a non-negative integer."}, status_code=400)
+                if numeric < 0:
+                    return JSONResponse({"detail": f"{value_name} cannot be negative."}, status_code=400)
+                if value_name == "service_interval_days":
+                    service_interval_days = numeric
+                else:
+                    service_interval_rides = numeric
+
+            if service_interval_miles is not None and service_interval_miles <= 0:
+                return JSONResponse({"detail": "service_interval_miles must be positive when provided."}, status_code=400)
+            if service_interval_hours is not None and service_interval_hours <= 0:
+                return JSONResponse({"detail": "service_interval_hours must be positive when provided."}, status_code=400)
+
+            cur.execute(
+                "select gear_component_id from gear_component where gear_id = %s and lower(component_key) = lower(%s) and coalesce(active, true) = true",
+                (gear_id, component_key),
+            )
+            if cur.fetchone() is not None:
+                return JSONResponse({"detail": "An active component with that key already exists for this bike."}, status_code=409)
+
+            cur.execute(
+                "select gear_component_id from gear_component where gear_id = %s and lower(component_key) = lower(%s) and coalesce(active, true) = false",
+                (gear_id, component_key),
+            )
+            if cur.fetchone() is not None:
+                return JSONResponse({"detail": "That component key exists as archived. Restore it instead of creating a duplicate."}, status_code=409)
+
+            cur.execute(
+                """
+                    select
+                        coalesce(sum(coalesce(sa.distance_mi, 0)), 0) as total_miles,
+                        coalesce(sum(coalesce(sa.moving_sec, 0)) / 3600.0, 0) as total_hours,
+                        count(sa.activity_id) filter (
+                            where lower(coalesce(sa.activity_category, '')) = 'ride'
+                                or lower(coalesce(sa.sport_type, '')) in (
+                                    'ride', 'road', 'gravel', 'mountain bike', 'mtb', 'e-bike', 'ebike',
+                                    'cycling', 'virtual ride', 'indoor cycle'
+                                )
+                                or lower(coalesce(sa.sport_type, '')) like '%%bike%%'
+                        ) as total_rides
+                    from strava_activities sa
+                    where sa.gear_id = %s
+                """,
+                (gear_id,),
+            )
+            bike_usage = cur.fetchone()
+
+            if baseline_mode == "original":
+                odometer_miles = 0
+                odometer_hours = 0
+                odometer_rides = 0
+            elif baseline_mode == "custom":
+                baseline_miles = payload.get("baseline_bike_miles")
+                baseline_hours = payload.get("baseline_bike_hours")
+                baseline_rides = payload.get("baseline_bike_rides")
+                if baseline_miles in (None, "", "null"):
+                    baseline_miles = bike_usage["total_miles"]
+                if baseline_hours in (None, "", "null"):
+                    baseline_hours = bike_usage["total_hours"]
+                if baseline_rides in (None, "", "null"):
+                    baseline_rides = bike_usage["total_rides"]
+                try:
+                    baseline_miles = float(baseline_miles)
+                except (TypeError, ValueError):
+                    return JSONResponse({"detail": "baseline_bike_miles must be a non-negative number."}, status_code=400)
+                try:
+                    baseline_hours = float(baseline_hours)
+                except (TypeError, ValueError):
+                    return JSONResponse({"detail": "baseline_bike_hours must be a non-negative number."}, status_code=400)
+                try:
+                    baseline_rides = int(baseline_rides)
+                except (TypeError, ValueError):
+                    return JSONResponse({"detail": "baseline_bike_rides must be a non-negative integer."}, status_code=400)
+                if baseline_miles < 0 or baseline_hours < 0 or baseline_rides < 0:
+                    return JSONResponse({"detail": "component baseline values cannot be negative."}, status_code=400)
+                odometer_miles = baseline_miles
+                odometer_hours = baseline_hours
+                odometer_rides = baseline_rides
+            else:
+                odometer_miles = float(bike_usage["total_miles"]) if bike_usage["total_miles"] is not None else None
+                odometer_hours = float(bike_usage["total_hours"]) if bike_usage["total_hours"] is not None else None
+                odometer_rides = int(bike_usage["total_rides"]) if bike_usage["total_rides"] is not None else None
+
+            cur.execute(
+                """
+                    insert into gear_component (
+                        gear_id,
+                        component_key,
+                        component_name,
+                        component_group,
+                        position,
+                        track_life,
+                        track_service,
+                        preferred_metric,
+                        service_interval_miles,
+                        service_interval_hours,
+                        service_interval_days,
+                        service_interval_rides,
+                        warning_percent,
+                        display_order,
+                        active,
+                        notes
+                    ) values (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, true, %s)
+                    returning gear_component_id
+                """,
+                (
+                    gear_id,
+                    component_key,
+                    component_name,
+                    component_group,
+                    position,
+                    track_life,
+                    track_service,
+                    preferred_metric,
+                    service_interval_miles,
+                    service_interval_hours,
+                    service_interval_days,
+                    service_interval_rides,
+                    warning_percent,
+                    display_order,
+                    _normalize_text(payload.get("notes")) or None,
+                ),
+            )
+            row = cur.fetchone()
+            component_id = row["gear_component_id"]
+
+            cur.execute(
+                """
+                    insert into gear_service_event (
+                        gear_component_id,
+                        gear_id,
+                        service_date,
+                        action,
+                        notes,
+                        cost,
+                        odometer_miles,
+                        odometer_hours,
+                        odometer_rides,
+                        odometer_elevation_ft,
+                        performed_by,
+                        service_location,
+                        source,
+                        source_reference
+                    ) values (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 'app', %s)
+                """,
+                (
+                    component_id,
+                    gear_id,
+                    service_date,
+                    "New" if baseline_mode == "original" else "Installation",
+                    "Original lifecycle baseline captured at component creation." if baseline_mode == "original" else "Initial lifecycle baseline captured at component creation.",
+                    None,
+                    odometer_miles,
+                    odometer_hours,
+                    odometer_rides,
+                    0,
+                    None,
+                    None,
+                    f"component:{component_id}",
+                ),
+            )
+            return JSONResponse({"gear_component_id": component_id, "component_key": component_key}, status_code=201)
+
+
+@router.patch("/api/components/{gear_component_id}")
+def api_update_component(gear_component_id: int, payload: dict | None = Body(default=None)):
+    if payload is None or not isinstance(payload, dict):
+        return JSONResponse({"detail": "Request body must be an object."}, status_code=400)
+
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                    select
+                        gear_component_id,
+                        gear_id,
+                        component_key,
+                        component_name,
+                        component_group,
+                        position,
+                        track_life,
+                        track_service,
+                        preferred_metric,
+                        service_interval_miles,
+                        service_interval_hours,
+                        service_interval_days,
+                        service_interval_rides,
+                        warning_percent,
+                        display_order,
+                        active,
+                        notes
+                    from gear_component
+                    where gear_component_id = %s
+                """,
+                (gear_component_id,),
+            )
+            component = cur.fetchone()
+            if component is None:
+                raise HTTPException(status_code=404, detail="Component not found.")
+
+            new_name = _normalize_text(payload.get("component_name"))
+            if new_name:
+                component_name = new_name
+            else:
+                component_name = component["component_name"]
+
+            new_group = _normalize_text(payload.get("component_group"))
+            if new_group:
+                component_group = new_group
+            else:
+                component_group = component["component_group"]
+
+            if not component_name:
+                return JSONResponse({"detail": "component_name is required."}, status_code=400)
+            if not component_group:
+                return JSONResponse({"detail": "component_group is required."}, status_code=400)
+
+            component_key = _normalize_component_key(payload.get("component_key"), component["component_key"])
+            if payload.get("component_key") not in (None, ""):
+                cur.execute(
+                    "select gear_component_id from gear_component where gear_id = %s and lower(component_key) = lower(%s) and gear_component_id != %s and coalesce(active, true) = true",
+                    (component["gear_id"], component_key, gear_component_id),
+                )
+                if cur.fetchone() is not None:
+                    return JSONResponse({"detail": "An active component with that key already exists for this bike."}, status_code=409)
+
+            position = _normalize_text(payload.get("position")) or None
+            track_life = payload.get("track_life")
+            if track_life is not None:
+                track_life = bool(track_life)
+            else:
+                track_life = component["track_life"]
+
+            track_service = payload.get("track_service")
+            if track_service is not None:
+                track_service = bool(track_service)
+            else:
+                track_service = component["track_service"]
+
+            preferred_metric = _normalize_text(payload.get("preferred_metric")) or component["preferred_metric"]
+            if preferred_metric not in {"miles", "hours", "days", "rides", "mixed", "inspection"}:
+                return JSONResponse({"detail": "preferred_metric is invalid."}, status_code=400)
+
+            warning_percent = _coerce_optional_decimal(payload.get("warning_percent"))
+            if warning_percent is None:
+                warning_percent = Decimal(str(component["warning_percent"])) if component["warning_percent"] is not None else Decimal("80.00")
+            if warning_percent <= 0 or warning_percent > 100:
+                return JSONResponse({"detail": "warning_percent must be between 0 and 100."}, status_code=400)
+
+            service_interval_miles = _coerce_optional_decimal(payload.get("service_interval_miles"))
+            if service_interval_miles is None and "service_interval_miles" in payload:
+                service_interval_miles = None
+            elif service_interval_miles is None:
+                service_interval_miles = component["service_interval_miles"]
+            if service_interval_miles is not None and service_interval_miles <= 0:
+                return JSONResponse({"detail": "service_interval_miles must be positive when provided."}, status_code=400)
+
+            service_interval_hours = _coerce_optional_decimal(payload.get("service_interval_hours"))
+            if service_interval_hours is None and "service_interval_hours" in payload:
+                service_interval_hours = None
+            elif service_interval_hours is None:
+                service_interval_hours = component["service_interval_hours"]
+            if service_interval_hours is not None and service_interval_hours <= 0:
+                return JSONResponse({"detail": "service_interval_hours must be positive when provided."}, status_code=400)
+
+            service_interval_days = payload.get("service_interval_days")
+            if service_interval_days in (None, "", "null"):
+                service_interval_days = None
+            else:
+                try:
+                    service_interval_days = int(service_interval_days)
+                except (TypeError, ValueError):
+                    return JSONResponse({"detail": "service_interval_days must be a non-negative integer."}, status_code=400)
+                if service_interval_days < 0:
+                    return JSONResponse({"detail": "service_interval_days cannot be negative."}, status_code=400)
+            if service_interval_days is None and "service_interval_days" in payload:
+                service_interval_days = None
+            elif service_interval_days is None:
+                service_interval_days = component["service_interval_days"]
+
+            service_interval_rides = payload.get("service_interval_rides")
+            if service_interval_rides in (None, "", "null"):
+                service_interval_rides = None
+            else:
+                try:
+                    service_interval_rides = int(service_interval_rides)
+                except (TypeError, ValueError):
+                    return JSONResponse({"detail": "service_interval_rides must be a non-negative integer."}, status_code=400)
+                if service_interval_rides < 0:
+                    return JSONResponse({"detail": "service_interval_rides cannot be negative."}, status_code=400)
+            if service_interval_rides is None and "service_interval_rides" in payload:
+                service_interval_rides = None
+            elif service_interval_rides is None:
+                service_interval_rides = component["service_interval_rides"]
+
+            display_order = payload.get("display_order")
+            if display_order in (None, "", "null"):
+                display_order = component["display_order"]
+            else:
+                try:
+                    display_order = int(display_order)
+                except (TypeError, ValueError):
+                    return JSONResponse({"detail": "display_order must be an integer."}, status_code=400)
+
+            notes = payload.get("notes")
+            if notes is None:
+                notes = component["notes"]
+            notes = _normalize_text(notes) or None
+
+            cur.execute(
+                """
+                    update gear_component
+                    set component_key = %s,
+                        component_name = %s,
+                        component_group = %s,
+                        position = %s,
+                        track_life = %s,
+                        track_service = %s,
+                        preferred_metric = %s,
+                        service_interval_miles = %s,
+                        service_interval_hours = %s,
+                        service_interval_days = %s,
+                        service_interval_rides = %s,
+                        warning_percent = %s,
+                        display_order = %s,
+                        notes = %s,
+                        updated_at = now()
+                    where gear_component_id = %s
+                """,
+                (
+                    component_key,
+                    component_name,
+                    component_group,
+                    position,
+                    track_life,
+                    track_service,
+                    preferred_metric,
+                    service_interval_miles,
+                    service_interval_hours,
+                    service_interval_days,
+                    service_interval_rides,
+                    warning_percent,
+                    display_order,
+                    notes,
+                    gear_component_id,
+                ),
+            )
+            return JSONResponse({"gear_component_id": gear_component_id, "updated": True})
+
+
+@router.post("/api/components/{gear_component_id}/archive")
+def api_archive_component(gear_component_id: int):
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                "update gear_component set active = false, updated_at = now() where gear_component_id = %s returning gear_component_id",
+                (gear_component_id,),
+            )
+            if cur.fetchone() is None:
+                raise HTTPException(status_code=404, detail="Component not found.")
+    return JSONResponse({"gear_component_id": gear_component_id, "active": False})
+
+
+@router.post("/api/components/{gear_component_id}/restore")
+def api_restore_component(gear_component_id: int):
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                "select gear_id, component_key from gear_component where gear_component_id = %s",
+                (gear_component_id,),
+            )
+            component = cur.fetchone()
+            if component is None:
+                raise HTTPException(status_code=404, detail="Component not found.")
+
+            cur.execute(
+                "select gear_component_id from gear_component where gear_id = %s and lower(component_key) = lower(%s) and coalesce(active, true) = true and gear_component_id != %s",
+                (component["gear_id"], component["component_key"], gear_component_id),
+            )
+            if cur.fetchone() is not None:
+                return JSONResponse({"detail": "An active component with that key already exists for this bike."}, status_code=409)
+
+            cur.execute(
+                "update gear_component set active = true, updated_at = now() where gear_component_id = %s returning gear_component_id",
+                (gear_component_id,),
+            )
+            row = cur.fetchone()
+            if row is None:
+                raise HTTPException(status_code=404, detail="Component not found.")
+    return JSONResponse({"gear_component_id": gear_component_id, "active": True})
 
 
 @router.get("/api/components/{gear_component_id}/services")
@@ -480,6 +1049,7 @@ def api_component_services(gear_component_id: int):
                         gc.gear_id,
                         gc.component_name,
                         gc.component_group,
+                        gc.position,
                         gc.active,
                         gc.track_service,
                         g.gear_name,
@@ -503,11 +1073,15 @@ def api_component_services(gear_component_id: int):
                         gear_id,
                         service_date,
                         action,
+                        product_name,
+                        manufacturer,
+                        model,
                         notes,
                         cost,
                         odometer_miles,
                         odometer_hours,
                         odometer_rides,
+                        odometer_elevation_ft,
                         performed_by,
                         service_location,
                         created_at,
@@ -525,9 +1099,11 @@ def api_component_services(gear_component_id: int):
         "gear_id": component["gear_id"],
         "component_name": component["component_name"],
         "component_group": component["component_group"],
+        "position": component["position"],
         "active": component["active"],
         "track_service": component["track_service"],
         "bike_name": component["gear_name"],
+        "bike_display_name": _format_bike_display_name(component),
         "brand": component["brand"],
         "model_year": component["model_year"],
     }
@@ -539,11 +1115,15 @@ def api_component_services(gear_component_id: int):
             "gear_id": row["gear_id"],
             "service_date": json_safe(row["service_date"]),
             "service_type": row["action"],
+            "product_name": row["product_name"],
+            "manufacturer": row["manufacturer"],
+            "model": row["model"],
             "notes": row["notes"],
             "cost": json_safe(row["cost"]),
             "mileage_at_service": json_safe(row["odometer_miles"]),
             "hours_at_service": json_safe(row["odometer_hours"]),
             "rides_at_service": json_safe(row["odometer_rides"]),
+            "elevation_at_service": json_safe(row["odometer_elevation_ft"]),
             "service_provider": row["performed_by"],
             "service_location": row["service_location"],
             "created_at": json_safe(row["created_at"]),
