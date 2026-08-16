@@ -20,7 +20,7 @@
     dailyAppliedQuery: "",
     dailySearchMatchCount: 0,
     dailySearchTotalCount: 0,
-    weeklyLimit: 60,
+    weeklyLimit: 52,
     zonesLimit: 60,
     yearlyView: "annual",
     yearlyRows: [],
@@ -29,7 +29,7 @@
 
   window.APP_ROW_LIMITS = Object.freeze({
     daily: [60, 90, 365, 1000],
-    weekly: [26, 60, 260],
+    weekly: [10, 52, 520],
     zones: [26, 60, 260],
   });
 
@@ -84,7 +84,7 @@
     next.hideShoes = Boolean(next.hideShoes);
     next.hideRetired = Boolean(next.hideRetired);
     next.dailyLimit = normalizeStoredPreference(next.dailyLimit, 60, window.APP_ROW_LIMITS.daily);
-    next.weeklyLimit = normalizeStoredPreference(next.weeklyLimit, 60, window.APP_ROW_LIMITS.weekly);
+    next.weeklyLimit = normalizeStoredPreference(next.weeklyLimit, 52, window.APP_ROW_LIMITS.weekly);
     next.zonesLimit = normalizeStoredPreference(next.zonesLimit, 60, window.APP_ROW_LIMITS.zones);
     delete next.gearLimit;
 

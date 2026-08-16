@@ -4,6 +4,9 @@
  * Owns zone table rendering and the threshold-based highlighting logic. It reads AppState and fetches data via the
  * shared API layer, while leaving the main tab shell and global theme styling elsewhere.
  */
+let zonesLoadRequestId = 0;
+let zonesLimitListenerBound = false;
+
 function formatPercent(value) {
   if (value === null || value === undefined || value === "") {
     return "";
@@ -55,17 +58,33 @@ function zoneHeaderLabel(metric, title) {
 }
 
 async function loadZones() {
+  const requestId = ++zonesLoadRequestId;
   const limit = Number(window.AppState.zonesLimit);
 
   try {
     if (window.api && typeof window.api.fetchZones === "function") {
-      window.AppState.zonesRows = await window.api.fetchZones(limit);
+      const rows = await window.api.fetchZones(limit);
+      if (requestId !== zonesLoadRequestId) {
+        return;
+      }
+      window.AppState.zonesRows = rows;
     } else {
-      window.AppState.zonesRows = await fetch(`/api/zones?limit=${limit}`).then(response => response.json());
+      const rows = await fetch(`/api/zones?limit=${limit}`).then(response => response.json());
+      if (requestId !== zonesLoadRequestId) {
+        return;
+      }
+      window.AppState.zonesRows = rows;
     }
   } catch (error) {
     console.error(error);
+    if (requestId !== zonesLoadRequestId) {
+      return;
+    }
     window.AppState.zonesRows = [];
+  }
+
+  if (requestId !== zonesLoadRequestId) {
+    return;
   }
 
   renderZonesTable();
@@ -73,6 +92,46 @@ async function loadZones() {
   if (window.AppState.activeTab === "zones") {
     renderHeaderSummary();
   }
+}
+
+function attachZonesLimitSelector() {
+  if (zonesLimitListenerBound) {
+    return;
+  }
+
+  const zonesLimitSelector = document.getElementById("zonesLimit");
+  if (!zonesLimitSelector) {
+    return;
+  }
+
+  zonesLimitSelector.addEventListener("change", (event) => {
+    const nextValue = Number(event.target.value);
+    const allowedValues = Array.isArray(window.APP_ROW_LIMITS?.zones) ? window.APP_ROW_LIMITS.zones : [26, 60, 260];
+
+    if (!Number.isInteger(nextValue) || !allowedValues.includes(nextValue)) {
+      event.target.value = String(window.AppState.zonesLimit ?? 60);
+      return;
+    }
+
+    if (typeof window.updateLimitPreference === "function") {
+      window.updateLimitPreference("zonesLimit", nextValue, () => {
+        if (window.AppState.activeTab === "zones" && typeof window.loadZones === "function") {
+          window.loadZones();
+        }
+      });
+      return;
+    }
+
+    window.AppState.zonesLimit = nextValue;
+    if (typeof window.persistPreferences === "function") {
+      window.persistPreferences();
+    }
+    if (window.AppState.activeTab === "zones" && typeof window.loadZones === "function") {
+      window.loadZones();
+    }
+  });
+
+  zonesLimitListenerBound = true;
 }
 
 function renderZonesTable() {
@@ -121,6 +180,8 @@ function renderZonesTable() {
     </tbody>
   `;
 }
+
+attachZonesLimitSelector();
 
 window.ZonesController = {
   load: loadZones,

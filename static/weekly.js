@@ -11,6 +11,9 @@ const weeklyState = {
   drawerDirty: false,
 };
 
+let weeklyLoadRequestId = 0;
+let weeklyLimitListenerBound = false;
+
 const weeklyDrawer = document.getElementById("weeklyDrawer");
 const weeklyDrawerContent = document.getElementById("weeklyDrawerContent");
 const weeklyDrawerContext = document.getElementById("drawerContext");
@@ -643,17 +646,33 @@ async function saveWeeklyDrawer() {
 }
 
 async function loadWeekly() {
+  const requestId = ++weeklyLoadRequestId;
   const limit = Number(window.AppState.weeklyLimit);
 
   try {
     if (window.api && typeof window.api.fetchWeekly === "function") {
-      window.AppState.weeklyRows = await window.api.fetchWeekly(limit);
+      const rows = await window.api.fetchWeekly(limit);
+      if (requestId !== weeklyLoadRequestId) {
+        return;
+      }
+      window.AppState.weeklyRows = rows;
     } else {
-      window.AppState.weeklyRows = await fetch(`/api/weekly?limit=${limit}`).then(response => response.json());
+      const rows = await fetch(`/api/weekly?limit=${limit}`).then(response => response.json());
+      if (requestId !== weeklyLoadRequestId) {
+        return;
+      }
+      window.AppState.weeklyRows = rows;
     }
   } catch (error) {
     console.error(error);
+    if (requestId !== weeklyLoadRequestId) {
+      return;
+    }
     window.AppState.weeklyRows = [];
+  }
+
+  if (requestId !== weeklyLoadRequestId) {
+    return;
   }
 
   renderWeeklyTable();
@@ -661,6 +680,46 @@ async function loadWeekly() {
   if (window.AppState.activeTab === "weekly") {
     renderHeaderSummary();
   }
+}
+
+function attachWeeklyLimitSelector() {
+  if (weeklyLimitListenerBound) {
+    return;
+  }
+
+  const weeklyLimitSelector = document.getElementById("weeklyLimit");
+  if (!weeklyLimitSelector) {
+    return;
+  }
+
+  weeklyLimitSelector.addEventListener("change", (event) => {
+    const nextValue = Number(event.target.value);
+    const allowedValues = Array.isArray(window.APP_ROW_LIMITS?.weekly) ? window.APP_ROW_LIMITS.weekly : [10, 52, 520];
+
+    if (!Number.isInteger(nextValue) || !allowedValues.includes(nextValue)) {
+      event.target.value = String(window.AppState.weeklyLimit ?? 52);
+      return;
+    }
+
+    if (typeof window.updateLimitPreference === "function") {
+      window.updateLimitPreference("weeklyLimit", nextValue, () => {
+        if (window.AppState.activeTab === "weekly" && typeof window.loadWeekly === "function") {
+          window.loadWeekly();
+        }
+      });
+      return;
+    }
+
+    window.AppState.weeklyLimit = nextValue;
+    if (typeof window.persistPreferences === "function") {
+      window.persistPreferences();
+    }
+    if (window.AppState.activeTab === "weekly" && typeof window.loadWeekly === "function") {
+      window.loadWeekly();
+    }
+  });
+
+  weeklyLimitListenerBound = true;
 }
 
 // Weekly table rendering
@@ -761,6 +820,7 @@ function registerWeeklyEventHandlers() {
 }
 
 registerWeeklyEventHandlers();
+attachWeeklyLimitSelector();
 window.loadWeekly = loadWeekly;
 window.WeeklyController = {
   load: loadWeekly,

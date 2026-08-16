@@ -161,6 +161,8 @@ let dailySearchRequestId = 0;
 let dailySearchDebounceTimer = null;
 let dailySearchResultItems = [];
 let dailySearchSelectedIndex = -1;
+let dailyLoadRequestId = 0;
+let dailyLimitListenerBound = false;
 
 function hideDailySearchResults() {
   const results = document.getElementById("dailySearchResults");
@@ -463,15 +465,67 @@ function attachDailySearch() {
   updateDailySearchControls();
 }
 
+function attachDailyLimitSelector() {
+  if (dailyLimitListenerBound) {
+    return;
+  }
+
+  const dailyLimitSelector = document.getElementById("dailyLimit");
+  if (!dailyLimitSelector) {
+    return;
+  }
+
+  dailyLimitSelector.addEventListener("change", (event) => {
+    const nextValue = Number(event.target.value);
+    const allowedValues = Array.isArray(window.APP_ROW_LIMITS?.daily) ? window.APP_ROW_LIMITS.daily : [60, 90, 365, 1000];
+
+    if (!Number.isInteger(nextValue) || !allowedValues.includes(nextValue)) {
+      event.target.value = String(window.AppState.dailyLimit ?? 60);
+      return;
+    }
+
+    if (typeof window.updateLimitPreference === "function") {
+      window.updateLimitPreference("dailyLimit", nextValue, () => {
+        if (window.AppState.activeTab === "daily" && typeof window.loadDaily === "function") {
+          window.loadDaily();
+        }
+      });
+      return;
+    }
+
+    window.AppState.dailyLimit = nextValue;
+    if (typeof window.persistPreferences === "function") {
+      window.persistPreferences();
+    }
+    if (window.AppState.activeTab === "daily" && typeof window.loadDaily === "function") {
+      window.loadDaily();
+    }
+  });
+
+  dailyLimitListenerBound = true;
+}
+
 attachDailySearch();
+attachDailyLimitSelector();
 
 async function loadDaily() {
+  const requestId = ++dailyLoadRequestId;
   const query = String(window.AppState.dailyAppliedQuery || "").trim();
   const limit = query ? 1000 : Number(window.AppState.dailyLimit);
+  const dailyLimitSelector = document.getElementById("dailyLimit");
+
+  if (dailyLimitSelector) {
+    const isAppliedSearch = Boolean(query);
+    const isLoading = true;
+    dailyLimitSelector.disabled = isAppliedSearch || isLoading;
+  }
 
   try {
     if (window.api && typeof window.api.fetchDaily === "function") {
       const payload = await window.api.fetchDaily(limit, query);
+      if (requestId !== dailyLoadRequestId) {
+        return;
+      }
       const rows = Array.isArray(payload) ? payload : (payload && Array.isArray(payload.rows) ? payload.rows : []);
       const totalCount = query ? Number((payload && payload.total_count) || rows.length) : 0;
       window.AppState.dailyRows = rows;
@@ -482,6 +536,9 @@ async function loadDaily() {
         params.set("q", query);
       }
       const payload = await fetch(`/api/daily?${params.toString()}`).then(response => response.json());
+      if (requestId !== dailyLoadRequestId) {
+        return;
+      }
       const rows = Array.isArray(payload) ? payload : (payload && Array.isArray(payload.rows) ? payload.rows : []);
       const totalCount = query ? Number((payload && payload.total_count) || rows.length) : 0;
       window.AppState.dailyRows = rows;
@@ -489,8 +546,15 @@ async function loadDaily() {
     }
   } catch (error) {
     console.error(error);
+    if (requestId !== dailyLoadRequestId) {
+      return;
+    }
     window.AppState.dailyRows = [];
     window.AppState.dailySearchTotalCount = 0;
+  }
+
+  if (requestId !== dailyLoadRequestId) {
+    return;
   }
 
   if (query) {
@@ -508,6 +572,7 @@ async function loadDaily() {
   }
 }
 
+window.loadDaily = loadDaily;
 window.DailyController = {
   load: loadDaily,
   render: renderDailyTable,
