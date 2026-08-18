@@ -15,6 +15,9 @@
   const settingsDailyLimit = document.getElementById("settingsDailyLimit");
   const settingsWeeklyLimit = document.getElementById("settingsWeeklyLimit");
   const settingsZonesLimit = document.getElementById("settingsZonesLimit");
+  const defaultSyncDaysInput = document.getElementById("defaultSyncDaysInput");
+  const saveDefaultSyncDaysBtn = document.getElementById("saveDefaultSyncDaysBtn");
+  const defaultSyncDaysStatus = document.getElementById("defaultSyncDaysStatus");
   const appearanceInputs = Array.from(document.querySelectorAll('input[name="appearance"]'));
   const settingsHideShoes = document.getElementById("settingsHideShoes");
   const settingsHideRetired = document.getElementById("settingsHideRetired");
@@ -139,6 +142,66 @@
   function handleSystemAppearanceChange() {
     if (window.AppState.appearance === "system") {
       applyAppearancePreference();
+    }
+  }
+
+  function setDefaultSyncDaysStatus(message, isError = false) {
+    if (!defaultSyncDaysStatus) {
+      return;
+    }
+
+    defaultSyncDaysStatus.textContent = message;
+    defaultSyncDaysStatus.classList.toggle("error", Boolean(isError));
+  }
+
+  async function loadDefaultSyncDaysPreference() {
+    if (!defaultSyncDaysInput) {
+      return;
+    }
+
+    try {
+      const data = await window.api.fetchAppPreferences();
+      const nextValue = Number(data?.default_sync_days_back ?? 7);
+      if (Number.isInteger(nextValue) && nextValue >= 1 && nextValue <= 6000) {
+        defaultSyncDaysInput.value = String(nextValue);
+        return;
+      }
+      defaultSyncDaysInput.value = "7";
+    } catch (error) {
+      defaultSyncDaysInput.value = "7";
+    }
+  }
+
+  async function saveDefaultSyncDaysPreference() {
+    if (!defaultSyncDaysInput || !saveDefaultSyncDaysBtn) {
+      return;
+    }
+
+    const rawValue = String(defaultSyncDaysInput.value).trim();
+    const numericValue = Number(rawValue);
+
+    if (!rawValue || !Number.isInteger(numericValue) || numericValue < 1 || numericValue > 6000) {
+      setDefaultSyncDaysStatus("Please enter a whole number from 1 to 6000.", true);
+      return;
+    }
+
+    saveDefaultSyncDaysBtn.disabled = true;
+    setDefaultSyncDaysStatus("Saving...");
+
+    try {
+      const saved = await window.api.saveAppPreferences({ default_sync_days_back: numericValue });
+      const savedValue = Number(saved?.default_sync_days_back ?? numericValue);
+      if (Number.isInteger(savedValue) && savedValue >= 1 && savedValue <= 6000) {
+        defaultSyncDaysInput.value = String(savedValue);
+        setDefaultSyncDaysStatus("Saved");
+      } else {
+        setDefaultSyncDaysStatus("Unable to save default sync days.", true);
+      }
+    } catch (error) {
+      console.error(error);
+      setDefaultSyncDaysStatus("Unable to save default sync days.", true);
+    } finally {
+      saveDefaultSyncDaysBtn.disabled = false;
     }
   }
 
@@ -452,6 +515,12 @@
 
     refreshStatusBtn?.addEventListener("click", loadSystemStatus);
     copyDiagnosticsBtn?.addEventListener("click", copySystemDiagnostics);
+    saveDefaultSyncDaysBtn?.addEventListener("click", saveDefaultSyncDaysPreference);
+    defaultSyncDaysInput?.addEventListener("keydown", (event) => {
+      if (event.key === "Enter") {
+        saveDefaultSyncDaysPreference();
+      }
+    });
 
     if (systemThemeMedia && typeof systemThemeMedia.addEventListener === "function") {
       systemThemeMedia.addEventListener("change", handleSystemAppearanceChange);
@@ -476,7 +545,8 @@
       if (settingsHideRetired) {
         settingsHideRetired.checked = window.AppState.hideRetired;
       }
-        attachSettingsEventListeners();
+      loadDefaultSyncDaysPreference();
+      attachSettingsEventListeners();
       setSettingsTab("general");
     },
   };
@@ -484,6 +554,8 @@
   window.SettingsController = SettingsController;
   window.loadSystemStatus = loadSystemStatus;
   window.copySystemDiagnostics = copySystemDiagnostics;
+  window.loadDefaultSyncDaysPreference = loadDefaultSyncDaysPreference;
+  window.saveDefaultSyncDaysPreference = saveDefaultSyncDaysPreference;
   window.restorePreferences = restorePreferences;
   window.syncLimitSelects = syncLimitSelects;
   window.updateLimitPreference = updateLimitPreference;

@@ -179,6 +179,28 @@
       return fetchJson("/api/sync-status");
     },
 
+    async fetchAppPreferences() {
+      return fetchJson("/api/settings/app-preferences");
+    },
+
+    async saveAppPreferences(payload = {}) {
+      const response = await fetch("/api/settings/app-preferences", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json",
+        },
+        body: JSON.stringify(payload || {}),
+      });
+
+      if (!response.ok) {
+        const detail = await response.json().catch(() => ({}));
+        throw new Error(detail.detail || `${response.status} ${response.statusText || "Save failed"}`);
+      }
+
+      return response.json();
+    },
+
     async requestSync() {
       return fetchJson("/api/sync-request", {
         method: "POST",

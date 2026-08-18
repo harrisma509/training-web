@@ -1,22 +1,70 @@
 """
 Sync route module.
 
-Owns sync status and sync request endpoints:
+Owns sync status, sync request endpoints, and the app preference used for new full-sync requests.
 - /api/sync-status
 - /api/sync-request
+- /api/settings/app-preferences
 
 This module reports latest sync health and inserts sync_request rows.
 Do not put ETL implementation logic here.
 """
 
+import os
 from datetime import datetime, timezone
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
 
 from db import db_conn
 
 router = APIRouter()
+
+
+def _sanitize_days_back(value):
+    if isinstance(value, bool):
+        return None
+    if not isinstance(value, int):
+        return None
+    if value < 1 or value > 6000:
+        return None
+    return value
+
+
+def _env_default_sync_days_back():
+    try:
+        value = int(os.environ.get("DAYS_BACK", "7"))
+    except (TypeError, ValueError):
+        return 7
+    if value < 1 or value > 6000:
+        return 7
+    return value
+
+
+def _effective_default_sync_days_back():
+    fallback = _env_default_sync_days_back()
+
+    try:
+        with db_conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT default_sync_days_back
+                    FROM public.app_settings
+                    WHERE settings_id = 1
+                    """
+                )
+                row = cur.fetchone()
+    except Exception:
+        return fallback
+
+    if row is None:
+        return fallback
+
+    value = _sanitize_days_back(row.get("default_sync_days_back"))
+    if value is None:
+        return fallback
+    return value
 
 
 def _format_sync_response(latest, open_request, latest_good):
@@ -148,8 +196,57 @@ def get_sync_status():
     return JSONResponse(_format_sync_response(latest, open_request, latest_good))
 
 
+@router.get("/api/settings/app-preferences")
+def get_app_preferences():
+    return {
+        "default_sync_days_back": _effective_default_sync_days_back()
+    }
+
+
+@router.post("/api/settings/app-preferences")
+async def update_app_preferences(request: Request):
+    try:
+        payload = await request.json()
+    except Exception:
+        return JSONResponse({"detail": "Invalid request body."}, status_code=400)
+
+    if not isinstance(payload, dict):
+        return JSONResponse({"detail": "Invalid request body."}, status_code=400)
+
+    candidate = payload.get("default_sync_days_back")
+    value = _sanitize_days_back(candidate)
+    if value is None:
+        return JSONResponse({"detail": "default_sync_days_back must be an integer between 1 and 6000."}, status_code=400)
+
+    try:
+        with db_conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    UPDATE public.app_settings
+                    SET
+                        default_sync_days_back = %s,
+                        updated_at = now()
+                    WHERE settings_id = 1
+                    RETURNING default_sync_days_back, updated_at
+                    """,
+                    (value,),
+                )
+                row = cur.fetchone()
+                if row is None:
+                    return JSONResponse({"detail": "Preference unavailable."}, status_code=500)
+                conn.commit()
+                return {
+                    "default_sync_days_back": int(row["default_sync_days_back"])
+                }
+    except Exception:
+        return JSONResponse({"detail": "Unable to save preference."}, status_code=500)
+
+
 @router.post("/api/sync-request")
 def create_sync_request():
+    days_back = _effective_default_sync_days_back()
+
     with db_conn() as conn:
         with conn.cursor() as cur:
             cur.execute("""
@@ -183,7 +280,7 @@ def create_sync_request():
                 )
                 VALUES (
                     'dashboard',
-                    7,
+                    %s,
                     'pending'
                 )
                 RETURNING
@@ -191,7 +288,7 @@ def create_sync_request():
                     requested_at_utc,
                     status,
                     days_back
-            """)
+            """, (days_back,))
             row = cur.fetchone()
 
     return {

@@ -133,6 +133,15 @@
                 <option value="yearly">Yearly</option>
               </select>
             </div>
+            <div class="settings-control-row" style="margin-top: 12px;">
+              <label for="defaultSyncDaysInput">Default sync days</label>
+              <input id="defaultSyncDaysInput" type="number" min="1" max="6000" step="1" value="7">
+            </div>
+            <div class="settings-help-text">Number of recent days refreshed by new sync requests. Range: 1–6000.</div>
+            <div class="settings-actions">
+              <button id="saveDefaultSyncDaysBtn" type="button" class="button-primary">Save</button>
+            </div>
+            <div id="defaultSyncDaysStatus" class="settings-status-message" aria-live="polite"></div>
           </div>
 
           <div class="settings-section settings-general-tile">
