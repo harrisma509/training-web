@@ -65,6 +65,10 @@ function hasOtherActivity(row) {
     return true;
   }
 
+  if (Array.isArray(row?.other_activities)) {
+    return row.other_activities.some(item => item && typeof item === "object" && typeof item.name === "string" && item.name.trim());
+  }
+
   const otherActivityNames = row.other_activity_names == null ? "" : String(row.other_activity_names).trim();
   return Boolean(otherActivityNames);
 }
@@ -91,6 +95,49 @@ function renderMainRideCell(row) {
   }
 
   return renderRideLinkFromFields(row.main_ride_name, row.main_ride_id);
+}
+
+function renderStructuredOtherActivities(row) {
+  const rawActivities = Array.isArray(row?.other_activities) ? row.other_activities : [];
+  const rendered = [];
+
+  for (const item of rawActivities) {
+    if (!item || typeof item !== "object") {
+      continue;
+    }
+
+    const rawName = item.name == null ? "" : String(item.name).trim();
+    const rawCategory = item.activity_category == null ? "" : String(item.activity_category).trim();
+    const escapedName = escapeHtml(rawName);
+    const categoryLabel = rawCategory || "other";
+
+    if (!rawName) {
+      continue;
+    }
+
+    const cleanedId = item.activity_id == null ? "" : String(item.activity_id).trim();
+    const activityLabel = /^[0-9]+$/.test(cleanedId)
+      ? `<a class="activity-link" href="https://www.strava.com/activities/${cleanedId}" target="_blank" rel="noopener noreferrer">${escapedName}</a>`
+      : escapedName;
+
+    rendered.push(`${activityLabel} (${escapeHtml(categoryLabel)})`);
+  }
+
+  if (rendered.length > 0) {
+    return rendered.join(" | ");
+  }
+
+  return "";
+}
+
+function renderOtherActivitiesCell(row) {
+  const structuredActivities = renderStructuredOtherActivities(row);
+  if (structuredActivities) {
+    return structuredActivities;
+  }
+
+  const fallbackValue = row.other_activity_names == null ? "" : String(row.other_activity_names);
+  return escapeHtml(fallbackValue).replaceAll("\n", "<br>");
 }
 
 function formatHrZones(value) {
@@ -123,8 +170,7 @@ function renderDailyTable() {
         <td>${safe(mainRideLoad)}</td>
         <td>${hasRide ? formatHrZones(row.main_ride_hr_zones) : ""}</td>
         <td>${hasOther && row.other_load != null ? Number(row.other_load).toFixed(0) : ""}</td>
-        <td>${safe(row.activity_categories)}</td>
-        <td>${safe(row.other_activity_names).replaceAll("\\n", "<br>")}</td>
+        <td>${renderOtherActivitiesCell(row)}</td>
       </tr>
     `;
   }).join("");
@@ -147,7 +193,6 @@ function renderDailyTable() {
         <th>Main Ride Load</th>
         <th>HR Zones</th>
         <th>Other</th>
-        <th>Count</th>
         <th>Other Activities</th>
       </tr>
     </thead>
