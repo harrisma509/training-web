@@ -8,7 +8,7 @@ NAS_WEB_DIR="$NAS_ROOT/web"
 
 if [ ! -d "$NAS_WEB_DIR" ]; then
   echo "NAS web folder not found: $NAS_WEB_DIR"
-  echo "Mount smb://192.168.1.188/docker first."
+  echo "Mount smb://192.168.1.101/docker first."
   exit 1
 fi
 

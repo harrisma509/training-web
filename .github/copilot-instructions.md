@@ -25,7 +25,7 @@ Do not change database schema from this repo unless explicitly requested.
 ## Runtime
 
 - The app runs in Docker on the home NAS.
-- Live app: `http://192.168.1.188:8088`
+- Live app: `http://192.168.1.101:8088`
 - Local `.venv` may not have runtime dependencies.
 - Local `py_compile` is syntax-only.
 - Real validation must happen against the NAS runtime.
@@ -43,7 +43,7 @@ After deploy, validate live endpoints with `curl`.
 Example:
 
 ```bash
-curl -sS -D - http://192.168.1.188:8088/api/gear/dashboard?limit=5
+curl -sS -D - http://192.168.1.101:8088/api/gear/dashboard?limit=5
 ```
 
 ## Safety rules

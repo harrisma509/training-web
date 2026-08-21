@@ -47,7 +47,7 @@ Useful checks:
 
 ```bash
 ./deploy_to_nas.sh
-curl -sS "http://192.168.1.188:8088/api/gear/dashboard?limit=5" | jq .
+curl -sS "http://192.168.1.101:8088/api/gear/dashboard?limit=5" | jq .
 ```
 
 After deploying Python route or app-registration changes, restart the web container when required by the existing deployment process.
@@ -85,7 +85,7 @@ When running audit scripts directly from the local workstation
 (rather than from inside the training-web container), use the
 externally reachable PostgreSQL endpoint:
 
-Host: 192.168.1.188
+Host: 192.168.1.101
 Port: 15432
 
 Do not modify application configuration files to accommodate local audits.

@@ -1,23 +1,20 @@
+name: training-web
+
 services:
   training-web:
     build: .
     container_name: training-web
     restart: unless-stopped
     env_file:
-      - /etc/training/.env
+      - .env
     volumes:
-      - /opt/training/web:/app:rw
+      - /volume1/docker/training/web:/app:rw
     ports:
       - "8088:8080"
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
     networks:
       - training_net
     command: uvicorn app:app --host 0.0.0.0 --port 8080 --reload
 
 networks:
   training_net:
-    name: training_net
-    ipam:
-      config:
-        - subnet: 172.30.0.0/24
+    external: true
