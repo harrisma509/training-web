@@ -20,6 +20,7 @@ from fastapi import FastAPI
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 
+from logging_config import configure_logging
 from health_api.ingest_routes import router as health_router
 from routes.daily import router as daily_router
 from routes.weekly import router as weekly_router
@@ -31,6 +32,8 @@ from routes.weekly_commentary import router as weekly_commentary_router
 from routes.status import router as status_router
 from routes.sync import router as sync_router
 from routes.components import router as components_router
+
+configure_logging("training-web")
 
 BASE_DIR = Path(__file__).resolve().parent
 

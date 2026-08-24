@@ -10,6 +10,7 @@ This module reports latest sync health and inserts sync_request rows.
 Do not put ETL implementation logic here.
 """
 
+import logging
 import os
 from datetime import datetime, timezone
 
@@ -17,6 +18,8 @@ from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
 
 from db import db_conn
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -56,13 +59,16 @@ def _effective_default_sync_days_back():
                 )
                 row = cur.fetchone()
     except Exception:
+        logger.exception("Unable to read app_settings default_sync_days_back; using fallback value")
         return fallback
 
     if row is None:
+        logger.warning("app_settings default_sync_days_back missing; using fallback value")
         return fallback
 
     value = _sanitize_days_back(row.get("default_sync_days_back"))
     if value is None:
+        logger.warning("app_settings default_sync_days_back invalid; using fallback value")
         return fallback
     return value
 
@@ -240,6 +246,7 @@ async def update_app_preferences(request: Request):
                     "default_sync_days_back": int(row["default_sync_days_back"])
                 }
     except Exception:
+        logger.exception("Failed to save app preference update")
         return JSONResponse({"detail": "Unable to save preference."}, status_code=500)
 
 
