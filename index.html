@@ -20,6 +20,7 @@
     </div>
 
     <nav class="tabs header-tabs">
+      <button id="overviewTab" type="button">Overview</button>
       <button id="dailyTab" class="active" type="button">Daily</button>
       <button id="weeklyTab" type="button">Weekly</button>
       <button id="zonesTab" type="button">Zones</button>
@@ -125,6 +126,7 @@
             <div id="startupTabRow" class="settings-control-row hidden">
               <label for="startupTab">Startup tab</label>
               <select id="startupTab">
+                <option value="overview">Overview</option>
                 <option value="daily">Daily</option>
                 <option value="weekly">Weekly</option>
                 <option value="zones">Zones</option>
@@ -255,6 +257,12 @@
 </div>
 
   <main>
+    <section id="overviewPane" class="hidden">
+      <div class="overview-shell">
+        <div id="overviewStrip" class="overview-weeks" aria-live="polite"></div>
+      </div>
+    </section>
+
     <section id="dailyPane">
       <div id="dailySearchStatusWrap" class="daily-search-status-wrap hidden">
         <div id="dailySearchStatusText" class="daily-search-status-text"></div>
@@ -367,6 +375,7 @@
 <script src="/static/yearly.js"></script>
 <script src="/static/settings.js"></script>
 <script src="/static/daily.js"></script>
+<script src="/static/overview.js"></script>
 <script src="/static/app.js"></script>
 </body>
 </html>
