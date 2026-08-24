@@ -48,13 +48,13 @@ This repo should not:
 - Do not rely on local schema assumptions when the live deployment is the real system.
 
 ## Deployment policy
-The NAS Docker deployment is the real runtime. Local checks are useful, but they are not enough.
+The HarrisServer Docker deployment is the real runtime. Local checks are useful, but they are not enough.
 
 Typical flow:
 
 ```bash
-./deploy_to_nas.sh
-curl -sS -D - http://192.168.1.101:8088/api/gear/dashboard?limit=5
+./deploy_to_server.sh
+curl -sS -D - http://harrisserver:8088/api/gear/dashboard?limit=5
 ```
 
 When a route or app-registration change is made, validate the live endpoint after deployment.

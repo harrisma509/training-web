@@ -41,11 +41,11 @@ The web app should be treated as the read/query and presentation layer, not as t
 - If a request touches data collection, schema, builder logic, or audit rules, stop and route the work to the ETL repo.
 
 ## Production runtime
-The real runtime is the NAS Docker deployment, not the local macOS environment.
+The real runtime is the HarrisServer Docker deployment, not the local macOS environment.
 
 Typical model:
 - PostgreSQL is the shared runtime database
-- the web app runs as a Dockerized FastAPI service
+- the web app runs as a Dockerized FastAPI service on HarrisServer
 - ETL runs separately and writes to the same database
 - the dashboard reads from the database and exposes the processed state
 
@@ -55,13 +55,13 @@ This matters because local syntax checks are useful, but they do not validate th
 Use the repository's deployment flow for runtime validation:
 
 ```bash
-./deploy_to_nas.sh
+./deploy_to_server.sh
 ```
 
 Then validate the live app with a focused HTTP request, for example:
 
 ```bash
-curl -sS -D - http://192.168.1.101:8088/api/gear/dashboard?limit=5
+curl -sS -D - http://harrisserver:8088/api/gear/dashboard?limit=5
 ```
 
 Important rules:

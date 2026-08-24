@@ -91,6 +91,7 @@ def api_weekly(limit: int = 60):
             weekly_training.very_hard_epic_days,
             weekly_training.chronic_weekly_cw,
             weekly_training.ac_ratio,
+            weekly_training.ramp_pct,
             weekly_training.ramp_pct_display,
             weekly_training.status_level,
             weekly_training.status_text,

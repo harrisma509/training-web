@@ -24,18 +24,18 @@ Do not change database schema from this repo unless explicitly requested.
 
 ## Runtime
 
-- The app runs in Docker on the home NAS.
-- Live app: `http://192.168.1.101:8088`
+- The app runs in Docker on HarrisServer.
+- Live app: `http://harrisserver:8088`
 - Local `.venv` may not have runtime dependencies.
 - Local `py_compile` is syntax-only.
-- Real validation must happen against the NAS runtime.
+- Real validation must happen against the HarrisServer runtime.
 
 ## Deployment
 
 Deploy with:
 
 ```bash
-./deploy_to_nas.sh
+./deploy_to_server.sh
 ```
 
 After deploy, validate live endpoints with `curl`.
@@ -43,7 +43,7 @@ After deploy, validate live endpoints with `curl`.
 Example:
 
 ```bash
-curl -sS -D - http://192.168.1.101:8088/api/gear/dashboard?limit=5
+curl -sS -D - http://harrisserver:8088/api/gear/dashboard?limit=5
 ```
 
 ## Safety rules
@@ -95,7 +95,7 @@ curl -sS -D - http://192.168.1.101:8088/api/gear/dashboard?limit=5
 For backend changes:
 
 1. Run `python -m py_compile` on touched Python files.
-2. Deploy with `./deploy_to_nas.sh`.
+2. Deploy with `./deploy_to_server.sh`.
 3. Test affected live endpoint with `curl`.
 4. Confirm HTTP 200.
 5. Confirm JSON shape.
@@ -103,7 +103,7 @@ For backend changes:
 
 For frontend changes:
 
-1. Deploy to NAS.
+1. Deploy to HarrisServer.
 2. Hard refresh browser with `Cmd+Shift+R`.
 3. Confirm changed tab loads.
 4. Confirm Daily, Weekly, Zones, Sync still work.
