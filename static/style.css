@@ -556,9 +556,35 @@ main {
 }
 
 .overview-load-gauge {
-  display: block;
-  width: 9px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  width: 28px;
   min-width: 0;
+  position: relative;
+  --overview-chronic-marker-percent: 66.6667%;
+}
+
+.overview-load-gauge-chronic,
+.overview-load-gauge-acute {
+  font-size: 8.5px;
+  line-height: 1.1;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+  text-align: center;
+  white-space: nowrap;
+  min-height: 1.2em;
+}
+
+.overview-load-gauge-chronic {
+  margin-bottom: 4px;
+}
+
+.overview-load-gauge-acute {
+  margin-top: 4px;
 }
 
 .overview-load-gauge-track {
@@ -600,7 +626,7 @@ main {
   background: var(--overview-load-high);
 }
 
-.overview-load-gauge-unavailable {
+.overview-load-gauge-track.overview-load-gauge-unavailable {
   background: rgba(148, 163, 184, 0.3);
 }
 

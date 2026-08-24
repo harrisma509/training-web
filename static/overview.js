@@ -120,6 +120,17 @@
     return `${Math.round(numeric)}`;
   }
 
+  function formatOverviewCompactLoad(value, prefix = "") {
+    if (value === null || value === undefined || value === "") {
+      return prefix ? `${prefix}—` : "—";
+    }
+    const numeric = Number(value);
+    if (!Number.isFinite(numeric)) {
+      return prefix ? `${prefix}—` : "—";
+    }
+    return `${prefix}${Math.round(numeric)}`;
+  }
+
   function getOverviewWeekKey(dateValue) {
     const weekStart = getWeekStart(dateValue);
     return toLocalDateKey(weekStart);
@@ -267,28 +278,25 @@
       ? new Intl.DateTimeFormat("en-US", { month: "long", day: "numeric", year: "numeric" }).format(weekDate)
       : "this week";
     const chronicMarkerPercent = (OVERVIEW_LOAD_GAUGE_CONFIG.chronicMarkerRatio / OVERVIEW_LOAD_GAUGE_CONFIG.maxRatio) * 100;
-
-    if (isMissingWeeklyRecord || acuteValue === null || chronicValue === null || chronicValue <= 0 || !Number.isFinite(ratio)) {
-      const accessibleText = buildOverviewGaugeAccessibleText(weekLabel, acuteValue, chronicValue, authoritativeRatio, rawRamp, isCurrentWeek);
-      return `
-        <div class="overview-load-gauge overview-load-gauge-unavailable" role="img" aria-label="${escapeHtml(accessibleText)}" title="${escapeHtml(accessibleText)}">
-          <div class="overview-load-gauge-track">
-            <div class="overview-load-gauge-marker" style="bottom: ${chronicMarkerPercent}%"></div>
-          </div>
-        </div>
-      `;
-    }
-
-    const fillPercent = getOverviewGaugeFillPercent(ratio);
-    const fillClass = getOverviewGaugeColorClass(weeklyRow, ratio, isCurrentWeek);
+    const chronicDisplay = formatOverviewCompactLoad(chronicValue);
+    const acuteDisplay = formatOverviewCompactLoad(acuteValue);
+    const missingGaugeData = isMissingWeeklyRecord || acuteValue === null || chronicValue === null || chronicValue <= 0 || !Number.isFinite(ratio);
+    const fillPercent = missingGaugeData ? 0 : getOverviewGaugeFillPercent(ratio);
+    const fillClass = missingGaugeData ? "overview-load-gauge-unavailable" : getOverviewGaugeColorClass(weeklyRow, ratio, isCurrentWeek);
     const accessibleText = buildOverviewGaugeAccessibleText(weekLabel, acuteValue, chronicValue, authoritativeRatio, rawRamp, isCurrentWeek);
+    const fillHtml = missingGaugeData
+      ? ""
+      : `<div class="overview-load-gauge-fill ${fillClass}" style="height: ${fillPercent}%"></div>`;
+    const trackClassName = missingGaugeData ? "overview-load-gauge-track overview-load-gauge-unavailable" : "overview-load-gauge-track";
 
     return `
-      <div class="overview-load-gauge" role="img" aria-label="${escapeHtml(accessibleText)}" title="${escapeHtml(accessibleText)}">
-        <div class="overview-load-gauge-track">
-          <div class="overview-load-gauge-fill ${fillClass}" style="height: ${fillPercent}%"></div>
+      <div class="overview-load-gauge" role="img" aria-label="${escapeHtml(accessibleText)}" title="${escapeHtml(accessibleText)}" style="--overview-chronic-marker-percent: ${chronicMarkerPercent}%">
+        <div class="overview-load-gauge-chronic" aria-hidden="true">${escapeHtml(chronicDisplay)}</div>
+        <div class="${trackClassName}">
+          ${fillHtml}
           <div class="overview-load-gauge-marker" style="bottom: ${chronicMarkerPercent}%"></div>
         </div>
+        <div class="overview-load-gauge-acute" aria-hidden="true">${escapeHtml(acuteDisplay)}</div>
       </div>
     `;
   }
