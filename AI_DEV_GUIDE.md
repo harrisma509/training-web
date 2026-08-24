@@ -1,134 +1,113 @@
-## AI Dev Guide
+# AI Dev Guide
 
-### Current workflow
-- Commit before using an agent.
-- Use small, independently testable vertical slices.
-- Ask the agent to inspect first if app wiring is unclear.
-- Require exact validation commands and results.
-- Review the diff before committing.
-- Use a new agent session for each major phase.
-- Stop after one speculative fix. If a live endpoint returns HTTP 500, obtain the exact container exception before editing again.
+## Mission
+This repo is the web dashboard and API layer for the Training Dashboard. It consumes already-processed data from the shared PostgreSQL database and presents it to the browser. The ETL repo owns data collection, schema evolution, and data-building logic.
 
-### Repository boundaries
-- `training-web` owns the FastAPI web API, UI, static assets, and NAS web deployment.
-- `training-etl` owns database DDL, ordered migrations, historical import scripts, ETL builders, and optional generated schema snapshots.
-- Do not modify database schema from `training-web` unless the work is explicitly coordinated with `training-etl`.
+Future agent work should respect that boundary and keep the web repo focused on presentation, API behavior, and deployment.
 
-### Schema authority and drift
+## Repo boundary
+- `training-web` owns FastAPI app setup, route registration, frontend assets, app presentation, and NAS deployment.
+- `training-etl` owns Strava ingestion, ETL builders, database writes, summary calculations, schema SQL, and operational ETL scripts.
+- Do not modify database schema from this repo unless there is a clear, explicit coordination request.
+- Do not move ETL logic into this repo unless the task specifically asks for it.
+
+## Architectural rule
+Treat this repo as the read/query + presentation layer.
+
+The web app should:
+- read processed state from Postgres
+- expose stable API routes
+- render dashboard data cleanly
+- show operational status and settings
+
+This repo should not:
+- own the source-of-truth schema
+- implement raw ingestion logic
+- rewrite weekly or daily training math
+- silently change database semantics
+
+## Safe default workflow
+1. Inspect the relevant route, frontend module, and database access pattern.
+2. Keep the scope small and vertical.
+3. Prefer read-only inspection before file edits.
+4. Preserve the current route contract.
+5. Validate the changed behavior with the smallest real runtime check.
+6. Report exactly what was validated and what was not.
+
+## Secrets and logging policy
+- Never log secrets, bearer tokens, access tokens, refresh tokens, env values, or raw database credentials.
+- Never log request headers, raw payloads, or full JSON response bodies unless the user explicitly asks for diagnostic debugging.
+- Keep logs minimal, stdout-friendly, and operationally useful.
+- Do not add duplicate noisy logging on top of the existing uvicorn/container logs.
+
+## Database policy
 - The live PostgreSQL schema is the deployed runtime truth.
-- Versioned DDL and migrations in `training-etl` are the intended, reproducible schema and Git history.
-- A read-only live-schema check verifies deployment and detects drift. It does not replace migrations or DDL.
-- Treat a manually maintained schema copy as documentation only. Prefer an optional generated snapshot if a full current-schema file is retained.
-- If repository DDL and the live schema disagree, stop and report the exact sanitized drift before changing application code.
-- Never make schema changes during a read-only audit.
+- `training-etl` is the canonical repo for DDL, data processing, and schema-affecting work.
+- If a request appears to require schema change, stop and confirm the intended source-of-truth repo before editing.
+- Read-only DB checks are acceptable for investigation and validation.
+- Do not rely on local schema assumptions when the live deployment is the real system.
 
-### Database access
-- Use the repository's existing `.venv`, database helper, and environment configuration.
-- Do not install packages, database clients, drivers, or extensions unless explicitly requested.
-- Do not print database URLs, passwords, tokens, connection strings, or environment values.
-- For audit sessions, run static or parameterized `SELECT` statements only.
-- Use the supplied/versioned DDL as the intended contract and the live database only for verification and data checks.
+## Deployment policy
+The NAS Docker deployment is the real runtime. Local checks are useful, but they are not enough.
 
-### Suggested training-etl SQL layout
-```text
-sql/
-├── migrations/
-│   └── ordered schema changes
-├── imports/
-│   └── controlled historical or seed-data loads
-└── schema/
-    └── optional generated current-schema snapshot
-```
-
-### NAS validation
-The real runtime is the NAS Docker container, not the local Mac `.venv`.
-
-Useful checks:
+Typical flow:
 
 ```bash
 ./deploy_to_nas.sh
-curl -sS "http://192.168.1.101:8088/api/gear/dashboard?limit=5" | jq .
+curl -sS -D - http://192.168.1.101:8088/api/gear/dashboard?limit=5
 ```
 
-After deploying Python route or app-registration changes, restart the web container when required by the existing deployment process.
+When a route or app-registration change is made, validate the live endpoint after deployment.
 
+## Error-handling policy
 If an endpoint returns HTTP 500:
-1. Reproduce it once with `curl`.
-2. Read the `training-web` container log.
-3. Capture the exact exception type, message, Python line, and failing SQL expression or result key.
-4. Make the smallest evidence-based correction.
-5. Redeploy and rerun the focused endpoint checks.
+1. Reproduce it once with a focused request.
+2. Read the exact exception from the container/runtime output.
+3. Identify the precise failing SQL, route logic, or response contract.
+4. Fix the root cause with the smallest change.
+5. Redeploy and rerun the same request.
 
-Do not continue guessing at SQL or response-contract failures without the runtime exception.
+Do not guess. Do not broaden the patch while debugging a failing request.
 
-### Agent completion report
-Require the agent to report:
-- Files changed
-- Database tables and columns used
-- Validation commands actually run
-- Live endpoint status and key row counts
-- Browser checks actually performed
-- Console or container errors
-- Any validation not performed
-- Remaining limitations or risks
-
-Do not accept claims for tests that were not actually performed.
-## Local PostgreSQL Access
-
-The application runs in Docker and uses:
-
-DB_HOST=training-postgres
-
-This hostname is Docker-network-only and will not resolve from macOS.
-
-When running audit scripts directly from the local workstation
-(rather than from inside the training-web container), use the
-externally reachable PostgreSQL endpoint:
-
-Host: 192.168.1.101
-Port: 15432
-
-Do not modify application configuration files to accommodate local audits.
-
-For local audit and validation work:
-- Use the existing database credentials.
-- Use the external PostgreSQL endpoint.
-- Do not print credentials in reports.
-- Do not modify environment files.
-## Python Validation Commands
-
-Do not assume `python` exists.
-
-This workstation may only expose `python3`.
-
-Before running validation commands:
+## Python validation
+Use the available interpreter on this machine. Prefer `python3` if `python` is not present.
 
 ```bash
 which python
 which python3
-## NAS Access Policy
+python3 -m py_compile app.py routes/*.py
+```
 
-Do not SSH to the NAS for normal implementation,
-validation, debugging, or HTTP endpoint testing.
+Local syntax checks are required for Python changes, but they are not a substitute for deployment and live endpoint checks.
 
-Do not execute:
+## Frontend expectations
+- Preserve the current dark theme and compact dashboard styling
+- keep tables and cards consistent with existing layout patterns
+- do not add charts or major UX rewrites unless explicitly requested
+- do not introduce `null`, `undefined`, or `NaN` values into the UI display layer
+- avoid broad refactors unrelated to the target bug or feature
 
-- ssh
-- scp
-- rsync
-- docker exec
-- docker logs
-- docker ps
+## What to report at the end of a task
+Every task should include:
+- files changed
+- routes or modules touched
+- whether a schema change was required
+- validation commands actually run
+- live endpoint status or runtime evidence
+- browser or UI checks performed
+- unresolved risks or limitations
 
-against the NAS unless explicitly requested by the user.
+Do not claim validation that was not actually performed.
 
-Preferred debugging order:
+## NAS access rule
+Do not perform normal implementation, validation, or debugging via SSH unless the user explicitly requests it.
 
-1. Static code review
-2. Local syntax validation
-3. Deployment
-4. HTTP response inspection
-5. Browser validation
+Preferred sequence:
+1. local code review
+2. local syntax validation
+3. deploy to NAS runtime
+4. targeted live endpoint check
+5. browser validation if required
 
-Only if the user explicitly requests NAS-level debugging
-may SSH-based investigation be performed.
+## Working principle for future sessions
+Keep this repo focused on the user-facing app and data presentation layer. The ETL repo owns the deeper processing and schema reality; the web repo should remain a stable, narrow, operational interface on top of that system.

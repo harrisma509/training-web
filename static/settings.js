@@ -442,7 +442,7 @@
 
     startupTab?.addEventListener("change", (event) => {
       const selectedTab = event.target.value;
-      if (!["daily", "weekly", "zones", "gear", "components", "yearly"].includes(selectedTab)) {
+      if (!["overview", "daily", "weekly", "zones", "gear", "components", "yearly"].includes(selectedTab)) {
         return;
       }
 

@@ -17,6 +17,9 @@ window.TrainingApp.api = window.api;
 window.TrainingApp.utils = window.AppUtils;
 window.TrainingApp.features = window.TrainingApp.features || {};
 
+if (window.OverviewController) {
+  window.TrainingApp.features.overview = window.OverviewController;
+}
 if (window.DailyController) {
   window.TrainingApp.features.daily = window.DailyController;
 }
@@ -42,6 +45,7 @@ if (window.SyncController) {
   window.TrainingApp.features.sync = window.SyncController;
 }
 
+const overviewTab = document.getElementById("overviewTab");
 const dailyTab = document.getElementById("dailyTab");
 const weeklyTab = document.getElementById("weeklyTab");
 const zonesTab = document.getElementById("zonesTab");
@@ -50,6 +54,7 @@ const componentsTab = document.getElementById("componentsTab");
 const yearlyTab = document.getElementById("yearlyTab");
 const yearlyAnnualTab = document.getElementById("yearlyAnnualTab");
 const yearlyMonthlyTab = document.getElementById("yearlyMonthlyTab");
+const overviewPane = document.getElementById("overviewPane");
 const dailyPane = document.getElementById("dailyPane");
 const weeklyPane = document.getElementById("weeklyPane");
 const zonesPane = document.getElementById("zonesPane");
@@ -97,6 +102,7 @@ function formatYearlyMaintenanceDifference(value) {
   return String(value);
 }
 
+overviewTab?.addEventListener("click", () => showTab("overview"));
 dailyTab.addEventListener("click", () => showTab("daily"));
 weeklyTab.addEventListener("click", () => showTab("weekly"));
 zonesTab.addEventListener("click", () => showTab("zones"));
@@ -146,16 +152,19 @@ function showYearlyView(view) {
 window.showYearlyView = showYearlyView;
 
 function showTab(tab) {
-  state.activeTab = tab;
+  const normalizedTab = ["overview", "daily", "weekly", "zones", "gear", "components", "yearly"].includes(tab) ? tab : "daily";
+  state.activeTab = normalizedTab;
   persistPreferences();
 
-  const isDaily = tab === "daily";
-  const isWeekly = tab === "weekly";
-  const isZones = tab === "zones";
-  const isGear = tab === "gear";
-  const isComponents = tab === "components";
-  const isYearly = tab === "yearly";
+  const isOverview = normalizedTab === "overview";
+  const isDaily = normalizedTab === "daily";
+  const isWeekly = normalizedTab === "weekly";
+  const isZones = normalizedTab === "zones";
+  const isGear = normalizedTab === "gear";
+  const isComponents = normalizedTab === "components";
+  const isYearly = normalizedTab === "yearly";
 
+  overviewPane.classList.toggle("hidden", !isOverview);
   dailyPane.classList.toggle("hidden", !isDaily);
   weeklyPane.classList.toggle("hidden", !isWeekly);
   zonesPane.classList.toggle("hidden", !isZones);
@@ -170,12 +179,17 @@ function showTab(tab) {
   componentsControls.classList.toggle("hidden", !isComponents);
   yearlyControls.classList.toggle("hidden", !isYearly);
 
+  overviewTab?.classList.toggle("active", isOverview);
   dailyTab.classList.toggle("active", isDaily);
   weeklyTab.classList.toggle("active", isWeekly);
   zonesTab.classList.toggle("active", isZones);
   gearTab.classList.toggle("active", isGear);
   componentsTab.classList.toggle("active", isComponents);
   yearlyTab.classList.toggle("active", isYearly);
+
+  if (isOverview && typeof window.loadOverview === "function") {
+    window.loadOverview();
+  }
 
   if (isYearly) {
     showYearlyView(state.yearlyView || "annual");

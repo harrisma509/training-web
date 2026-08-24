@@ -1,46 +1,109 @@
-## Training Web
+# Training Web
 
-FastAPI + static frontend dashboard for the Training Dashboard system.
+FastAPI application and browser dashboard for the Training Dashboard stack.
 
-### What this application does
-This repo provides the browser-based dashboard and API layer for a personal training intelligence platform. It is the presentation and operational surface for a larger data pipeline that ingests training data, processes it into summaries, and exposes it in a usable dashboard.
+## Purpose
+This repo provides the web-facing presentation layer for a personal training system. It does not own the ingestion pipeline or the canonical database schema. Instead, it consumes processed data from the shared PostgreSQL database and presents it through API routes and a static frontend UI.
 
-In practical terms, this app shows:
-- daily training summaries
-- weekly performance and audit views
-- zone distribution analysis
-- yearly trends and annual review data
-- gear usage and maintenance status
-- component lifecycle tracking
-- sync health and system status
-- user preferences and dashboard settings
+This app is responsible for:
+- training dashboards and daily/weekly/yearly views
+- gear and component status presentation
+- sync status and operational health views
+- user settings and app preferences
+- web deployment for the local NAS runtime
 
-The app is not the source of truth for raw data collection or schema design. It consumes the processed data created by the ETL pipeline and renders the user-facing dashboard.
+## System architecture
 
-### System overview
-The overall system has two main layers:
+### 1) ETL layer: training-etl
+The separate `training-etl` repo owns:
+- Strava ingestion and sync jobs
+- data builders and summary generation
+- zone, weekly audit, and yearly computations
+- database writes and normalization
+- schema and historical import logic
+- operational scripts and backup/sync coordination
 
-1. ETL layer (`training-etl`)
-   - fetches Strava and related source data
-   - builds daily/weekly/yearly summaries
-   - computes training zones and audits
-   - writes normalized data to the database
-   - handles sync and operational processing
+### 2) Web layer: training-web
+This repo owns:
+- FastAPI app setup and route registration
+- API endpoints for dashboard data
+- frontend static assets and browser UI
+- status and sync presentation
+- NAS deployment packaging
 
-2. Web layer (`training-web`)
-   - reads the processed data from the database
-   - provides the dashboard UI and API routes
-   - exposes system status, syncing, and settings flows
-   - delivers the front-end experience for training data inspection
+The web app should be treated as the read/query and presentation layer, not as the source of truth for ETL logic or schema evolution.
 
-### Repo boundary
-- This repo owns the web API, UI, static assets, dashboard behavior, and NAS web deployment.
-- Database schema, migrations, historical imports, ETL builders, and data-processing logic live in the separate `training-etl` repo.
-- Do not create or change database schema from this repo unless explicitly coordinated with `training-etl`.
-- The live PostgreSQL schema is the deployed runtime state.
-- Versioned DDL and migrations in `training-etl` are the reproducible intended schema and source-control history.
-- Read-only live-schema checks may verify deployment and detect drift, but they do not replace versioned DDL or migrations.
-- If repository DDL and the live schema disagree, stop and report the drift before changing application code.
+## Repository boundary
+- `training-etl` owns data collection, schema intent, ETL builders, database writes, and operational ETL scripts.
+- `training-web` owns the app layer, dashboard UI, and API surface for consuming already-processed data.
+- Do not modify database schema from this repo unless explicitly requested and coordinated.
+- Do not add ETL logic, transform logic, or warehouse/data-model work here unless the task explicitly requires it.
+- If a request touches data collection, schema, builder logic, or audit rules, stop and route the work to the ETL repo.
 
-### Product intent
-This is effectively a training analytics and maintenance dashboard: it blends workout performance tracking with gear/component lifecycle awareness and operational health checks, giving a single place to review training quality, maintenance needs, and live system state.
+## Production runtime
+The real runtime is the NAS Docker deployment, not the local macOS environment.
+
+Typical model:
+- PostgreSQL is the shared runtime database
+- the web app runs as a Dockerized FastAPI service
+- ETL runs separately and writes to the same database
+- the dashboard reads from the database and exposes the processed state
+
+This matters because local syntax checks are useful, but they do not validate the true production environment.
+
+## Deployment and validation
+Use the repository's deployment flow for runtime validation:
+
+```bash
+./deploy_to_nas.sh
+```
+
+Then validate the live app with a focused HTTP request, for example:
+
+```bash
+curl -sS -D - http://192.168.1.101:8088/api/gear/dashboard?limit=5
+```
+
+Important rules:
+- prefer targeted endpoint validation over broad testing
+- confirm HTTP status and JSON shape
+- validate the impacted route, not just the app boot
+- do not assume local Python execution is equivalent to the NAS runtime
+
+## Security and operational safety
+- Never commit or expose `.env`, credentials, tokens, or raw API payloads
+- Never log secrets, database URLs, access tokens, refresh tokens, or password-like values
+- Do not print raw request payloads, headers, or stack traces into normal app logs
+- Keep logging operational and minimal; prefer structured, non-sensitive messages
+
+## Coding expectations for future agent work
+- Keep changes scoped and commit-friendly
+- Prefer read-only investigation before editing
+- Reuse the existing route and DB helper patterns
+- Preserve current API contracts unless a task explicitly asks for a contract change
+- Keep frontend behavior consistent with the dark dashboard theme and compact layout
+- Do not make schema or ETL changes here without explicit approval
+
+## What to avoid in this repo
+- do not change the ETL pipeline, builder scripts, or schema SQL from here
+- do not modify weekly audit logic, load rules, or sync behavior unless explicitly requested
+- do not add service tables or heavy data-model work here
+- do not rewrite broad route wiring or frontend architecture without specific need
+- do not add noisy or duplicate logging that competes with uvicorn/container logs
+
+## Local development guidance
+This repo is a web app, but it depends on a live database and deployment environment.
+
+Use local validation for:
+- Python syntax checks
+- focused file-level review
+- route-level logic sanity
+
+Use live validation for:
+- endpoint behavior
+- API contract checks
+- runtime dependency checks
+- deployment correctness
+
+## One-sentence rule for future sessions
+This repo is the presentation and operational interface for training data; it reads shared database state and renders it, while the ETL repo owns the actual data pipeline and schema evolution.
