@@ -1,6 +1,6 @@
 # Training Web
 
-FastAPI application and browser dashboard for the Training Web
+FastAPI application and browser dashboard for the Training Web Application
 
 ## Purpose
 This repo provides the web-facing presentation layer for a personal training system. It does not own the ingestion pipeline or the canonical database schema. Instead, it consumes processed data from the shared PostgreSQL database and presents it through API routes and a static frontend UI.
