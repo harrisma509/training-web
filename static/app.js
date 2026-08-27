@@ -17,8 +17,17 @@ window.TrainingApp.api = window.api;
 window.TrainingApp.utils = window.AppUtils;
 window.TrainingApp.features = window.TrainingApp.features || {};
 
-if (window.OverviewController) {
-  window.TrainingApp.features.overview = window.OverviewController;
+if (window.PlanController) {
+  window.TrainingApp.features.plan = window.PlanController;
+}
+if (window.GoalsController) {
+  window.TrainingApp.features.goals = window.GoalsController;
+}
+if (window.KPIsController) {
+  window.TrainingApp.features.kpis = window.KPIsController;
+}
+if (window.ChartsController) {
+  window.TrainingApp.features.charts = window.ChartsController;
 }
 if (window.DailyController) {
   window.TrainingApp.features.daily = window.DailyController;
@@ -45,7 +54,10 @@ if (window.SyncController) {
   window.TrainingApp.features.sync = window.SyncController;
 }
 
-const overviewTab = document.getElementById("overviewTab");
+const planTab = document.getElementById("planTab");
+const goalsTab = document.getElementById("goalsTab");
+const kpisTab = document.getElementById("kpisTab");
+const chartsTab = document.getElementById("chartsTab");
 const dailyTab = document.getElementById("dailyTab");
 const weeklyTab = document.getElementById("weeklyTab");
 const zonesTab = document.getElementById("zonesTab");
@@ -54,7 +66,10 @@ const componentsTab = document.getElementById("componentsTab");
 const yearlyTab = document.getElementById("yearlyTab");
 const yearlyAnnualTab = document.getElementById("yearlyAnnualTab");
 const yearlyMonthlyTab = document.getElementById("yearlyMonthlyTab");
-const overviewPane = document.getElementById("overviewPane");
+const planPane = document.getElementById("planPane");
+const goalsPane = document.getElementById("goalsPane");
+const kpisPane = document.getElementById("kpisPane");
+const chartsPane = document.getElementById("chartsPane");
 const dailyPane = document.getElementById("dailyPane");
 const weeklyPane = document.getElementById("weeklyPane");
 const zonesPane = document.getElementById("zonesPane");
@@ -102,7 +117,10 @@ function formatYearlyMaintenanceDifference(value) {
   return String(value);
 }
 
-overviewTab?.addEventListener("click", () => showTab("overview"));
+planTab?.addEventListener("click", () => showTab("plan"));
+goalsTab?.addEventListener("click", () => showTab("goals"));
+kpisTab?.addEventListener("click", () => showTab("kpis"));
+chartsTab?.addEventListener("click", () => showTab("charts"));
 dailyTab.addEventListener("click", () => showTab("daily"));
 weeklyTab.addEventListener("click", () => showTab("weekly"));
 zonesTab.addEventListener("click", () => showTab("zones"));
@@ -152,11 +170,14 @@ function showYearlyView(view) {
 window.showYearlyView = showYearlyView;
 
 function showTab(tab) {
-  const normalizedTab = ["overview", "daily", "weekly", "zones", "gear", "components", "yearly"].includes(tab) ? tab : "daily";
+  const normalizedTab = ["plan", "goals", "kpis", "charts", "daily", "weekly", "zones", "gear", "components", "yearly"].includes(tab) ? tab : "daily";
   state.activeTab = normalizedTab;
   persistPreferences();
 
-  const isOverview = normalizedTab === "overview";
+  const isPlan = normalizedTab === "plan";
+  const isGoals = normalizedTab === "goals";
+  const isKpis = normalizedTab === "kpis";
+  const isCharts = normalizedTab === "charts";
   const isDaily = normalizedTab === "daily";
   const isWeekly = normalizedTab === "weekly";
   const isZones = normalizedTab === "zones";
@@ -164,7 +185,10 @@ function showTab(tab) {
   const isComponents = normalizedTab === "components";
   const isYearly = normalizedTab === "yearly";
 
-  overviewPane.classList.toggle("hidden", !isOverview);
+  planPane.classList.toggle("hidden", !isPlan);
+  goalsPane.classList.toggle("hidden", !isGoals);
+  kpisPane.classList.toggle("hidden", !isKpis);
+  chartsPane.classList.toggle("hidden", !isCharts);
   dailyPane.classList.toggle("hidden", !isDaily);
   weeklyPane.classList.toggle("hidden", !isWeekly);
   zonesPane.classList.toggle("hidden", !isZones);
@@ -179,7 +203,10 @@ function showTab(tab) {
   componentsControls.classList.toggle("hidden", !isComponents);
   yearlyControls.classList.toggle("hidden", !isYearly);
 
-  overviewTab?.classList.toggle("active", isOverview);
+  planTab?.classList.toggle("active", isPlan);
+  goalsTab?.classList.toggle("active", isGoals);
+  kpisTab?.classList.toggle("active", isKpis);
+  chartsTab?.classList.toggle("active", isCharts);
   dailyTab.classList.toggle("active", isDaily);
   weeklyTab.classList.toggle("active", isWeekly);
   zonesTab.classList.toggle("active", isZones);
@@ -187,8 +214,8 @@ function showTab(tab) {
   componentsTab.classList.toggle("active", isComponents);
   yearlyTab.classList.toggle("active", isYearly);
 
-  if (isOverview && typeof window.loadOverview === "function") {
-    window.loadOverview();
+  if (isPlan && typeof window.loadPlan === "function") {
+    window.loadPlan();
   }
 
   if (isYearly) {
@@ -327,15 +354,15 @@ async function openYearlyCommentaryDrawer(calendarYear) {
     const payload = window.api && typeof window.api.fetchYearlyCommentary === "function"
       ? await window.api.fetchYearlyCommentary(calendarYear)
       : await fetch(`/api/yearly/commentary/${calendarYear}`).then(async response => {
-          if (!response.ok) {
-            const detail = response.status === 404 ? "No commentary exists for this year." : `Request failed: ${response.status}`;
-            goodNode.textContent = detail;
-            badNode.textContent = "No entry recorded.";
-            annualNode.textContent = "No entry recorded.";
-            throw new Error(detail);
-          }
-          return response.json();
-        });
+        if (!response.ok) {
+          const detail = response.status === 404 ? "No commentary exists for this year." : `Request failed: ${response.status}`;
+          goodNode.textContent = detail;
+          badNode.textContent = "No entry recorded.";
+          annualNode.textContent = "No entry recorded.";
+          throw new Error(detail);
+        }
+        return response.json();
+      });
 
     goodNode.textContent = getYearlyCommentText(payload.good_summary);
     badNode.textContent = getYearlyCommentText(payload.bad_summary);
@@ -442,11 +469,11 @@ async function loadYearly() {
     const payload = window.api && typeof window.api.fetchYearly === "function"
       ? await window.api.fetchYearly()
       : await fetch("/api/yearly").then(async response => {
-          if (!response.ok) {
-            throw new Error(`Yearly endpoint failed: ${response.status}`);
-          }
-          return response.json();
-        });
+        if (!response.ok) {
+          throw new Error(`Yearly endpoint failed: ${response.status}`);
+        }
+        return response.json();
+      });
 
     const annualRows = Array.isArray(payload) ? payload : (payload.annual_metrics || []);
     const monthlyRows = Array.isArray(payload.monthly_hours) ? payload.monthly_hours : [];

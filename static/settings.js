@@ -244,11 +244,11 @@
       const data = window.api && typeof window.api.fetchSystemStatus === "function"
         ? await window.api.fetchSystemStatus()
         : await fetch("/api/system-status").then(async response => {
-            if (!response.ok) {
-              throw new Error(`System status failed: ${response.status}`);
-            }
-            return response.json();
-          });
+          if (!response.ok) {
+            throw new Error(`System status failed: ${response.status}`);
+          }
+          return response.json();
+        });
 
       renderSystemStatusSummary(data);
     } catch (error) {
@@ -441,8 +441,8 @@
     });
 
     startupTab?.addEventListener("change", (event) => {
-      const selectedTab = event.target.value;
-      if (!["overview", "daily", "weekly", "zones", "gear", "components", "yearly"].includes(selectedTab)) {
+      const selectedTab = event.target.value === "overview" ? "plan" : event.target.value;
+      if (!["plan", "goals", "kpis", "charts", "daily", "weekly", "zones", "gear", "components", "yearly"].includes(selectedTab)) {
         return;
       }
 

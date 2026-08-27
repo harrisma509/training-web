@@ -8,6 +8,10 @@
   <link rel="icon" href="/static/favicon.ico" type="image/x-icon">
   <link rel="shortcut icon" href="/static/favicon.ico" type="image/x-icon">
   <link rel="stylesheet" href="/static/style.css">
+  <link rel="stylesheet" href="/static/plan.css">
+  <link rel="stylesheet" href="/static/goals.css">
+  <link rel="stylesheet" href="/static/kpis.css">
+  <link rel="stylesheet" href="/static/charts.css">
   <link rel="stylesheet" href="/static/settings.css">
   <link rel="stylesheet" href="/static/weekly.css">
   <link rel="stylesheet" href="/static/yearly.css">
@@ -22,9 +26,12 @@
       </div>
 
       <nav class="tabs header-tabs">
-        <button id="overviewTab" type="button">Overview</button>
-        <button id="dailyTab" class="active" type="button">Daily</button>
+        <button id="planTab" type="button">Plan</button>
         <button id="weeklyTab" type="button">Weekly</button>
+        <button id="dailyTab" class="active" type="button">Daily</button>
+        <button id="goalsTab" type="button">Goals</button>
+        <button id="kpisTab" type="button">KPIs</button>
+        <button id="chartsTab" type="button">Charts</button>
         <button id="zonesTab" type="button">Zones</button>
         <button id="gearTab" type="button">Gear</button>
         <button id="componentsTab" type="button">Components</button>
@@ -136,7 +143,10 @@
               <div id="startupTabRow" class="settings-control-row hidden">
                 <label for="startupTab">Startup tab</label>
                 <select id="startupTab">
-                  <option value="overview">Overview</option>
+                  <option value="plan">Plan</option>
+                  <option value="goals">Goals</option>
+                  <option value="kpis">KPIs</option>
+                  <option value="charts">Charts</option>
                   <option value="daily">Daily</option>
                   <option value="weekly">Weekly</option>
                   <option value="zones">Zones</option>
@@ -269,9 +279,40 @@
   </div>
 
   <main>
-    <section id="overviewPane" class="hidden">
-      <div class="overview-shell">
-        <div id="overviewStrip" class="overview-weeks" aria-live="polite"></div>
+    <section id="planPane" class="hidden">
+      <div class="plan-shell">
+        <div id="planStrip" class="plan-weeks" aria-live="polite"></div>
+      </div>
+    </section>
+
+    <section id="goalsPane" class="hidden">
+      <div class="placeholder-panel goals-panel">
+        <h2 class="placeholder-title">Training Goals</h2>
+        <p class="placeholder-lead">Track progress toward annual training and health targets.</p>
+        <p class="placeholder-body">Monitor weight, training hours, elevation, cycling distance, strength consistency,
+          and other configured goals. Compare current progress with annual targets and expected pace.</p>
+        <div class="placeholder-status">Goal tracking is coming soon.</div>
+      </div>
+    </section>
+
+    <section id="kpisPane" class="hidden">
+      <div class="placeholder-panel kpis-panel">
+        <h2 class="placeholder-title">Key Performance Indicators</h2>
+        <p class="placeholder-lead">See the training and recovery signals that matter most right now.</p>
+        <p class="placeholder-body">Review current load, chronic load, ramp, weight, sleep, HRV, resting heart rate,
+          strength consistency, weekly audit status, and other key indicators requiring attention.</p>
+        <div class="placeholder-status">KPI summaries are coming soon.</div>
+      </div>
+    </section>
+
+    <section id="chartsPane" class="hidden">
+      <div class="placeholder-panel charts-panel">
+        <h2 class="placeholder-title">Training Trends</h2>
+        <p class="placeholder-lead">Explore training, health, and performance trends over time.</p>
+        <p class="placeholder-body">Analyze load, hours, distance, elevation, weight, recovery, and intensity across
+          selectable time periods. Use historical patterns to understand the current state and direction of training.
+        </p>
+        <div class="placeholder-status">Training charts are coming soon.</div>
       </div>
     </section>
 
@@ -387,7 +428,10 @@
   <script src="/static/yearly.js"></script>
   <script src="/static/settings.js"></script>
   <script src="/static/daily.js"></script>
-  <script src="/static/overview.js"></script>
+  <script src="/static/plan.js"></script>
+  <script src="/static/goals.js"></script>
+  <script src="/static/kpis.js"></script>
+  <script src="/static/charts.js"></script>
   <script src="/static/app.js"></script>
 </body>
 

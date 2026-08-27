@@ -1,0 +1,28 @@
+.charts-panel {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 20px 22px;
+    max-width: 800px;
+}
+
+.charts-panel .placeholder-title {
+    margin: 0 0 8px;
+    font-size: 1.5rem;
+    color: var(--text);
+}
+
+.charts-panel .placeholder-lead,
+.charts-panel .placeholder-body {
+    margin: 0 0 12px;
+    color: var(--muted);
+    line-height: 1.6;
+}
+
+.charts-panel .placeholder-status {
+    margin-top: 18px;
+    border-top: 1px solid var(--line);
+    padding-top: 14px;
+    color: var(--text);
+    font-weight: 600;
+}

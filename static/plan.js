@@ -1,8 +1,8 @@
 (function () {
   const DAY_NAMES = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
-  const OVERVIEW_LOAD_REQUESTS = { current: 0 };
-  const OVERVIEW_WEEK_COLLAPSE_STATE = new Map();
-  const OVERVIEW_LOAD_GAUGE_CONFIG = Object.freeze({
+  const PLAN_LOAD_REQUESTS = { current: 0 };
+  const PLAN_WEEK_COLLAPSE_STATE = new Map();
+  const PLAN_LOAD_GAUGE_CONFIG = Object.freeze({
     maxRatio: 1.5,
     chronicMarkerRatio: 1.0,
     completedLowRampThreshold: -0.2,
@@ -99,7 +99,7 @@
     return `${year}-${month}-${day}`;
   }
 
-  function formatOverviewDay(dateValue) {
+  function formatPlanDay(dateValue) {
     if (!dateValue || Number.isNaN(dateValue.getTime())) {
       return { weekday: "", month: "", date: "" };
     }
@@ -109,7 +109,7 @@
     return { weekday, month: month.toUpperCase(), date: String(date) };
   }
 
-  function formatOverviewHeaderLoad(value) {
+  function formatPlanHeaderLoad(value) {
     if (value === null || value === undefined || value === "") {
       return "—";
     }
@@ -120,7 +120,7 @@
     return `${Math.round(numeric)}`;
   }
 
-  function formatOverviewCompactLoad(value, prefix = "") {
+  function formatPlanCompactLoad(value, prefix = "") {
     if (value === null || value === undefined || value === "") {
       return prefix ? `${prefix}—` : "—";
     }
@@ -131,19 +131,19 @@
     return `${prefix}${Math.round(numeric)}`;
   }
 
-  function getOverviewWeekKey(dateValue) {
+  function getPlanWeekKey(dateValue) {
     const weekStart = getWeekStart(dateValue);
     return toLocalDateKey(weekStart);
   }
 
-  function getOverviewWeeklyRows() {
+  function getPlanWeeklyRows() {
     if (Array.isArray(window.AppState?.weeklyRows) && window.AppState.weeklyRows.length > 0) {
       return window.AppState.weeklyRows;
     }
     return [];
   }
 
-  function buildOverviewWeeklyRowMap(rows) {
+  function buildPlanWeeklyRowMap(rows) {
     const map = new Map();
     for (const row of rows || []) {
       const weekStart = row?.week_start == null ? "" : String(row.week_start).trim();
@@ -154,12 +154,12 @@
       if (Number.isNaN(parsedDate.getTime())) {
         continue;
       }
-      map.set(getOverviewWeekKey(parsedDate), row);
+      map.set(getPlanWeekKey(parsedDate), row);
     }
     return map;
   }
 
-  function parseOverviewNumericValue(value) {
+  function parsePlanNumericValue(value) {
     if (value === null || value === undefined || value === "") {
       return null;
     }
@@ -170,48 +170,47 @@
     return numeric;
   }
 
-  function getOverviewMetricColorClass(ratio) {
+  function getPlanMetricColorClass(ratio) {
     if (ratio === null || !Number.isFinite(ratio)) {
-      return "overview-load-gauge-unavailable";
+      return "plan-load-gauge-unavailable";
     }
-    if (ratio < OVERVIEW_LOAD_GAUGE_CONFIG.currentWeekLowRatio) {
-      return "overview-load-gauge-low";
+    if (ratio < PLAN_LOAD_GAUGE_CONFIG.currentWeekLowRatio) {
+      return "plan-load-gauge-low";
     }
-    if (ratio <= OVERVIEW_LOAD_GAUGE_CONFIG.currentWeekHighRatio) {
-      return "overview-load-gauge-target";
+    if (ratio <= PLAN_LOAD_GAUGE_CONFIG.currentWeekHighRatio) {
+      return "plan-load-gauge-target";
     }
-    return "overview-load-gauge-high";
+    return "plan-load-gauge-high";
   }
 
-  // ramp_pct from the API is decimal form (0.276 == 27.6%), not a whole-number percentage.
-  function normalizeOverviewRampRatio(rawRamp) {
-    return parseOverviewNumericValue(rawRamp);
+  function normalizePlanRampRatio(rawRamp) {
+    return parsePlanNumericValue(rawRamp);
   }
 
-  function getOverviewGaugeColorClass(weeklyRow, ratio, isCurrentWeek) {
+  function getPlanGaugeColorClass(weeklyRow, ratio, isCurrentWeek) {
     if (isCurrentWeek) {
-      return getOverviewMetricColorClass(ratio);
+      return getPlanMetricColorClass(ratio);
     }
 
     const rawRamp = weeklyRow?.ramp_pct;
-    const normalizedRampRatio = normalizeOverviewRampRatio(rawRamp);
+    const normalizedRampRatio = normalizePlanRampRatio(rawRamp);
     if (!Number.isFinite(normalizedRampRatio)) {
-      return "overview-load-gauge-unavailable";
+      return "plan-load-gauge-unavailable";
     }
 
-    if (normalizedRampRatio < OVERVIEW_LOAD_GAUGE_CONFIG.completedLowRampThreshold) {
-      return "overview-load-gauge-low";
+    if (normalizedRampRatio < PLAN_LOAD_GAUGE_CONFIG.completedLowRampThreshold) {
+      return "plan-load-gauge-low";
     }
-    if (normalizedRampRatio <= OVERVIEW_LOAD_GAUGE_CONFIG.completedHighRampThreshold) {
-      return "overview-load-gauge-target";
+    if (normalizedRampRatio <= PLAN_LOAD_GAUGE_CONFIG.completedHighRampThreshold) {
+      return "plan-load-gauge-target";
     }
-    return "overview-load-gauge-high";
+    return "plan-load-gauge-high";
   }
 
-  function getOverviewMeterRatio(acuteValue, chronicValue, authoritativeRatioValue) {
-    const acute = parseOverviewNumericValue(acuteValue);
-    const chronic = parseOverviewNumericValue(chronicValue);
-    const authoritativeRatio = parseOverviewNumericValue(authoritativeRatioValue);
+  function getPlanMeterRatio(acuteValue, chronicValue, authoritativeRatioValue) {
+    const acute = parsePlanNumericValue(acuteValue);
+    const chronic = parsePlanNumericValue(chronicValue);
+    const authoritativeRatio = parsePlanNumericValue(authoritativeRatioValue);
 
     if (acute === null || chronic === null || chronic <= 0) {
       return null;
@@ -225,15 +224,15 @@
     return Number.isFinite(directRatio) ? directRatio : null;
   }
 
-  function getOverviewGaugeFillPercent(ratio) {
+  function getPlanGaugeFillPercent(ratio) {
     if (ratio === null || !Number.isFinite(ratio) || ratio < 0) {
       return 0;
     }
-    const scaled = (ratio / OVERVIEW_LOAD_GAUGE_CONFIG.maxRatio) * 100;
+    const scaled = (ratio / PLAN_LOAD_GAUGE_CONFIG.maxRatio) * 100;
     return Math.min(Math.max(scaled, 0), 100);
   }
 
-  function buildOverviewGaugeAccessibleText(weekLabel, acuteValue, chronicValue, authoritativeRatio, rawRamp, isCurrentWeek) {
+  function buildPlanGaugeAccessibleText(weekLabel, acuteValue, chronicValue, authoritativeRatio, rawRamp, isCurrentWeek) {
     const acuteText = acuteValue === null
       ? "Acute load unavailable"
       : `${isCurrentWeek ? "Week-to-date acute load" : "Acute load"} ${Math.round(acuteValue)}`;
@@ -248,12 +247,12 @@
     if (isCurrentWeek) {
       statusText = "Current week is incomplete.";
     } else {
-      const normalizedRampRatio = normalizeOverviewRampRatio(rawRamp);
+      const normalizedRampRatio = normalizePlanRampRatio(rawRamp);
       if (Number.isFinite(normalizedRampRatio)) {
         const rampPercentText = `${normalizedRampRatio >= 0 ? "plus" : "minus"} ${Math.abs(Math.round(normalizedRampRatio * 100))} percent`;
-        statusText = normalizedRampRatio > OVERVIEW_LOAD_GAUGE_CONFIG.completedHighRampThreshold
+        statusText = normalizedRampRatio > PLAN_LOAD_GAUGE_CONFIG.completedHighRampThreshold
           ? `Ramp ${rampPercentText}, above the 20 percent limit.`
-          : normalizedRampRatio < OVERVIEW_LOAD_GAUGE_CONFIG.completedLowRampThreshold
+          : normalizedRampRatio < PLAN_LOAD_GAUGE_CONFIG.completedLowRampThreshold
             ? `Ramp ${rampPercentText}, below the negative 20 percent limit.`
             : `Ramp ${rampPercentText}, within the target band.`;
       } else {
@@ -266,76 +265,76 @@
       .join(" ");
   }
 
-  function renderOverviewWeeklyLoadGauge(weekKey, weeklyRow, isCurrentWeek) {
-    const acuteValue = parseOverviewNumericValue(weeklyRow?.total_load);
-    const chronicValue = parseOverviewNumericValue(weeklyRow?.chronic_weekly_cw);
-    const authoritativeRatio = parseOverviewNumericValue(weeklyRow?.ac_ratio);
+  function renderPlanWeeklyLoadGauge(weekKey, weeklyRow, isCurrentWeek) {
+    const acuteValue = parsePlanNumericValue(weeklyRow?.total_load);
+    const chronicValue = parsePlanNumericValue(weeklyRow?.chronic_weekly_cw);
+    const authoritativeRatio = parsePlanNumericValue(weeklyRow?.ac_ratio);
     const rawRamp = weeklyRow?.ramp_pct;
-    const ratio = getOverviewMeterRatio(acuteValue, chronicValue, authoritativeRatio);
+    const ratio = getPlanMeterRatio(acuteValue, chronicValue, authoritativeRatio);
     const isMissingWeeklyRecord = !weeklyRow;
     const weekDate = weekKey ? new Date(`${weekKey}T00:00:00`) : null;
     const weekLabel = weekDate && !Number.isNaN(weekDate.getTime())
       ? new Intl.DateTimeFormat("en-US", { month: "long", day: "numeric", year: "numeric" }).format(weekDate)
       : "this week";
-    const chronicMarkerPercent = (OVERVIEW_LOAD_GAUGE_CONFIG.chronicMarkerRatio / OVERVIEW_LOAD_GAUGE_CONFIG.maxRatio) * 100;
-    const chronicDisplay = formatOverviewCompactLoad(chronicValue);
-    const acuteDisplay = formatOverviewCompactLoad(acuteValue);
+    const chronicMarkerPercent = (PLAN_LOAD_GAUGE_CONFIG.chronicMarkerRatio / PLAN_LOAD_GAUGE_CONFIG.maxRatio) * 100;
+    const chronicDisplay = formatPlanCompactLoad(chronicValue);
+    const acuteDisplay = formatPlanCompactLoad(acuteValue);
     const missingGaugeData = isMissingWeeklyRecord || acuteValue === null || chronicValue === null || chronicValue <= 0 || !Number.isFinite(ratio);
-    const fillPercent = missingGaugeData ? 0 : getOverviewGaugeFillPercent(ratio);
-    const fillClass = missingGaugeData ? "overview-load-gauge-unavailable" : getOverviewGaugeColorClass(weeklyRow, ratio, isCurrentWeek);
-    const accessibleText = buildOverviewGaugeAccessibleText(weekLabel, acuteValue, chronicValue, authoritativeRatio, rawRamp, isCurrentWeek);
+    const fillPercent = missingGaugeData ? 0 : getPlanGaugeFillPercent(ratio);
+    const fillClass = missingGaugeData ? "plan-load-gauge-unavailable" : getPlanGaugeColorClass(weeklyRow, ratio, isCurrentWeek);
+    const accessibleText = buildPlanGaugeAccessibleText(weekLabel, acuteValue, chronicValue, authoritativeRatio, rawRamp, isCurrentWeek);
     const fillHtml = missingGaugeData
       ? ""
-      : `<div class="overview-load-gauge-fill ${fillClass}" style="height: ${fillPercent}%"></div>`;
-    const trackClassName = missingGaugeData ? "overview-load-gauge-track overview-load-gauge-unavailable" : "overview-load-gauge-track";
+      : `<div class="plan-load-gauge-fill ${fillClass}" style="height: ${fillPercent}%"></div>`;
+    const trackClassName = missingGaugeData ? "plan-load-gauge-track plan-load-gauge-unavailable" : "plan-load-gauge-track";
 
     return `
-      <div class="overview-load-gauge" role="img" aria-label="${escapeHtml(accessibleText)}" title="${escapeHtml(accessibleText)}" style="--overview-chronic-marker-percent: ${chronicMarkerPercent}%">
-        <div class="overview-load-gauge-chronic" aria-hidden="true">${escapeHtml(chronicDisplay)}</div>
+      <div class="plan-load-gauge" role="img" aria-label="${escapeHtml(accessibleText)}" title="${escapeHtml(accessibleText)}" style="--plan-chronic-marker-percent: ${chronicMarkerPercent}%">
+        <div class="plan-load-gauge-chronic" aria-hidden="true">${escapeHtml(chronicDisplay)}</div>
         <div class="${trackClassName}">
           ${fillHtml}
-          <div class="overview-load-gauge-marker" style="bottom: ${chronicMarkerPercent}%"></div>
+          <div class="plan-load-gauge-marker" style="bottom: ${chronicMarkerPercent}%"></div>
         </div>
-        <div class="overview-load-gauge-acute" aria-hidden="true">${escapeHtml(acuteDisplay)}</div>
+        <div class="plan-load-gauge-acute" aria-hidden="true">${escapeHtml(acuteDisplay)}</div>
       </div>
     `;
   }
 
-  function isOverviewWeekCollapsed(weekKey, defaultCollapsed) {
-    if (OVERVIEW_WEEK_COLLAPSE_STATE.has(weekKey)) {
-      return OVERVIEW_WEEK_COLLAPSE_STATE.get(weekKey) === true;
+  function isPlanWeekCollapsed(weekKey, defaultCollapsed) {
+    if (PLAN_WEEK_COLLAPSE_STATE.has(weekKey)) {
+      return PLAN_WEEK_COLLAPSE_STATE.get(weekKey) === true;
     }
     return Boolean(defaultCollapsed);
   }
 
-  function toggleOverviewWeekCollapse(weekKey) {
-    const nextState = !(OVERVIEW_WEEK_COLLAPSE_STATE.get(weekKey) === true);
-    OVERVIEW_WEEK_COLLAPSE_STATE.set(weekKey, nextState);
-    renderOverviewStrip();
+  function togglePlanWeekCollapse(weekKey) {
+    const nextState = !(PLAN_WEEK_COLLAPSE_STATE.get(weekKey) === true);
+    PLAN_WEEK_COLLAPSE_STATE.set(weekKey, nextState);
+    renderPlanStrip();
   }
 
-  function setupOverviewToggleHandlers() {
-    const strip = document.getElementById("overviewStrip");
-    if (!strip || strip.dataset.overviewToggleBound === "true") {
+  function setupPlanToggleHandlers() {
+    const strip = document.getElementById("planStrip");
+    if (!strip || strip.dataset.planToggleBound === "true") {
       return;
     }
 
     strip.addEventListener("click", (event) => {
-      const button = event.target.closest("[data-overview-week-toggle]");
+      const button = event.target.closest("[data-plan-week-toggle]");
       if (!button) {
         return;
       }
-      const weekKey = button.getAttribute("data-overview-week-toggle");
+      const weekKey = button.getAttribute("data-plan-week-toggle");
       if (!weekKey) {
         return;
       }
-      toggleOverviewWeekCollapse(weekKey);
+      togglePlanWeekCollapse(weekKey);
     });
 
-    strip.dataset.overviewToggleBound = "true";
+    strip.dataset.planToggleBound = "true";
   }
 
-  function formatOverviewDuration(value) {
+  function formatPlanDuration(value) {
     if (value === null || value === undefined || value === "") {
       return "";
     }
@@ -386,14 +385,14 @@
       .slice(0, 10);
   }
 
-  function formatOverviewSupportNames(row) {
+  function formatPlanSupportNames(row) {
     const names = getSupportActivityNames(row);
     return names.slice(0, 2).map((name) => escapeHtml(name));
   }
 
-  function getOverviewRows() {
-    if (Array.isArray(window.AppState?.overviewRows) && window.AppState.overviewRows.length > 0) {
-      return window.AppState.overviewRows;
+  function getPlanRows() {
+    if (Array.isArray(window.AppState?.planRows) && window.AppState.planRows.length > 0) {
+      return window.AppState.planRows;
     }
     if (Array.isArray(window.AppState?.dailyRows)) {
       return window.AppState.dailyRows;
@@ -402,7 +401,7 @@
   }
 
   function getDayRow(dateKey) {
-    const rows = getOverviewRows();
+    const rows = getPlanRows();
     return rows.find((row) => {
       const rowDate = row?.date == null ? "" : String(row.date).trim();
       if (!rowDate) {
@@ -413,11 +412,11 @@
     });
   }
 
-  function renderOverviewDayCell(date, row, isWeekCollapsed) {
-    const label = formatOverviewDay(date);
+  function renderPlanDayCell(date, row, isWeekCollapsed) {
+    const label = formatPlanDay(date);
     const mainRideName = row?.main_ride_name == null ? "" : String(row.main_ride_name).trim();
     const mainRideTime = row?.main_ride_time == null ? "" : String(row.main_ride_time).trim();
-    const loadDisplay = formatOverviewHeaderLoad(row?.total_load);
+    const loadDisplay = formatPlanHeaderLoad(row?.total_load);
     const loadLabel = loadDisplay === "—" ? "No daily load" : `${loadDisplay} daily load`;
     const structuredItems = getStructuredOtherActivities(row);
     const supportNames = getSupportActivityNames(row);
@@ -428,17 +427,17 @@
 
     let bodyHtml = "";
     if (!hasRow) {
-      bodyHtml = '<div class="overview-empty-state">No activity</div>';
+      bodyHtml = '<div class="plan-empty-state">No activity</div>';
     } else if (hasMainRide) {
-      bodyHtml += `<div class="overview-primary-name">${renderActivityWithIcon(mainRideName, row?.main_ride_sport_type, row?.main_ride_category)}</div>`;
+      bodyHtml += `<div class="plan-primary-name">${renderActivityWithIcon(mainRideName, row?.main_ride_sport_type, row?.main_ride_category)}</div>`;
       if (mainRideTime) {
-        bodyHtml += `<div class="overview-metric">${escapeHtml(mainRideTime)}</div>`;
+        bodyHtml += `<div class="plan-metric">${escapeHtml(mainRideTime)}</div>`;
       }
       if (hasSupport) {
         const visibleSupport = structuredItems.slice(0, 2).length > 0 ? structuredItems.slice(0, 2) : supportNames.slice(0, 2).map((name) => ({ name, activity_category: "", sport_type: "" }));
-        const supportHtml = visibleSupport.map((item) => `<div class="overview-support-name">${renderActivityWithIcon(item.name, item.sport_type, item.activity_category)}</div>`).join("");
+        const supportHtml = visibleSupport.map((item) => `<div class="plan-support-name">${renderActivityWithIcon(item.name, item.sport_type, item.activity_category)}</div>`).join("");
         const remainingAfterVisible = Math.max(0, Math.max(structuredItems.length, supportNames.length) - visibleSupport.length);
-        bodyHtml += `<div class="overview-support-list">${supportHtml}${remainingAfterVisible > 0 ? `<div class="overview-support-more">+${remainingAfterVisible} more</div>` : ""}</div>`;
+        bodyHtml += `<div class="plan-support-list">${supportHtml}${remainingAfterVisible > 0 ? `<div class="plan-support-more">+${remainingAfterVisible} more</div>` : ""}</div>`;
       }
     } else if (hasStructuredSupport) {
       const primaryItem = structuredItems[0];
@@ -446,10 +445,10 @@
       const visibleSupport = remainingSupport.slice(0, 2);
       const remainingAfterVisible = Math.max(0, remainingSupport.length - visibleSupport.length);
 
-      bodyHtml += `<div class="overview-primary-name">${renderActivityWithIcon(primaryItem.name, primaryItem.sport_type, primaryItem.activity_category)}</div>`;
+      bodyHtml += `<div class="plan-primary-name">${renderActivityWithIcon(primaryItem.name, primaryItem.sport_type, primaryItem.activity_category)}</div>`;
       if (visibleSupport.length > 0 || remainingAfterVisible > 0) {
-        const supportHtml = visibleSupport.map((item) => `<div class="overview-support-name">${renderActivityWithIcon(item.name, item.sport_type, item.activity_category)}</div>`).join("");
-        bodyHtml += `<div class="overview-support-list">${supportHtml}${remainingAfterVisible > 0 ? `<div class="overview-support-more">+${remainingAfterVisible} more</div>` : ""}</div>`;
+        const supportHtml = visibleSupport.map((item) => `<div class="plan-support-name">${renderActivityWithIcon(item.name, item.sport_type, item.activity_category)}</div>`).join("");
+        bodyHtml += `<div class="plan-support-list">${supportHtml}${remainingAfterVisible > 0 ? `<div class="plan-support-more">+${remainingAfterVisible} more</div>` : ""}</div>`;
       }
     } else if (hasSupport) {
       const primaryName = supportNames[0];
@@ -457,24 +456,24 @@
       const visibleSupport = remainingSupport.slice(0, 2);
       const remainingAfterVisible = Math.max(0, remainingSupport.length - visibleSupport.length);
 
-      bodyHtml += `<div class="overview-primary-name">${renderActivityWithIcon(primaryName, "", "")}</div>`;
+      bodyHtml += `<div class="plan-primary-name">${renderActivityWithIcon(primaryName, "", "")}</div>`;
       if (visibleSupport.length > 0 || remainingAfterVisible > 0) {
-        const supportHtml = visibleSupport.map((name) => `<div class="overview-support-name">${renderActivityWithIcon(name, "", "")}</div>`).join("");
-        bodyHtml += `<div class="overview-support-list">${supportHtml}${remainingAfterVisible > 0 ? `<div class="overview-support-more">+${remainingAfterVisible} more</div>` : ""}</div>`;
+        const supportHtml = visibleSupport.map((name) => `<div class="plan-support-name">${renderActivityWithIcon(name, "", "")}</div>`).join("");
+        bodyHtml += `<div class="plan-support-list">${supportHtml}${remainingAfterVisible > 0 ? `<div class="plan-support-more">+${remainingAfterVisible} more</div>` : ""}</div>`;
       }
     } else {
-      bodyHtml = '<div class="overview-empty-state">No activity details</div>';
+      bodyHtml = '<div class="plan-empty-state">No activity details</div>';
     }
 
     return `
-      <div class="overview-day ${isWeekCollapsed ? "is-collapsed" : ""}">
-        <div class="overview-day-header">
-          <span class="overview-weekday">${escapeHtml(label.weekday || "")}</span>
-          <span class="overview-day-load" aria-label="${escapeHtml(loadLabel)}" title="${escapeHtml(loadLabel)}">${escapeHtml(loadDisplay)}</span>
-          <span class="overview-date">${escapeHtml(label.month || "")} ${escapeHtml(label.date || "")}</span>
+      <div class="plan-day ${isWeekCollapsed ? "is-collapsed" : ""}">
+        <div class="plan-day-header">
+          <span class="plan-weekday">${escapeHtml(label.weekday || "")}</span>
+          <span class="plan-day-load" aria-label="${escapeHtml(loadLabel)}" title="${escapeHtml(loadLabel)}">${escapeHtml(loadDisplay)}</span>
+          <span class="plan-date">${escapeHtml(label.month || "")} ${escapeHtml(label.date || "")}</span>
         </div>
-        <div class="overview-day-body" ${isWeekCollapsed ? "hidden" : ""}>
-          ${bodyHtml || '<div class="overview-empty-state">No activity</div>'}
+        <div class="plan-day-body" ${isWeekCollapsed ? "hidden" : ""}>
+          ${bodyHtml || '<div class="plan-empty-state">No activity</div>'}
         </div>
       </div>
     `;
@@ -509,7 +508,7 @@
     return getWeekDates(olderWeekStart);
   }
 
-  function buildOverviewRowMap(rows) {
+  function buildPlanRowMap(rows) {
     const map = new Map();
     for (const row of rows || []) {
       const rowDate = row?.date == null ? "" : String(row.date).trim();
@@ -525,56 +524,56 @@
     return map;
   }
 
-  function renderOverviewWeekRow(weekStartDate, rowMap, weeklyRowMap, defaultCollapsed) {
-    const weekKey = getOverviewWeekKey(weekStartDate);
-    const collapsed = isOverviewWeekCollapsed(weekKey, defaultCollapsed);
+  function renderPlanWeekRow(weekStartDate, rowMap, weeklyRowMap, defaultCollapsed) {
+    const weekKey = getPlanWeekKey(weekStartDate);
+    const collapsed = isPlanWeekCollapsed(weekKey, defaultCollapsed);
     const weekLabel = new Intl.DateTimeFormat("en-US", { month: "long", day: "numeric", year: "numeric" }).format(weekStartDate);
     const weeklyRecord = weeklyRowMap.get(weekKey) || null;
-    const isCurrentWeek = weekKey === getOverviewWeekKey(new Date());
+    const isCurrentWeek = weekKey === getPlanWeekKey(new Date());
     const dates = getWeekDates(weekStartDate);
     const html = dates.map((date) => {
       const key = toLocalDateKey(date);
       const row = rowMap.get(key) || null;
-      return renderOverviewDayCell(date, row, collapsed);
+      return renderPlanDayCell(date, row, collapsed);
     }).join("");
 
     return `
-      <div class="overview-week-row ${collapsed ? "collapsed" : "expanded"}">
-        <div class="overview-week-toggle-cell">
-          <button type="button" class="overview-week-toggle" data-overview-week-toggle="${escapeHtml(weekKey || "")}" aria-expanded="${collapsed ? "false" : "true"}" aria-label="${escapeHtml(collapsed ? `Expand week of ${weekLabel}` : `Collapse week of ${weekLabel}`)}">${collapsed ? "+" : "−"}</button>
-          ${renderOverviewWeeklyLoadGauge(weekKey, weeklyRecord, isCurrentWeek)}
+      <div class="plan-week-row ${collapsed ? "collapsed" : "expanded"}">
+        <div class="plan-week-toggle-cell">
+          <button type="button" class="plan-week-toggle" data-plan-week-toggle="${escapeHtml(weekKey || "")}" aria-expanded="${collapsed ? "false" : "true"}" aria-label="${escapeHtml(collapsed ? `Expand week of ${weekLabel}` : `Collapse week of ${weekLabel}`)}">${collapsed ? "+" : "−"}</button>
+          ${renderPlanWeeklyLoadGauge(weekKey, weeklyRecord, isCurrentWeek)}
         </div>
-        <div class="overview-strip">${html}</div>
+        <div class="plan-strip">${html}</div>
       </div>
     `;
   }
 
-  function renderOverviewStrip() {
-    const strip = document.getElementById("overviewStrip");
+  function renderPlanStrip() {
+    const strip = document.getElementById("planStrip");
     if (!strip) {
       return;
     }
 
-    const rows = getOverviewRows();
-    const rowMap = buildOverviewRowMap(rows);
-    const weeklyRows = getOverviewWeeklyRows();
-    const weeklyRowMap = buildOverviewWeeklyRowMap(weeklyRows);
+    const rows = getPlanRows();
+    const rowMap = buildPlanRowMap(rows);
+    const weeklyRows = getPlanWeeklyRows();
+    const weeklyRowMap = buildPlanWeeklyRowMap(weeklyRows);
     const currentWeekDates = getCurrentWeekDates();
     const previousWeekDates = getPreviousWeekDates();
     const olderWeekDates = getOlderWeekDates();
-    const olderWeekKey = getOverviewWeekKey(olderWeekDates[0]);
+    const olderWeekKey = getPlanWeekKey(olderWeekDates[0]);
 
     const html = [
-      renderOverviewWeekRow(currentWeekDates[0], rowMap, weeklyRowMap, false),
-      renderOverviewWeekRow(previousWeekDates[0], rowMap, weeklyRowMap, false),
-      renderOverviewWeekRow(olderWeekDates[0], rowMap, weeklyRowMap, !OVERVIEW_WEEK_COLLAPSE_STATE.has(olderWeekKey)),
+      renderPlanWeekRow(currentWeekDates[0], rowMap, weeklyRowMap, false),
+      renderPlanWeekRow(previousWeekDates[0], rowMap, weeklyRowMap, false),
+      renderPlanWeekRow(olderWeekDates[0], rowMap, weeklyRowMap, !PLAN_WEEK_COLLAPSE_STATE.has(olderWeekKey)),
     ].join("");
 
     strip.innerHTML = html;
-    setupOverviewToggleHandlers();
+    setupPlanToggleHandlers();
   }
 
-  async function ensureOverviewWeeklyRows() {
+  async function ensurePlanWeeklyRows() {
     if (Array.isArray(window.AppState?.weeklyRows) && window.AppState.weeklyRows.length > 0) {
       return;
     }
@@ -588,27 +587,27 @@
       const rows = Array.isArray(payload) ? payload : (payload && Array.isArray(payload.rows) ? payload.rows : []);
       window.AppState.weeklyRows = rows;
     } catch (error) {
-      console.warn("Overview weekly data unavailable.", error);
+      console.warn("Plan weekly data unavailable.", error);
       window.AppState.weeklyRows = [];
     }
   }
 
-  async function loadOverview() {
-    const strip = document.getElementById("overviewStrip");
+  async function loadPlan() {
+    const strip = document.getElementById("planStrip");
     if (!strip) {
       return;
     }
 
-    const requestId = ++OVERVIEW_LOAD_REQUESTS.current;
+    const requestId = ++PLAN_LOAD_REQUESTS.current;
 
     if (Array.isArray(window.AppState?.dailyRows) && window.AppState.dailyRows.length > 0) {
-      window.AppState.overviewRows = window.AppState.dailyRows;
-      await ensureOverviewWeeklyRows();
-      renderOverviewStrip();
+      window.AppState.planRows = window.AppState.dailyRows;
+      await ensurePlanWeeklyRows();
+      renderPlanStrip();
       return;
     }
 
-    strip.innerHTML = '<div class="overview-empty-state">Loading overview…</div>';
+    strip.innerHTML = '<div class="plan-empty-state">Loading plan…</div>';
 
     try {
       if (!window.api || typeof window.api.fetchDaily !== "function") {
@@ -617,34 +616,34 @@
 
       const payload = await window.api.fetchDaily(21);
       const rows = Array.isArray(payload) ? payload : (payload && Array.isArray(payload.rows) ? payload.rows : []);
-      if (requestId !== OVERVIEW_LOAD_REQUESTS.current) {
+      if (requestId !== PLAN_LOAD_REQUESTS.current) {
         return;
       }
       window.AppState.dailyRows = rows;
-      window.AppState.overviewRows = rows;
-      await ensureOverviewWeeklyRows();
-      renderOverviewStrip();
+      window.AppState.planRows = rows;
+      await ensurePlanWeeklyRows();
+      renderPlanStrip();
     } catch (error) {
       console.error(error);
-      if (requestId !== OVERVIEW_LOAD_REQUESTS.current) {
+      if (requestId !== PLAN_LOAD_REQUESTS.current) {
         return;
       }
-      window.AppState.overviewRows = [];
-      strip.innerHTML = '<div class="overview-empty-state">Overview unavailable</div>';
+      window.AppState.planRows = [];
+      strip.innerHTML = '<div class="plan-empty-state">Plan unavailable</div>';
     }
   }
 
-  function buildOverviewController() {
+  function buildPlanController() {
     return {
-      load: loadOverview,
-      render: renderOverviewStrip,
+      load: loadPlan,
+      render: renderPlanStrip,
     };
   }
 
-  window.loadOverview = loadOverview;
-  window.OverviewController = buildOverviewController();
+  window.loadPlan = loadPlan;
+  window.PlanController = buildPlanController();
 
   document.addEventListener("DOMContentLoaded", () => {
-    renderOverviewStrip();
+    renderPlanStrip();
   });
 })();

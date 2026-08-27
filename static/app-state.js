@@ -35,7 +35,7 @@
 
   window.AppState = window.AppState || {
     dailyRows: [],
-    overviewRows: [],
+    planRows: [],
     dailyDraftQuery: "",
     dailyAppliedQuery: "",
     dailySearchMatchCount: 0,
@@ -75,10 +75,15 @@
   function sanitizePreferences(rawPreferences = {}) {
     const next = { ...window.DEFAULT_PREFERENCES, ...(rawPreferences || {}) };
 
+    const normalizeTabValue = (tabValue) => {
+      const value = tabValue === "overview" ? "plan" : tabValue;
+      return value;
+    };
+
     next.appearance = ["system", "light", "dark"].includes(next.appearance) ? next.appearance : "system";
-    next.activeTab = ["overview", "daily", "weekly", "zones", "gear", "components", "yearly"].includes(next.activeTab) ? next.activeTab : "daily";
+    next.activeTab = ["plan", "goals", "kpis", "charts", "daily", "weekly", "zones", "gear", "components", "yearly"].includes(normalizeTabValue(next.activeTab)) ? normalizeTabValue(next.activeTab) : "daily";
     next.rememberLastTab = next.rememberLastTab !== false;
-    next.startupTab = ["overview", "daily", "weekly", "zones", "gear", "components", "yearly"].includes(next.startupTab) ? next.startupTab : "daily";
+    next.startupTab = ["plan", "goals", "kpis", "charts", "daily", "weekly", "zones", "gear", "components", "yearly"].includes(normalizeTabValue(next.startupTab)) ? normalizeTabValue(next.startupTab) : "daily";
     next.yearlyView = ["annual", "monthly"].includes(next.yearlyView) ? next.yearlyView : "annual";
     next.defaultBikeGearId = next.defaultBikeGearId == null ? "" : String(next.defaultBikeGearId).trim();
     next.componentsSelectedGearId = next.componentsSelectedGearId == null ? "" : String(next.componentsSelectedGearId).trim();
