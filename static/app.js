@@ -58,6 +58,9 @@ const planTab = document.getElementById("planTab");
 const goalsTab = document.getElementById("goalsTab");
 const kpisTab = document.getElementById("kpisTab");
 const chartsTab = document.getElementById("chartsTab");
+const chartsLoadTab = document.getElementById("chartsLoadTab");
+const chartsHealthTab = document.getElementById("chartsHealthTab");
+const chartsVolumeTab = document.getElementById("chartsVolumeTab");
 const dailyTab = document.getElementById("dailyTab");
 const weeklyTab = document.getElementById("weeklyTab");
 const zonesTab = document.getElementById("zonesTab");
@@ -70,6 +73,9 @@ const planPane = document.getElementById("planPane");
 const goalsPane = document.getElementById("goalsPane");
 const kpisPane = document.getElementById("kpisPane");
 const chartsPane = document.getElementById("chartsPane");
+const chartsLoadPanel = document.getElementById("chartsLoadPanel");
+const chartsHealthPanel = document.getElementById("chartsHealthPanel");
+const chartsVolumePanel = document.getElementById("chartsVolumePanel");
 const dailyPane = document.getElementById("dailyPane");
 const weeklyPane = document.getElementById("weeklyPane");
 const zonesPane = document.getElementById("zonesPane");
@@ -167,6 +173,71 @@ function showYearlyView(view) {
   }
 }
 
+function normalizeChartsCategory(category) {
+  const normalized = String(category || "").trim().toLowerCase();
+  return ["load", "health", "volume"].includes(normalized) ? normalized : "load";
+}
+
+function getChartsCategory() {
+  const savedValue = window.AppState && typeof window.AppState.chartsCategory !== "undefined"
+    ? normalizeChartsCategory(window.AppState.chartsCategory)
+    : "load";
+
+  if (window.AppState && window.AppState.chartsCategory !== savedValue) {
+    window.AppState.chartsCategory = savedValue;
+    persistPreferences();
+  }
+
+  return savedValue;
+}
+
+function showChartsCategory(category) {
+  const nextCategory = normalizeChartsCategory(category);
+
+  if (window.AppState) {
+    window.AppState.chartsCategory = nextCategory;
+    persistPreferences();
+  }
+
+  const panels = {
+    load: chartsLoadPanel,
+    health: chartsHealthPanel,
+    volume: chartsVolumePanel,
+  };
+
+  const tabs = {
+    load: chartsLoadTab,
+    health: chartsHealthTab,
+    volume: chartsVolumeTab,
+  };
+
+  Object.entries(panels).forEach(([name, panel]) => {
+    if (panel) {
+      panel.classList.toggle("hidden", name !== nextCategory);
+      panel.setAttribute("aria-hidden", String(name !== nextCategory));
+    }
+  });
+
+  Object.entries(tabs).forEach(([name, tab]) => {
+    if (tab) {
+      const selected = name === nextCategory;
+      tab.classList.toggle("active", selected);
+      tab.setAttribute("aria-selected", String(selected));
+      tab.setAttribute("aria-controls", `${name === "load" ? "chartsLoadPanel" : name === "health" ? "chartsHealthPanel" : "chartsVolumePanel"}`);
+    }
+  });
+
+  if (nextCategory === "health" && window.ChartsController && typeof window.ChartsController.load === "function") {
+    window.ChartsController.load();
+  }
+}
+
+window.showChartsCategory = showChartsCategory;
+
+chartsLoadTab?.addEventListener("click", () => showChartsCategory("load"));
+chartsHealthTab?.addEventListener("click", () => showChartsCategory("health"));
+chartsVolumeTab?.addEventListener("click", () => showChartsCategory("volume"));
+
 window.showYearlyView = showYearlyView;
 
 function showTab(tab) {
@@ -218,8 +289,8 @@ function showTab(tab) {
     window.loadPlan();
   }
 
-  if (isCharts && window.ChartsController && typeof window.ChartsController.load === "function") {
-    window.ChartsController.load();
+  if (isCharts) {
+    showChartsCategory(getChartsCategory());
   }
 
   if (isYearly) {

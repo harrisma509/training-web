@@ -11,6 +11,7 @@
     activeTab: "daily",
     rememberLastTab: true,
     startupTab: "daily",
+    chartsCategory: "load",
     defaultBikeGearId: "",
     componentsSelectedGearId: "",
     hideShoes: true,
@@ -84,6 +85,7 @@
     next.activeTab = ["plan", "goals", "kpis", "charts", "daily", "weekly", "zones", "gear", "components", "yearly"].includes(normalizeTabValue(next.activeTab)) ? normalizeTabValue(next.activeTab) : "daily";
     next.rememberLastTab = next.rememberLastTab !== false;
     next.startupTab = ["plan", "goals", "kpis", "charts", "daily", "weekly", "zones", "gear", "components", "yearly"].includes(normalizeTabValue(next.startupTab)) ? normalizeTabValue(next.startupTab) : "daily";
+    next.chartsCategory = ["load", "health", "volume"].includes(String(next.chartsCategory || "").trim().toLowerCase()) ? String(next.chartsCategory).trim().toLowerCase() : "load";
     next.yearlyView = ["annual", "monthly"].includes(next.yearlyView) ? next.yearlyView : "annual";
     next.defaultBikeGearId = next.defaultBikeGearId == null ? "" : String(next.defaultBikeGearId).trim();
     next.componentsSelectedGearId = next.componentsSelectedGearId == null ? "" : String(next.componentsSelectedGearId).trim();
@@ -116,6 +118,7 @@
       activeTab: window.AppState.activeTab,
       rememberLastTab: window.AppState.rememberLastTab,
       startupTab: window.AppState.startupTab,
+      chartsCategory: window.AppState.chartsCategory,
       defaultBikeGearId: window.AppState.defaultBikeGearId,
       componentsSelectedGearId: window.AppState.componentsSelectedGearId,
       hideShoes: window.AppState.hideShoes,

@@ -2,6 +2,69 @@
     max-width: 1120px;
 }
 
+.charts-category-tabs {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-bottom: 12px;
+}
+
+.charts-category-tab {
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    background: transparent;
+    color: var(--muted);
+    cursor: pointer;
+    font: inherit;
+    font-size: 0.8rem;
+    line-height: 1.2;
+    padding: 6px 10px;
+    transition: border-color 0.15s ease, background 0.15s ease, color 0.15s ease;
+}
+
+.charts-category-tab.active {
+    background: var(--panel-alt, var(--panel));
+    border-color: var(--blue);
+    color: var(--text);
+}
+
+.charts-category-tab:focus-visible {
+    outline: 2px solid var(--blue);
+    outline-offset: 2px;
+}
+
+.charts-category-panel {
+    min-height: 120px;
+}
+
+.charts-placeholder-panel {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.charts-placeholder-panel h3 {
+    margin: 0;
+    color: var(--text);
+    font-size: 1rem;
+}
+
+.charts-placeholder-panel p {
+    margin: 0;
+    color: var(--muted);
+    line-height: 1.5;
+}
+
+.charts-placeholder-status {
+    color: var(--muted);
+    font-size: 0.82rem;
+}
+
 .charts-heading-row {
     margin-bottom: 16px;
 }
