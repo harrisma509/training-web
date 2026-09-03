@@ -199,10 +199,34 @@
         const colors = getThemeColors();
         const target = payload.target;
         const latestPoint = payload.latest && Number.isFinite(Number(payload.latest.weight_lb)) ? payload.latest : null;
-        const labels = [...new Set(daily.map(row => row.date).concat(monthly.map(row => row.month_start)))].sort();
-        const monthBoundaryValues = new Set(monthly.map(row => row.month_start));
-        const isMonthBoundaryValue = (value) => typeof value === "string" && monthBoundaryValues.has(value);
-        const weights = daily.map(row => Number(row.weight_lb)).concat(monthly.map(row => Number(row.average_lb)), Number(target.low_lb), Number(target.high_lb));
+
+        const endpointByMonth = new Map();
+        daily.forEach(row => {
+            const monthKey = row.date.slice(0, 7);
+            endpointByMonth.set(monthKey, row.date);
+        });
+
+        const monthlyAverageRows = monthly.map(row => {
+            const monthKey = row.month;
+            return {
+                ...row,
+                endpointDate: endpointByMonth.get(monthKey) || row.month_start || row.month,
+            };
+        });
+
+        const monthlyEndpointSet = new Set(
+            monthlyAverageRows
+                .map(row => row.endpointDate)
+                .filter(date => typeof date === "string" && date.length >= 10)
+        );
+
+        const dailyDateSet = new Set(daily.map(row => row.date));
+        const labels = [...new Set([
+            ...daily.map(row => row.date),
+            ...[...monthlyEndpointSet].filter(date => !dailyDateSet.has(date)),
+        ])].sort();
+
+        const weights = daily.map(row => Number(row.weight_lb)).concat(monthlyAverageRows.map(row => Number(row.average_lb)), Number(target.low_lb), Number(target.high_lb));
         const minimum = Math.min(...weights);
         const maximum = Math.max(...weights);
         const padding = Math.max(2, Math.ceil((maximum - minimum) * 0.15));
@@ -232,50 +256,12 @@
             },
         };
 
-        const monthTickPlugin = {
-            id: "weightMonthTicks",
-            afterTickToLabelConversion(chart, args) {
-                if (!chart.scales.x || chart.scales.x.options.type !== "category") {
-                    return;
-                }
-
-                args.ticks = args.ticks.filter(tick => {
-                    const value = (tick && typeof tick === "object") ? (tick.value ?? tick.label ?? "") : (tick ?? "");
-                    return isMonthBoundaryValue(value);
-                });
-            },
-        };
-
-        const monthGridPlugin = {
-            id: "weightMonthGrid",
-            beforeDatasetsDraw(chart) {
-                const xScale = chart.scales.x;
-                if (!xScale || xScale.options.type !== "category") {
-                    return;
-                }
-
-                const { ctx, chartArea } = chart;
-                const categoryValues = Array.isArray(chart.data.labels) ? chart.data.labels : [];
-
-                ctx.save();
-                ctx.strokeStyle = colors.line;
-                ctx.lineWidth = 1;
-
-                categoryValues.forEach(value => {
-                    const normalized = String(value);
-                    if (!isMonthBoundaryValue(normalized)) {
-                        return;
-                    }
-
-                    const x = xScale.getPixelForValue(normalized);
-                    ctx.beginPath();
-                    ctx.moveTo(x, chartArea.top);
-                    ctx.lineTo(x, chartArea.bottom);
-                    ctx.stroke();
-                });
-
-                ctx.restore();
-            },
+        const monthLabelFromDate = (value) => {
+            if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+                return "";
+            }
+            const parsed = new Date(`${value}T12:00:00`);
+            return Number.isNaN(parsed.getTime()) ? "" : parsed.toLocaleDateString(undefined, { month: "short" });
         };
 
         weightChart = new window.Chart(canvas, {
@@ -295,7 +281,7 @@
                     },
                     {
                         label: "Monthly average",
-                        data: monthly.map(row => ({ x: row.month_start, y: Number(row.average_lb), details: row })),
+                        data: monthlyAverageRows.map(row => ({ x: row.endpointDate, y: Number(row.average_lb), details: row })),
                         borderColor: colors.blue,
                         backgroundColor: colors.blue,
                         borderWidth: 3,
@@ -309,7 +295,7 @@
                     },
                 ],
             },
-            plugins: [targetBand, monthTickPlugin, monthGridPlugin],
+            plugins: [targetBand],
             options: {
                 responsive: true,
                 maintainAspectRatio: false,
@@ -347,11 +333,17 @@
                             autoSkip: false,
                             callback(value) {
                                 const label = this.getLabelForValue(value);
-                                return isMonthBoundaryValue(label) ? formatMonth(label.slice(0, 7)).slice(0, 3) : "";
+                                if (typeof label !== "string" || !monthlyEndpointSet.has(label)) {
+                                    return "";
+                                }
+                                return monthLabelFromDate(label);
                             },
                         },
                         grid: {
-                            display: false,
+                            color(context) {
+                                const label = context.scale.getLabelForValue(context.tick.value);
+                                return typeof label === "string" && monthlyEndpointSet.has(label) ? colors.line : "rgba(0, 0, 0, 0)";
+                            },
                             drawBorder: false,
                             drawTicks: false,
                             tickLength: 0,
