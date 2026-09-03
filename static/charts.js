@@ -269,15 +269,33 @@
             };
         });
 
+        const firstRepresentedMonth = monthly.map(row => row.month).sort()[0];
+        const januaryMonth = `${selectedYear}-01`;
+        const previousDecember = payload.previous_december;
+        const hasPreviousDecember = previousDecember && previousDecember.month === `${selectedYear - 1}-12` &&
+            Number.isFinite(Number(previousDecember.average_lb)) && Number.isFinite(Number(previousDecember.minimum_lb)) &&
+            Number.isFinite(Number(previousDecember.maximum_lb)) && Number.isFinite(Number(previousDecember.measurement_count));
+        const shouldShowCarryIn = firstRepresentedMonth === januaryMonth && monthly.some(row => row.month === januaryMonth) && hasPreviousDecember;
+        const carryInCategory = shouldShowCarryIn ? `carry-in-${previousDecember.month}` : null;
+        const monthlyAverageData = monthlyAverageRows.map(row => ({ x: row.endpointDate, y: Number(row.average_lb), details: row }));
+        if (shouldShowCarryIn) {
+            monthlyAverageData.unshift({
+                x: carryInCategory,
+                y: Number(previousDecember.average_lb),
+                details: previousDecember,
+                is_carry_in: true,
+            });
+        }
+
         const monthStartSet = new Set(monthly.map(row => (
             typeof row.month_start === "string" && /^\d{4}-\d{2}-\d{2}$/.test(row.month_start)
                 ? row.month_start
                 : `${row.month}-01`
         )));
 
-        const labels = getCalendarDatesForMonths(monthly);
+        const labels = shouldShowCarryIn ? [carryInCategory, ...getCalendarDatesForMonths(monthly)] : getCalendarDatesForMonths(monthly);
 
-        const weights = daily.map(row => Number(row.weight_lb)).concat(monthlyAverageRows.map(row => Number(row.average_lb)), Number(target.low_lb), Number(target.high_lb));
+        const weights = daily.map(row => Number(row.weight_lb)).concat(monthlyAverageRows.map(row => Number(row.average_lb)), shouldShowCarryIn ? Number(previousDecember.average_lb) : [], Number(target.low_lb), Number(target.high_lb));
         const minimum = Math.min(...weights);
         const maximum = Math.max(...weights);
         const padding = Math.max(2, Math.ceil((maximum - minimum) * 0.15));
@@ -337,14 +355,14 @@
                     },
                     {
                         label: "Monthly average",
-                        data: monthlyAverageRows.map(row => ({ x: row.endpointDate, y: Number(row.average_lb), details: row })),
+                        data: monthlyAverageData,
                         borderColor: colors.blue,
                         backgroundColor: colors.blue,
                         borderWidth: 3,
-                        pointRadius: 4,
-                        pointHoverRadius: 5,
+                        pointRadius: context => context.raw.is_carry_in ? 3 : 4,
+                        pointHoverRadius: context => context.raw.is_carry_in ? 4 : 5,
                         pointBorderColor: colors.blue,
-                        pointBackgroundColor: colors.text,
+                        pointBackgroundColor: context => context.raw.is_carry_in ? "rgba(59, 130, 246, 0.55)" : colors.text,
                         showLine: true,
                         tension: 0.25,
                         order: 1,
@@ -362,6 +380,9 @@
                         callbacks: {
                             title(items) {
                                 const item = items[0];
+                                if (item.dataset.label === "Monthly average" && item.raw.is_carry_in) {
+                                    return `December ${item.raw.details.year} carry-in`;
+                                }
                                 return item.dataset.label === "Monthly average" ? formatMonth(item.raw.details.month) : item.raw.x;
                             },
                             label(context) {
@@ -370,6 +391,13 @@
                                     return `Daily weight: ${formatWeight(context.raw.y)}${latestLabel}`;
                                 }
                                 const details = context.raw.details;
+                                if (context.raw.is_carry_in) {
+                                    return [
+                                        `Monthly average: ${formatWeight(context.raw.y)}`,
+                                        `Range: ${formatWeight(details.minimum_lb)}-${formatWeight(details.maximum_lb)}`,
+                                        `Measurements: ${details.measurement_count}`,
+                                    ];
+                                }
                                 return [
                                     `Monthly average: ${formatWeight(context.raw.y)}`,
                                     `Range: ${formatWeight(details.minimum_lb)}-${formatWeight(details.maximum_lb)}`,

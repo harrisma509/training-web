@@ -35,6 +35,7 @@ def api_weight_chart(year: int | None = None):
 
     year_start = date(selected_year, 1, 1)
     next_year_start = date(selected_year + 1, 1, 1)
+    previous_december_start = date(selected_year - 1, 12, 1)
     daily_sql = """
         select date, weight_lb
         from health_weight
@@ -59,6 +60,17 @@ def api_weight_chart(year: int | None = None):
         where weight_lb is not null
         order by year desc
     """
+    previous_december_sql = """
+        select
+            avg(weight_lb) as average_lb,
+            min(weight_lb) as minimum_lb,
+            max(weight_lb) as maximum_lb,
+            count(*) as measurement_count,
+            min(date) as first_date,
+            max(date) as last_date
+        from public.health_weight
+        where date >= %s and date < %s and weight_lb is not null
+    """
 
     with db_conn() as conn:
         with conn.cursor() as cur:
@@ -68,8 +80,17 @@ def api_weight_chart(year: int | None = None):
             daily_rows = cur.fetchall()
             cur.execute(monthly_sql, (year_start, next_year_start))
             monthly_rows = cur.fetchall()
+            cur.execute(previous_december_sql, (previous_december_start, year_start))
+            previous_december_row = cur.fetchone()
 
     available_years = [int(row["year"]) for row in available_year_rows]
+    previous_december = None
+    if previous_december_row and previous_december_row["measurement_count"]:
+        previous_december = {
+            **previous_december_row,
+            "month": previous_december_start.strftime("%Y-%m"),
+            "year": selected_year - 1,
+        }
 
     if not daily_rows:
         return JSONResponse({
@@ -79,6 +100,7 @@ def api_weight_chart(year: int | None = None):
             "latest": None,
             "monthly": [],
             "daily": [],
+            "previous_december": None,
             "available_years": available_years,
         })
 
@@ -99,6 +121,7 @@ def api_weight_chart(year: int | None = None):
         "latest": rows_to_json([daily_rows[-1]])[0],
         "monthly": rows_to_json(monthly),
         "daily": rows_to_json(daily_rows),
+        "previous_december": rows_to_json([previous_december])[0] if previous_december else None,
         "available_years": available_years,
     })
 
