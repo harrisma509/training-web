@@ -1,6 +1,7 @@
 (function () {
     let weightChart = null;
     const WEIGHT_YEAR_KEY = "trainingWeightChartYear";
+    const WEIGHT_MODE_KEY = "trainingWeightChartMode";
 
     function getElements() {
         return {
@@ -11,6 +12,9 @@
             latest: document.getElementById("weightChartLatest"),
             legend: document.getElementById("weightChartLegend"),
             yearSelect: document.getElementById("weightChartYearSelect"),
+            monthlyControls: document.getElementById("weightChartMonthlyControls"),
+            monthlyModeButton: document.getElementById("weightChartMonthlyMode"),
+            annualModeButton: document.getElementById("weightChartAnnualMode"),
         };
     }
 
@@ -94,6 +98,31 @@
         return payload && typeof payload === "object" && payload.target &&
             Number.isFinite(Number(payload.target.low_lb)) && Number.isFinite(Number(payload.target.high_lb)) &&
             Array.isArray(payload.daily) && Array.isArray(payload.monthly);
+    }
+
+    function isValidAnnualPayload(payload) {
+        return payload && typeof payload === "object" && payload.target &&
+            Number.isFinite(Number(payload.target.low_lb)) && Number.isFinite(Number(payload.target.high_lb)) &&
+            Array.isArray(payload.annual);
+    }
+
+    function getWeightChartMode() {
+        return sessionStorage.getItem(WEIGHT_MODE_KEY) === "annual" ? "annual" : "monthly";
+    }
+
+    function setWeightChartMode(mode) {
+        const resolvedMode = mode === "annual" ? "annual" : "monthly";
+        const { annualModeButton, monthlyControls, monthlyModeButton } = getElements();
+        sessionStorage.setItem(WEIGHT_MODE_KEY, resolvedMode);
+        if (monthlyControls) {
+            monthlyControls.classList.toggle("hidden", resolvedMode === "annual");
+        }
+        if (monthlyModeButton) {
+            monthlyModeButton.setAttribute("aria-pressed", String(resolvedMode === "monthly"));
+        }
+        if (annualModeButton) {
+            annualModeButton.setAttribute("aria-pressed", String(resolvedMode === "annual"));
+        }
     }
 
     function getLegendVisibilityState() {
@@ -387,10 +416,123 @@
         updateWeightLegend(weightChart);
     }
 
+    function renderAnnualWeightChart(payload) {
+        const { canvas, canvasWrap, status, meta, latest, legend } = getElements();
+        if (!window.Chart) {
+            setStatus("Weight chart is unavailable because its local chart library did not load.", "is-error");
+            return;
+        }
+
+        const annual = payload.annual.filter(row => Number.isInteger(Number(row?.year)) && Number.isFinite(Number(row.average_weight_lb)) &&
+            Number.isFinite(Number(row.minimum_weight_lb)) && Number.isFinite(Number(row.maximum_weight_lb)));
+        meta.textContent = formatTarget(payload.target);
+        if (!annual.length) {
+            latest.textContent = "";
+            setStatus("No annual weight data available", "is-empty");
+            return;
+        }
+
+        destroyWeightChart();
+        const colors = getThemeColors();
+        const target = payload.target;
+        const latestAnnual = annual[annual.length - 1];
+        const latestYear = Number(latestAnnual.year);
+        const latestPrefix = latestYear === new Date().getFullYear() ? "YTD" : latestAnnual.is_partial ? "Partial year" : "";
+        const rangeWeights = annual.flatMap(row => [Number(row.minimum_weight_lb), Number(row.maximum_weight_lb)]);
+        const minimum = Math.min(...rangeWeights, Number(target.low_lb));
+        const maximum = Math.max(...rangeWeights, Number(target.high_lb));
+        const padding = Math.max(3, Math.ceil((maximum - minimum) * 0.1));
+        const tickStep = maximum - minimum > 30 ? 5 : 2;
+
+        latest.textContent = `Latest year ${latestYear}${latestPrefix ? ` ${latestPrefix}` : ""} · ${formatWeight(latestAnnual.average_weight_lb)} avg`;
+        latest.title = latest.textContent;
+        status.classList.add("hidden");
+        canvasWrap.classList.remove("hidden");
+        if (legend) {
+            legend.innerHTML = "";
+        }
+
+        const targetBand = {
+            id: "weightTargetBand",
+            beforeDatasetsDraw(chart) {
+                const { ctx, chartArea, scales } = chart;
+                const upper = scales.y.getPixelForValue(target.high_lb);
+                const lower = scales.y.getPixelForValue(target.low_lb);
+                ctx.save();
+                ctx.fillStyle = "rgba(34, 197, 94, 0.16)";
+                ctx.fillRect(chartArea.left, upper, chartArea.right - chartArea.left, lower - upper);
+                ctx.restore();
+            },
+        };
+
+        weightChart = new window.Chart(canvas, {
+            type: "line",
+            data: {
+                labels: annual.map(row => String(row.year)),
+                datasets: [{
+                    label: "Annual average",
+                    data: annual.map(row => ({ x: String(row.year), y: Number(row.average_weight_lb), details: row })),
+                    borderColor: colors.blue,
+                    backgroundColor: colors.blue,
+                    borderWidth: 3,
+                    pointRadius: 4,
+                    pointHoverRadius: 5,
+                    pointBorderColor: colors.blue,
+                    pointBackgroundColor: colors.text,
+                    tension: 0.15,
+                }],
+            },
+            plugins: [targetBand],
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                interaction: { mode: "nearest", intersect: false },
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        callbacks: {
+                            title(items) {
+                                return items[0].raw.details.year;
+                            },
+                            label(context) {
+                                const details = context.raw.details;
+                                const partialLabel = Number(details.year) === new Date().getFullYear() ? "YTD" : details.is_partial ? "Partial year" : "";
+                                return [
+                                    `Annual average: ${formatWeight(context.raw.y)}`,
+                                    `Range: ${formatWeight(details.minimum_weight_lb)}-${formatWeight(details.maximum_weight_lb)}`,
+                                    `Measurements: ${details.measurement_count}`,
+                                    `Coverage: ${formatLatestDate(details.first_date)}-${formatLatestDate(details.last_date)}`,
+                                    partialLabel,
+                                ].filter(Boolean);
+                            },
+                        },
+                    },
+                },
+                scales: {
+                    x: {
+                        type: "category",
+                        ticks: { color: colors.muted, maxRotation: 0, autoSkip: true },
+                        grid: { color: "rgba(0, 0, 0, 0)", drawBorder: false, drawTicks: false },
+                    },
+                    y: {
+                        title: { display: true, text: "Weight (lb)", color: colors.text },
+                        min: Math.floor(minimum - padding),
+                        max: Math.ceil(maximum + padding),
+                        ticks: { color: colors.muted, stepSize: tickStep, precision: 0 },
+                        grid: { color: colors.line },
+                    },
+                },
+            },
+        });
+
+        updateWeightLegend(weightChart);
+    }
+
     let weightChartRequestId = 0;
 
     async function loadCharts() {
         const { yearSelect } = getElements();
+        const mode = getWeightChartMode();
         const rawSavedYear = sessionStorage.getItem(WEIGHT_YEAR_KEY);
         const savedYear = rawSavedYear !== null && rawSavedYear !== "" ? Number.parseInt(rawSavedYear, 10) : NaN;
         const currentYear = new Date().getFullYear();
@@ -400,8 +542,21 @@
         const selectedYear = Number.isInteger(currentSelectValue) && currentSelectValue >= 2000 ? currentSelectValue : yearValue;
         const requestId = ++weightChartRequestId;
 
-        setStatus("Loading weight trend...");
+        setWeightChartMode(mode);
+        setStatus(mode === "annual" ? "Loading annual weight trend..." : "Loading weight trend...");
         try {
+            if (mode === "annual") {
+                const payload = await window.api.fetchAnnualWeightChart();
+                if (!isValidAnnualPayload(payload)) {
+                    throw new Error("Unexpected annual weight chart response.");
+                }
+                if (requestId !== weightChartRequestId || getWeightChartMode() !== "annual") {
+                    return;
+                }
+                renderAnnualWeightChart(payload);
+                return;
+            }
+
             const payload = await window.api.fetchWeightChart(selectedYear);
             if (!isValidPayload(payload)) {
                 throw new Error("Unexpected weight chart response.");
@@ -418,10 +573,10 @@
             }
             renderWeightChart({ ...payload, year: defaultYear, available_years: availableYears });
         } catch (error) {
-            if (requestId !== weightChartRequestId) {
+            if (requestId !== weightChartRequestId || getWeightChartMode() !== mode) {
                 return;
             }
-            setStatus("Weight trend is currently unavailable.", "is-error");
+            setStatus(mode === "annual" ? "Annual weight trend is currently unavailable" : "Weight trend is currently unavailable.", "is-error");
         }
     }
 
@@ -436,6 +591,25 @@
         });
     }
 
+    const { annualModeButton, monthlyModeButton } = getElements();
+    if (monthlyModeButton) {
+        monthlyModeButton.addEventListener("click", () => {
+            if (getWeightChartMode() !== "monthly") {
+                setWeightChartMode("monthly");
+                loadCharts();
+            }
+        });
+    }
+    if (annualModeButton) {
+        annualModeButton.addEventListener("click", () => {
+            if (getWeightChartMode() !== "annual") {
+                setWeightChartMode("annual");
+                loadCharts();
+            }
+        });
+    }
+
+    setWeightChartMode(getWeightChartMode());
     window.ChartsController = { load: loadCharts, render: renderWeightChart };
 
     new MutationObserver(() => {

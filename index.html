@@ -309,15 +309,23 @@
       <div class="charts-shell">
         <div class="charts-heading-row">
           <h2 class="charts-title">Training Trends</h2>
-          <p class="charts-subtitle">Weight measurements and monthly trend for the current year.</p>
+          <p class="charts-subtitle">Charts</p>
         </div>
         <section class="weight-chart-card" aria-labelledby="weightChartTitle">
           <div class="weight-chart-header">
             <div class="weight-chart-title-group">
               <h3 id="weightChartTitle">Weight Trend</h3>
-              <label class="weight-chart-year-label" for="weightChartYearSelect">Weight chart year</label>
-              <select id="weightChartYearSelect" class="weight-chart-year-select"
-                aria-label="Weight chart year"></select>
+              <div class="weight-chart-mode-control" aria-label="Weight trend display mode">
+                <button id="weightChartMonthlyMode" class="weight-chart-mode-button" type="button"
+                  aria-pressed="true">Monthly</button>
+                <button id="weightChartAnnualMode" class="weight-chart-mode-button" type="button"
+                  aria-pressed="false">Annual</button>
+              </div>
+              <div id="weightChartMonthlyControls" class="weight-chart-monthly-controls">
+                <label class="weight-chart-year-label" for="weightChartYearSelect">Weight chart year</label>
+                <select id="weightChartYearSelect" class="weight-chart-year-select"
+                  aria-label="Weight chart year"></select>
+              </div>
               <div id="weightChartMeta" class="weight-chart-meta">Target range loading...</div>
             </div>
             <div id="weightChartLegend" class="weight-chart-legend" aria-label="Weight chart legend"></div>

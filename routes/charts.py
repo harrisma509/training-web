@@ -20,6 +20,13 @@ def _is_partial_month(month_start: date, through_date: date) -> bool:
     return month_start.year == through_date.year and month_start.month == through_date.month and through_date < month_end
 
 
+def _is_partial_year(year: int, first_date: date, last_date: date) -> bool:
+    if year == date.today().year:
+        return True
+
+    return first_date > date(year, 1, 14) or last_date < date(year, 12, 17)
+
+
 @router.get("/api/charts/weight")
 def api_weight_chart(year: int | None = None):
     selected_year = date.today().year if year is None else year
@@ -93,4 +100,43 @@ def api_weight_chart(year: int | None = None):
         "monthly": rows_to_json(monthly),
         "daily": rows_to_json(daily_rows),
         "available_years": available_years,
+    })
+
+
+@router.get("/api/charts/weight/annual")
+def api_annual_weight_chart():
+    annual_sql = """
+        select
+            extract(year from date)::integer as year,
+            avg(weight_lb) as average_weight_lb,
+            min(weight_lb) as minimum_weight_lb,
+            max(weight_lb) as maximum_weight_lb,
+            count(*) as measurement_count,
+            min(date) as first_date,
+            max(date) as last_date
+        from public.health_weight
+        where weight_lb is not null
+        group by 1
+        order by 1
+    """
+
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(annual_sql)
+            annual_rows = cur.fetchall()
+
+    annual = [
+        {
+            **row,
+            "is_partial": _is_partial_year(row["year"], row["first_date"], row["last_date"]),
+        }
+        for row in annual_rows
+    ]
+    latest_year = annual[-1]["year"] if annual else None
+
+    return JSONResponse({
+        "target": {"low_lb": WEIGHT_TARGET_LOW_LB, "high_lb": WEIGHT_TARGET_HIGH_LB},
+        "first_year": annual[0]["year"] if annual else None,
+        "latest_year": latest_year,
+        "annual": rows_to_json(annual),
     })

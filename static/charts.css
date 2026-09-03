@@ -55,6 +55,45 @@
     line-height: 1.2;
 }
 
+.weight-chart-mode-control,
+.weight-chart-monthly-controls {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.weight-chart-mode-control {
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    overflow: hidden;
+}
+
+.weight-chart-mode-button {
+    border: 0;
+    border-right: 1px solid var(--line);
+    background: transparent;
+    color: var(--muted);
+    cursor: pointer;
+    font: inherit;
+    font-size: 0.78rem;
+    line-height: 1.2;
+    padding: 4px 8px;
+}
+
+.weight-chart-mode-button:last-child {
+    border-right: 0;
+}
+
+.weight-chart-mode-button[aria-pressed="true"] {
+    background: var(--blue);
+    color: #fff;
+}
+
+.weight-chart-mode-button:focus-visible {
+    outline: 2px solid var(--blue);
+    outline-offset: -2px;
+}
+
 .weight-chart-year-label {
     color: var(--muted);
     font-size: 0.78rem;

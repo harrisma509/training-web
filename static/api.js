@@ -220,6 +220,10 @@
       return fetchJson(`/api/charts/weight${suffix ? `?${suffix}` : ""}`);
     },
 
+    async fetchAnnualWeightChart() {
+      return fetchJson("/api/charts/weight/annual");
+    },
+
     async fetchWeeklyAuditItems(weekStart) {
       return fetchJson(`/api/weekly-audit/${encodeURIComponent(weekStart)}/items`);
     },
