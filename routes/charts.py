@@ -46,13 +46,23 @@ def api_weight_chart(year: int | None = None):
         group by 1
         order by 1
     """
+    year_sql = """
+        select distinct extract(year from date) as year
+        from health_weight
+        where weight_lb is not null
+        order by year desc
+    """
 
     with db_conn() as conn:
         with conn.cursor() as cur:
+            cur.execute(year_sql)
+            available_year_rows = cur.fetchall()
             cur.execute(daily_sql, (year_start, next_year_start))
             daily_rows = cur.fetchall()
             cur.execute(monthly_sql, (year_start, next_year_start))
             monthly_rows = cur.fetchall()
+
+    available_years = [int(row["year"]) for row in available_year_rows]
 
     if not daily_rows:
         return JSONResponse({
@@ -62,6 +72,7 @@ def api_weight_chart(year: int | None = None):
             "latest": None,
             "monthly": [],
             "daily": [],
+            "available_years": available_years,
         })
 
     through_date = daily_rows[-1]["date"]
@@ -81,4 +92,5 @@ def api_weight_chart(year: int | None = None):
         "latest": rows_to_json([daily_rows[-1]])[0],
         "monthly": rows_to_json(monthly),
         "daily": rows_to_json(daily_rows),
+        "available_years": available_years,
     })

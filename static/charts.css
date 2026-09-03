@@ -44,15 +44,32 @@
 
 .weight-chart-title-group {
     display: flex;
-    align-items: baseline;
+    align-items: center;
     gap: 8px;
     min-width: 0;
-    flex-wrap: nowrap;
+    flex-wrap: wrap;
 }
 
 .weight-chart-header h3 {
     font-size: 1.05rem;
     line-height: 1.2;
+}
+
+.weight-chart-year-label {
+    color: var(--muted);
+    font-size: 0.78rem;
+    margin-left: 8px;
+}
+
+.weight-chart-year-select {
+    min-width: 92px;
+    padding: 4px 8px;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    background: var(--panel-alt, var(--panel));
+    color: var(--text);
+    font: inherit;
+    font-size: 0.82rem;
 }
 
 .weight-chart-meta,

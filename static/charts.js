@@ -1,5 +1,6 @@
 (function () {
     let weightChart = null;
+    const WEIGHT_YEAR_KEY = "trainingWeightChartYear";
 
     function getElements() {
         return {
@@ -9,6 +10,7 @@
             meta: document.getElementById("weightChartMeta"),
             latest: document.getElementById("weightChartLatest"),
             legend: document.getElementById("weightChartLegend"),
+            yearSelect: document.getElementById("weightChartYearSelect"),
         };
     }
 
@@ -68,6 +70,36 @@
             Array.isArray(payload.daily) && Array.isArray(payload.monthly);
     }
 
+    function getLegendVisibilityState() {
+        try {
+            return JSON.parse(sessionStorage.getItem("trainingWeightChartLegendState") || "{}");
+        } catch (error) {
+            return {};
+        }
+    }
+
+    function setLegendVisibilityState(chart) {
+        const state = {};
+        chart.data.datasets.forEach((dataset, index) => {
+            state[dataset.label] = Boolean(chart.getDatasetMeta(index).hidden);
+        });
+        sessionStorage.setItem("trainingWeightChartLegendState", JSON.stringify(state));
+    }
+
+    function applyLegendVisibilityState(chart) {
+        const state = getLegendVisibilityState();
+        if (!chart || !chart.data || !Array.isArray(chart.data.datasets)) {
+            return;
+        }
+
+        chart.data.datasets.forEach((dataset, index) => {
+            const meta = chart.getDatasetMeta(index);
+            if (Object.prototype.hasOwnProperty.call(state, dataset.label)) {
+                meta.hidden = Boolean(state[dataset.label]);
+            }
+        });
+    }
+
     function updateWeightLegend(chart) {
         const { legend } = getElements();
         if (!legend || !chart) {
@@ -101,6 +133,7 @@
             button.addEventListener("click", () => {
                 const meta = chart.getDatasetMeta(index);
                 meta.hidden = !meta.hidden;
+                setLegendVisibilityState(chart);
                 chart.update();
                 updateWeightLegend(chart);
             });
@@ -108,8 +141,40 @@
         });
     }
 
+    function populateYearSelector(availableYears, selectedYear) {
+        const { yearSelect } = getElements();
+        if (!yearSelect) {
+            return;
+        }
+
+        const normalizedYears = [...new Set((availableYears || []).filter(Number.isFinite))].sort((a, b) => b - a);
+        const fallbackYear = normalizedYears.length ? normalizedYears[0] : Number.isFinite(selectedYear) ? selectedYear : new Date().getFullYear();
+        const resolvedYear = normalizedYears.includes(Number(selectedYear)) ? Number(selectedYear) : fallbackYear;
+
+        yearSelect.innerHTML = "";
+        normalizedYears.forEach((year) => {
+            const option = document.createElement("option");
+            option.value = String(year);
+            option.textContent = String(year);
+            if (year === resolvedYear) {
+                option.selected = true;
+            }
+            yearSelect.appendChild(option);
+        });
+
+        if (!normalizedYears.length) {
+            yearSelect.disabled = true;
+            yearSelect.setAttribute("aria-label", "No weight chart years available");
+            return;
+        }
+
+        yearSelect.disabled = false;
+        yearSelect.setAttribute("aria-label", "Weight chart year");
+        yearSelect.value = String(resolvedYear);
+    }
+
     function renderWeightChart(payload) {
-        const { canvas, canvasWrap, status, meta, latest, legend } = getElements();
+        const { canvas, canvasWrap, status, meta, latest, legend, yearSelect } = getElements();
         if (!window.Chart) {
             setStatus("Weight chart is unavailable because its local chart library did not load.", "is-error");
             return;
@@ -117,6 +182,11 @@
 
         const daily = payload.daily.filter(row => typeof row?.date === "string" && Number.isFinite(Number(row.weight_lb)));
         const monthly = payload.monthly.filter(row => typeof row?.month === "string" && Number.isFinite(Number(row.average_lb)));
+        const availableYears = Array.isArray(payload.available_years) ? payload.available_years.map(Number).filter(Number.isFinite).sort((a, b) => b - a) : [];
+        const activeYear = Number.isInteger(payload.year) ? Number(payload.year) : new Date().getFullYear();
+        const selectedYear = Number.isFinite(activeYear) ? activeYear : new Date().getFullYear();
+        const resolvedYears = availableYears.length ? availableYears : [selectedYear];
+        populateYearSelector(resolvedYears, selectedYear);
         meta.textContent = formatTarget(payload.target);
 
         if (!daily.length || !monthly.length) {
@@ -143,6 +213,10 @@
         canvasWrap.classList.remove("hidden");
         if (legend) {
             legend.innerHTML = "";
+        }
+        if (yearSelect) {
+            yearSelect.value = String(selectedYear);
+            sessionStorage.setItem(WEIGHT_YEAR_KEY, String(selectedYear));
         }
 
         const targetBand = {
@@ -297,17 +371,53 @@
         updateWeightLegend(weightChart);
     }
 
+    let weightChartRequestId = 0;
+
     async function loadCharts() {
+        const { yearSelect } = getElements();
+        const rawSavedYear = sessionStorage.getItem(WEIGHT_YEAR_KEY);
+        const savedYear = rawSavedYear !== null && rawSavedYear !== "" ? Number.parseInt(rawSavedYear, 10) : NaN;
+        const currentYear = new Date().getFullYear();
+        const yearValue = Number.isInteger(savedYear) && savedYear >= 2000 ? savedYear : currentYear;
+        const rawSelectValue = yearSelect && yearSelect.value !== undefined ? String(yearSelect.value).trim() : "";
+        const currentSelectValue = rawSelectValue !== "" ? Number.parseInt(rawSelectValue, 10) : null;
+        const selectedYear = Number.isInteger(currentSelectValue) && currentSelectValue >= 2000 ? currentSelectValue : yearValue;
+        const requestId = ++weightChartRequestId;
+
         setStatus("Loading weight trend...");
         try {
-            const payload = await window.api.fetchWeightChart();
+            const payload = await window.api.fetchWeightChart(selectedYear);
             if (!isValidPayload(payload)) {
                 throw new Error("Unexpected weight chart response.");
             }
-            renderWeightChart(payload);
+            if (requestId !== weightChartRequestId) {
+                return;
+            }
+
+            const availableYears = Array.isArray(payload.available_years) ? payload.available_years.map(Number).filter(Number.isFinite).sort((a, b) => b - a) : [];
+            const defaultYear = availableYears.includes(selectedYear) ? selectedYear : (availableYears.includes(currentYear) ? currentYear : availableYears[0] || selectedYear);
+            sessionStorage.setItem(WEIGHT_YEAR_KEY, String(defaultYear));
+            if (yearSelect) {
+                populateYearSelector(availableYears, defaultYear);
+            }
+            renderWeightChart({ ...payload, year: defaultYear, available_years: availableYears });
         } catch (error) {
+            if (requestId !== weightChartRequestId) {
+                return;
+            }
             setStatus("Weight trend is currently unavailable.", "is-error");
         }
+    }
+
+    const { yearSelect } = getElements();
+    if (yearSelect) {
+        yearSelect.addEventListener("change", () => {
+            const nextYear = Number.parseInt(yearSelect.value, 10);
+            if (Number.isInteger(nextYear) && nextYear >= 2000) {
+                sessionStorage.setItem(WEIGHT_YEAR_KEY, String(nextYear));
+                loadCharts();
+            }
+        });
     }
 
     window.ChartsController = { load: loadCharts, render: renderWeightChart };
