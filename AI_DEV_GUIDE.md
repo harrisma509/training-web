@@ -54,7 +54,7 @@ Typical flow:
 
 ```bash
 ./deploy_to_server.sh
-curl -sS -D - http://harrisserver:8088/api/gear/dashboard?limit=5
+curl -sS -D - http://192.168.1.100:8088/api/gear/dashboard?limit=5
 ```
 
 When a route or app-registration change is made, validate the live endpoint after deployment.

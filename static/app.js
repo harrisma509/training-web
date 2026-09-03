@@ -218,6 +218,10 @@ function showTab(tab) {
     window.loadPlan();
   }
 
+  if (isCharts && window.ChartsController && typeof window.ChartsController.load === "function") {
+    window.ChartsController.load();
+  }
+
   if (isYearly) {
     showYearlyView(state.yearlyView || "annual");
   }

@@ -211,6 +211,15 @@
       return fetchJson("/api/yearly");
     },
 
+    async fetchWeightChart(year) {
+      const params = new URLSearchParams();
+      if (Number.isInteger(year)) {
+        params.set("year", String(year));
+      }
+      const suffix = params.toString();
+      return fetchJson(`/api/charts/weight${suffix ? `?${suffix}` : ""}`);
+    },
+
     async fetchWeeklyAuditItems(weekStart) {
       return fetchJson(`/api/weekly-audit/${encodeURIComponent(weekStart)}/items`);
     },

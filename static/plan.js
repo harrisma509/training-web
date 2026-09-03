@@ -2,6 +2,8 @@
   const DAY_NAMES = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
   const PLAN_LOAD_REQUESTS = { current: 0 };
   const PLAN_WEEK_COLLAPSE_STATE = new Map();
+  const PLAN_EXPANDED_DAY_KEYS = new Set();
+  const PLAN_VISIBLE_ACTIVITY_LIMIT = 5;
   const PLAN_LOAD_GAUGE_CONFIG = Object.freeze({
     maxRatio: 1.5,
     chronicMarkerRatio: 1.0,
@@ -313,6 +315,18 @@
     renderPlanStrip();
   }
 
+  function togglePlanDayActivities(dayKey) {
+    if (!dayKey) {
+      return;
+    }
+    if (PLAN_EXPANDED_DAY_KEYS.has(dayKey)) {
+      PLAN_EXPANDED_DAY_KEYS.delete(dayKey);
+    } else {
+      PLAN_EXPANDED_DAY_KEYS.add(dayKey);
+    }
+    renderPlanStrip();
+  }
+
   function setupPlanToggleHandlers() {
     const strip = document.getElementById("planStrip");
     if (!strip || strip.dataset.planToggleBound === "true") {
@@ -320,15 +334,25 @@
     }
 
     strip.addEventListener("click", (event) => {
-      const button = event.target.closest("[data-plan-week-toggle]");
-      if (!button) {
+      const weekButton = event.target.closest("[data-plan-week-toggle]");
+      if (weekButton) {
+        const weekKey = weekButton.getAttribute("data-plan-week-toggle");
+        if (!weekKey) {
+          return;
+        }
+        togglePlanWeekCollapse(weekKey);
         return;
       }
-      const weekKey = button.getAttribute("data-plan-week-toggle");
-      if (!weekKey) {
+
+      const dayButton = event.target.closest("[data-plan-day-toggle]");
+      if (!dayButton) {
         return;
       }
-      togglePlanWeekCollapse(weekKey);
+      const dayKey = dayButton.getAttribute("data-plan-day-toggle");
+      if (!dayKey) {
+        return;
+      }
+      togglePlanDayActivities(dayKey);
     });
 
     strip.dataset.planToggleBound = "true";
@@ -412,8 +436,25 @@
     });
   }
 
+  function renderPlanSupportToggle(dayKey, dateLabel, hiddenCount, isExpanded) {
+    if (!dayKey || hiddenCount <= 0) {
+      return "";
+    }
+
+    const buttonText = isExpanded ? "Show less" : `+${hiddenCount} more`;
+    const noun = hiddenCount === 1 ? "activity" : "activities";
+    const accessibleLabel = isExpanded
+      ? `Show fewer activities for ${dateLabel}`
+      : `Show ${hiddenCount} more ${noun} for ${dateLabel}`;
+
+    return `<button type="button" class="plan-support-toggle" data-plan-day-toggle="${escapeHtml(dayKey)}" aria-expanded="${isExpanded ? "true" : "false"}" aria-label="${escapeHtml(accessibleLabel)}">${escapeHtml(buttonText)}</button>`;
+  }
+
   function renderPlanDayCell(date, row, isWeekCollapsed) {
     const label = formatPlanDay(date);
+    const dayKey = toLocalDateKey(date);
+    const isDayExpanded = PLAN_EXPANDED_DAY_KEYS.has(dayKey);
+    const formattedDateLabel = [label.weekday, label.month, label.date].filter(Boolean).join(" ").trim() || "this day";
     const mainRideName = row?.main_ride_name == null ? "" : String(row.main_ride_name).trim();
     const mainRideTime = row?.main_ride_time == null ? "" : String(row.main_ride_time).trim();
     const loadDisplay = formatPlanHeaderLoad(row?.total_load);
@@ -424,6 +465,7 @@
     const hasMainRide = Boolean(mainRideName);
     const hasStructuredSupport = structuredItems.length > 0;
     const hasSupport = supportNames.length > 0;
+    const supportVisibleLimit = Math.max(0, PLAN_VISIBLE_ACTIVITY_LIMIT - 1);
 
     let bodyHtml = "";
     if (!hasRow) {
@@ -434,32 +476,33 @@
         bodyHtml += `<div class="plan-metric">${escapeHtml(mainRideTime)}</div>`;
       }
       if (hasSupport) {
-        const visibleSupport = structuredItems.slice(0, 2).length > 0 ? structuredItems.slice(0, 2) : supportNames.slice(0, 2).map((name) => ({ name, activity_category: "", sport_type: "" }));
+        const supportItems = structuredItems.length > 0 ? structuredItems : supportNames.map((name) => ({ name, activity_category: "", sport_type: "" }));
+        const visibleSupport = isDayExpanded ? supportItems : supportItems.slice(0, supportVisibleLimit);
         const supportHtml = visibleSupport.map((item) => `<div class="plan-support-name">${renderActivityWithIcon(item.name, item.sport_type, item.activity_category)}</div>`).join("");
-        const remainingAfterVisible = Math.max(0, Math.max(structuredItems.length, supportNames.length) - visibleSupport.length);
-        bodyHtml += `<div class="plan-support-list">${supportHtml}${remainingAfterVisible > 0 ? `<div class="plan-support-more">+${remainingAfterVisible} more</div>` : ""}</div>`;
+        const hiddenCount = Math.max(0, supportItems.length + 1 - PLAN_VISIBLE_ACTIVITY_LIMIT);
+        bodyHtml += `<div class="plan-support-list">${supportHtml}${hiddenCount > 0 ? renderPlanSupportToggle(dayKey, formattedDateLabel, hiddenCount, isDayExpanded) : ""}</div>`;
       }
     } else if (hasStructuredSupport) {
       const primaryItem = structuredItems[0];
       const remainingSupport = structuredItems.slice(1);
-      const visibleSupport = remainingSupport.slice(0, 2);
-      const remainingAfterVisible = Math.max(0, remainingSupport.length - visibleSupport.length);
+      const visibleSupport = isDayExpanded ? remainingSupport : remainingSupport.slice(0, supportVisibleLimit);
+      const hiddenCount = Math.max(0, remainingSupport.length + 1 - PLAN_VISIBLE_ACTIVITY_LIMIT);
 
       bodyHtml += `<div class="plan-primary-name">${renderActivityWithIcon(primaryItem.name, primaryItem.sport_type, primaryItem.activity_category)}</div>`;
-      if (visibleSupport.length > 0 || remainingAfterVisible > 0) {
+      if (visibleSupport.length > 0 || hiddenCount > 0) {
         const supportHtml = visibleSupport.map((item) => `<div class="plan-support-name">${renderActivityWithIcon(item.name, item.sport_type, item.activity_category)}</div>`).join("");
-        bodyHtml += `<div class="plan-support-list">${supportHtml}${remainingAfterVisible > 0 ? `<div class="plan-support-more">+${remainingAfterVisible} more</div>` : ""}</div>`;
+        bodyHtml += `<div class="plan-support-list">${supportHtml}${hiddenCount > 0 ? renderPlanSupportToggle(dayKey, formattedDateLabel, hiddenCount, isDayExpanded) : ""}</div>`;
       }
     } else if (hasSupport) {
       const primaryName = supportNames[0];
       const remainingSupport = supportNames.slice(1);
-      const visibleSupport = remainingSupport.slice(0, 2);
-      const remainingAfterVisible = Math.max(0, remainingSupport.length - visibleSupport.length);
+      const visibleSupport = isDayExpanded ? remainingSupport : remainingSupport.slice(0, supportVisibleLimit);
+      const hiddenCount = Math.max(0, remainingSupport.length + 1 - PLAN_VISIBLE_ACTIVITY_LIMIT);
 
       bodyHtml += `<div class="plan-primary-name">${renderActivityWithIcon(primaryName, "", "")}</div>`;
-      if (visibleSupport.length > 0 || remainingAfterVisible > 0) {
+      if (visibleSupport.length > 0 || hiddenCount > 0) {
         const supportHtml = visibleSupport.map((name) => `<div class="plan-support-name">${renderActivityWithIcon(name, "", "")}</div>`).join("");
-        bodyHtml += `<div class="plan-support-list">${supportHtml}${remainingAfterVisible > 0 ? `<div class="plan-support-more">+${remainingAfterVisible} more</div>` : ""}</div>`;
+        bodyHtml += `<div class="plan-support-list">${supportHtml}${hiddenCount > 0 ? renderPlanSupportToggle(dayKey, formattedDateLabel, hiddenCount, isDayExpanded) : ""}</div>`;
       }
     } else {
       bodyHtml = '<div class="plan-empty-state">No activity details</div>';

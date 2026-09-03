@@ -306,13 +306,25 @@
     </section>
 
     <section id="chartsPane" class="hidden">
-      <div class="placeholder-panel charts-panel">
-        <h2 class="placeholder-title">Training Trends</h2>
-        <p class="placeholder-lead">Explore training, health, and performance trends over time.</p>
-        <p class="placeholder-body">Analyze load, hours, distance, elevation, weight, recovery, and intensity across
-          selectable time periods. Use historical patterns to understand the current state and direction of training.
-        </p>
-        <div class="placeholder-status">Training charts are coming soon.</div>
+      <div class="charts-shell">
+        <div class="charts-heading-row">
+          <h2 class="charts-title">Training Trends</h2>
+          <p class="charts-subtitle">Weight measurements and monthly trend for the current year.</p>
+        </div>
+        <section class="weight-chart-card" aria-labelledby="weightChartTitle">
+          <div class="weight-chart-header">
+            <div class="weight-chart-title-group">
+              <h3 id="weightChartTitle">Weight Trend</h3>
+              <div id="weightChartMeta" class="weight-chart-meta">Target range loading...</div>
+            </div>
+            <div id="weightChartLegend" class="weight-chart-legend" aria-label="Weight chart legend"></div>
+            <div id="weightChartLatest" class="weight-chart-latest"></div>
+          </div>
+          <div id="weightChartStatus" class="weight-chart-status" aria-live="polite">Loading weight trend...</div>
+          <div id="weightChartCanvasWrap" class="weight-chart-canvas-wrap hidden">
+            <canvas id="weightChartCanvas" aria-label="Weight trend chart"></canvas>
+          </div>
+        </section>
       </div>
     </section>
 
@@ -431,6 +443,7 @@
   <script src="/static/plan.js"></script>
   <script src="/static/goals.js"></script>
   <script src="/static/kpis.js"></script>
+  <script src="/static/vendor/chart.umd.min.js"></script>
   <script src="/static/charts.js"></script>
   <script src="/static/app.js"></script>
 </body>

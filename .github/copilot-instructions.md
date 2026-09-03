@@ -25,7 +25,7 @@ Do not change database schema from this repo unless explicitly requested.
 ## Runtime
 
 - The app runs in Docker on HarrisServer.
-- Live app: `http://harrisserver:8088`
+- Live app: `http://192.168.1.100:8088`
 - Local `.venv` may not have runtime dependencies.
 - Local `py_compile` is syntax-only.
 - Real validation must happen against the HarrisServer runtime.
@@ -43,7 +43,7 @@ After deploy, validate live endpoints with `curl`.
 Example:
 
 ```bash
-curl -sS -D - http://harrisserver:8088/api/gear/dashboard?limit=5
+curl -sS -D - http://192.168.1.100:8088/api/gear/dashboard?limit=5
 ```
 
 ## Safety rules
@@ -103,7 +103,7 @@ For backend changes:
 
 For frontend changes:
 
-1. Deploy to HarrisServer.
+1. Deploy to `http://192.168.1.100:8088` HarrisServer.
 2. Hard refresh browser with `Cmd+Shift+R`.
 3. Confirm changed tab loads.
 4. Confirm Daily, Weekly, Zones, Sync still work.
