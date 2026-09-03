@@ -54,6 +54,32 @@
         return Number.isNaN(parsed.getTime()) ? value : parsed.toLocaleDateString(undefined, { month: "short", year: "numeric" });
     }
 
+    function getCalendarDatesForMonths(monthly) {
+        const monthKeys = monthly
+            .map(row => row.month)
+            .filter(month => typeof month === "string" && /^\d{4}-\d{2}$/.test(month))
+            .sort();
+        if (!monthKeys.length) {
+            return [];
+        }
+
+        const [firstYear, firstMonth] = monthKeys[0].split("-").map(Number);
+        const [lastYear, lastMonth] = monthKeys[monthKeys.length - 1].split("-").map(Number);
+        const current = new Date(firstYear, firstMonth - 1, 1);
+        const end = new Date(lastYear, lastMonth, 0);
+        const dates = [];
+
+        while (current <= end) {
+            const year = current.getFullYear();
+            const month = String(current.getMonth() + 1).padStart(2, "0");
+            const day = String(current.getDate()).padStart(2, "0");
+            dates.push(`${year}-${month}-${day}`);
+            current.setDate(current.getDate() + 1);
+        }
+
+        return dates;
+    }
+
     function getThemeColors() {
         const styles = getComputedStyle(document.documentElement);
         return {
@@ -214,17 +240,13 @@
             };
         });
 
-        const monthlyEndpointSet = new Set(
-            monthlyAverageRows
-                .map(row => row.endpointDate)
-                .filter(date => typeof date === "string" && date.length >= 10)
-        );
+        const monthStartSet = new Set(monthly.map(row => (
+            typeof row.month_start === "string" && /^\d{4}-\d{2}-\d{2}$/.test(row.month_start)
+                ? row.month_start
+                : `${row.month}-01`
+        )));
 
-        const dailyDateSet = new Set(daily.map(row => row.date));
-        const labels = [...new Set([
-            ...daily.map(row => row.date),
-            ...[...monthlyEndpointSet].filter(date => !dailyDateSet.has(date)),
-        ])].sort();
+        const labels = getCalendarDatesForMonths(monthly);
 
         const weights = daily.map(row => Number(row.weight_lb)).concat(monthlyAverageRows.map(row => Number(row.average_lb)), Number(target.low_lb), Number(target.high_lb));
         const minimum = Math.min(...weights);
@@ -263,6 +285,11 @@
             const parsed = new Date(`${value}T12:00:00`);
             return Number.isNaN(parsed.getTime()) ? "" : parsed.toLocaleDateString(undefined, { month: "short" });
         };
+
+        const monthLabelByDate = new Map(monthly.map(row => {
+            const midpointDate = `${row.month}-15`;
+            return [midpointDate, monthLabelFromDate(midpointDate)];
+        }));
 
         weightChart = new window.Chart(canvas, {
             type: "scatter",
@@ -333,16 +360,13 @@
                             autoSkip: false,
                             callback(value) {
                                 const label = this.getLabelForValue(value);
-                                if (typeof label !== "string" || !monthlyEndpointSet.has(label)) {
-                                    return "";
-                                }
-                                return monthLabelFromDate(label);
+                                return typeof label === "string" ? monthLabelByDate.get(label) || "" : "";
                             },
                         },
                         grid: {
                             color(context) {
                                 const label = context.scale.getLabelForValue(context.tick.value);
-                                return typeof label === "string" && monthlyEndpointSet.has(label) ? colors.line : "rgba(0, 0, 0, 0)";
+                                return typeof label === "string" && monthStartSet.has(label) ? colors.line : "rgba(0, 0, 0, 0)";
                             },
                             drawBorder: false,
                             drawTicks: false,
