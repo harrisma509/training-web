@@ -48,13 +48,13 @@
             return;
         }
         if (value > 0) {
-            element.textContent = "↑";
+            element.textContent = "▲";
             element.classList.add("is-up");
         } else if (value < 0) {
-            element.textContent = "↓";
+            element.textContent = "▼";
             element.classList.add("is-down");
         } else {
-            element.textContent = "−";
+            element.textContent = "━";
             element.classList.add("is-flat");
         }
     }
