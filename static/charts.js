@@ -25,6 +25,9 @@
             fitnessFatigueChange7: document.getElementById("fitnessFatigueChange7"),
             fitnessFatigueChange28: document.getElementById("fitnessFatigueChange28"),
             fitnessFatigueChange90: document.getElementById("fitnessFatigueChange90"),
+            fitnessFatigueDirection7: document.getElementById("fitnessFatigueDirection7"),
+            fitnessFatigueDirection28: document.getElementById("fitnessFatigueDirection28"),
+            fitnessFatigueDirection90: document.getElementById("fitnessFatigueDirection90"),
             fitnessFatigueMeta: document.getElementById("fitnessFatigueMeta"),
         };
     }
@@ -36,6 +39,24 @@
         }
         const rounded = Math.round(numeric);
         return signed && rounded > 0 ? `+${rounded}` : String(rounded);
+    }
+
+    function setFitnessFatigueDirection(element, value) {
+        element.classList.remove("is-up", "is-down", "is-flat");
+        element.textContent = "";
+        if (!Number.isFinite(value)) {
+            return;
+        }
+        if (value > 0) {
+            element.textContent = "↑";
+            element.classList.add("is-up");
+        } else if (value < 0) {
+            element.textContent = "↓";
+            element.classList.add("is-down");
+        } else {
+            element.textContent = "−";
+            element.classList.add("is-flat");
+        }
     }
 
     function formatFitnessFatigueDate(value) {
@@ -60,6 +81,7 @@
         const { fitnessFatigueStatus, fitnessFatigueContent,
             fitnessFatigueFitness, fitnessFatigueFatigue, fitnessFatigueForm,
             fitnessFatigueChange7, fitnessFatigueChange28, fitnessFatigueChange90,
+            fitnessFatigueDirection7, fitnessFatigueDirection28, fitnessFatigueDirection90,
             fitnessFatigueMeta } = getElements();
 
         if (!payload || !payload.current || !payload.model || !payload.coverage) {
@@ -78,6 +100,9 @@
         fitnessFatigueChange7.textContent = formatWholeValue(change.days_7, true);
         fitnessFatigueChange28.textContent = formatWholeValue(change.days_28, true);
         fitnessFatigueChange90.textContent = formatWholeValue(change.days_90, true);
+        setFitnessFatigueDirection(fitnessFatigueDirection7, change.days_7);
+        setFitnessFatigueDirection(fitnessFatigueDirection28, change.days_28);
+        setFitnessFatigueDirection(fitnessFatigueDirection90, change.days_90);
         fitnessFatigueChange7.title = change.days_7 === null ? "7-day Fitness change not available" : `7-day Fitness change ${change.days_7}`;
         fitnessFatigueChange28.title = change.days_28 === null ? "28-day Fitness change not available" : `28-day Fitness change ${change.days_28}`;
         fitnessFatigueChange90.title = change.days_90 === null ? "90-day Fitness change not available" : `90-day Fitness change ${change.days_90}`;
