@@ -65,6 +65,180 @@
     font-size: 0.82rem;
 }
 
+.fitness-fatigue-card {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 18px;
+    max-width: 960px;
+}
+
+.fitness-fatigue-header h3 {
+    margin: 0;
+    color: var(--text);
+    font-size: 1.05rem;
+}
+
+.fitness-fatigue-subtitle,
+.fitness-fatigue-detail,
+.fitness-fatigue-section-description,
+.fitness-fatigue-meta,
+.fitness-fatigue-note {
+    color: var(--muted);
+}
+
+.fitness-fatigue-subtitle {
+    font-size: 0.9rem;
+    margin: 5px 0 0;
+}
+
+.fitness-fatigue-section {
+    margin-top: 5px;
+}
+
+.fitness-fatigue-section-heading {
+    color: var(--text);
+    font-size: 0.86rem;
+    font-weight: 600;
+    margin-bottom: 9px;
+}
+
+.fitness-fatigue-values {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 12px;
+}
+
+.fitness-fatigue-value {
+    background: var(--panel-alt, var(--panel2));
+    border: 1px solid var(--line);
+    border-left: 3px solid var(--blue);
+    border-radius: 7px;
+    min-width: 0;
+    padding: 12px 14px;
+}
+
+.fitness-fatigue-value.fatigue {
+    border-left-color: #f59e0b;
+}
+
+.fitness-fatigue-value.form {
+    border-left-color: #2dd4bf;
+}
+
+.fitness-fatigue-label,
+.fitness-fatigue-detail {
+    display: block;
+}
+
+.fitness-fatigue-label {
+    color: var(--text);
+    font-size: 0.83rem;
+    font-weight: 600;
+}
+
+.fitness-fatigue-number {
+    display: block;
+    color: var(--text);
+    font-size: 2.2rem;
+    font-weight: 700;
+    line-height: 1.15;
+    margin: 5px 0 4px;
+}
+
+.fitness-fatigue-detail,
+.fitness-fatigue-meta,
+.fitness-fatigue-note {
+    font-size: 0.83rem;
+}
+
+.fitness-fatigue-trends {
+    border-top: 1px solid var(--line);
+    margin-top: 18px;
+    padding-top: 16px;
+}
+
+.fitness-fatigue-section-description {
+    font-size: 0.83rem;
+    margin: -4px 0 10px;
+}
+
+.fitness-fatigue-change-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 12px;
+}
+
+.fitness-fatigue-change-item {
+    background: var(--panel-alt, var(--panel2));
+    border: 1px solid var(--line);
+    border-radius: 7px;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 2px;
+    color: var(--blue);
+    font-size: 1.5rem;
+    padding: 10px 12px;
+}
+
+.fitness-fatigue-change-item strong {
+    color: var(--text);
+    font-size: 1.2rem;
+    font-weight: 600;
+}
+
+.fitness-fatigue-change-item small {
+    color: var(--muted);
+    font-size: 0.8rem;
+}
+
+.fitness-fatigue-meta {
+    border-top: 1px solid var(--line);
+    margin-top: 14px;
+    padding-top: 12px;
+}
+
+.fitness-fatigue-note {
+    color: var(--text);
+    margin: 10px 0 0;
+}
+
+.fitness-fatigue-status {
+    min-height: 160px;
+    display: grid;
+    place-items: center;
+    color: var(--muted);
+    text-align: center;
+}
+
+.fitness-fatigue-status.is-error {
+    color: var(--red);
+}
+
+@media (max-width: 640px) {
+    .fitness-fatigue-card {
+        padding: 14px;
+    }
+
+    .fitness-fatigue-values {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .fitness-fatigue-value.form {
+        grid-column: span 2;
+    }
+
+    .fitness-fatigue-change-grid {
+        gap: 10px;
+    }
+}
+
+@media (max-width: 420px) {
+    .fitness-fatigue-change-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
 .charts-heading-row {
     margin-bottom: 16px;
 }

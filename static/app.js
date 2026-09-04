@@ -227,8 +227,13 @@ function showChartsCategory(category) {
     }
   });
 
-  if (nextCategory === "health" && window.ChartsController && typeof window.ChartsController.load === "function") {
-    window.ChartsController.load();
+  if (window.ChartsController) {
+    if (nextCategory === "load" && typeof window.ChartsController.loadFitnessFatigue === "function") {
+      window.ChartsController.loadFitnessFatigue();
+    }
+    if (nextCategory === "health" && typeof window.ChartsController.load === "function") {
+      window.ChartsController.load();
+    }
   }
 }
 

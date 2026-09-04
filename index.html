@@ -309,7 +309,7 @@
       <div class="charts-shell">
         <div class="charts-category-tabs" role="tablist" aria-label="Charts categories">
           <button id="chartsLoadTab" class="charts-category-tab active" type="button" role="tab" aria-selected="true"
-            aria-controls="chartsLoadPanel" data-charts-category="load">Load</button>
+            aria-controls="chartsLoadPanel" data-charts-category="load">Fitness</button>
           <button id="chartsHealthTab" class="charts-category-tab" type="button" role="tab" aria-selected="false"
             aria-controls="chartsHealthPanel" data-charts-category="health">Health</button>
           <button id="chartsVolumeTab" class="charts-category-tab" type="button" role="tab" aria-selected="false"
@@ -317,53 +317,90 @@
         </div>
 
         <div id="chartsLoadPanel" class="charts-category-panel" role="tabpanel" aria-labelledby="chartsLoadTab">
-          <div class="charts-placeholder-panel">
-            <h3>Load Analysis</h3>
-            <p>Compare training load across weeks, months, and years, and explore total, ride, and other-activity load
-              trends over time.</p>
-            <div class="charts-placeholder-status">Load charts are coming soon.</div>
-          </div>
-        </div>
-
-        <div id="chartsHealthPanel" class="charts-category-panel hidden" role="tabpanel"
-          aria-labelledby="chartsHealthTab">
-          <section class="weight-chart-card" aria-labelledby="weightChartTitle">
-            <div class="weight-chart-header">
-              <div class="weight-chart-title-group">
-                <h3 id="weightChartTitle">Weight Trend</h3>
-                <div class="weight-chart-mode-control" aria-label="Weight trend display mode">
-                  <button id="weightChartMonthlyMode" class="weight-chart-mode-button" type="button"
-                    aria-pressed="true">Monthly</button>
-                  <button id="weightChartAnnualMode" class="weight-chart-mode-button" type="button"
-                    aria-pressed="false">Annual</button>
+          <section class="fitness-fatigue-card" aria-labelledby="fitnessFatigueTitle">
+            <div id="fitnessFatigueStatus" class="fitness-fatigue-status" aria-live="polite">Loading fitness and
+              freshness...</div>
+            <div id="fitnessFatigueContent" class="hidden">
+              <div class="fitness-fatigue-section">
+                <div class="fitness-fatigue-values" aria-label="Current Fitness, Fatigue, and Form">
+                  <div class="fitness-fatigue-value fitness">
+                    <span class="fitness-fatigue-label">Fitness</span>
+                    <strong id="fitnessFatigueFitness" class="fitness-fatigue-number"></strong>
+                    <span class="fitness-fatigue-detail">42-day load</span>
+                  </div>
+                  <div class="fitness-fatigue-value fatigue">
+                    <span class="fitness-fatigue-label">Fatigue</span>
+                    <strong id="fitnessFatigueFatigue" class="fitness-fatigue-number"></strong>
+                    <span class="fitness-fatigue-detail">7-day load</span>
+                  </div>
+                  <div class="fitness-fatigue-value form">
+                    <span class="fitness-fatigue-label">Form</span>
+                    <strong id="fitnessFatigueForm" class="fitness-fatigue-number"></strong>
+                    <span class="fitness-fatigue-detail">Start of day</span>
+                  </div>
                 </div>
-                <div id="weightChartMonthlyControls" class="weight-chart-monthly-controls">
-                  <label class="weight-chart-year-label" for="weightChartYearSelect">Weight chart year</label>
-                  <select id="weightChartYearSelect" class="weight-chart-year-select"
-                    aria-label="Weight chart year"></select>
-                </div>
-                <div id="weightChartMeta" class="weight-chart-meta">Target range loading...</div>
               </div>
-              <div id="weightChartLegend" class="weight-chart-legend" aria-label="Weight chart legend"></div>
-              <div id="weightChartLatest" class="weight-chart-latest"></div>
+              <div class="fitness-fatigue-trends">
+                <div class="fitness-fatigue-section-heading">Fitness change</div>
+                <div class="fitness-fatigue-change-grid">
+                  <div class="fitness-fatigue-change-item">
+                    <span>7 days</span>
+                    <strong id="fitnessFatigueChange7"></strong>
+                  </div>
+                  <div class="fitness-fatigue-change-item">
+                    <span>28 days</span>
+                    <strong id="fitnessFatigueChange28"></strong>
+                  </div>
+                  <div class="fitness-fatigue-change-item">
+                    <span>90 days</span>
+                    <strong id="fitnessFatigueChange90"></strong>
+                  </div>
+                </div>
+              </div>
+              <div id="fitnessFatigueMeta" class="fitness-fatigue-meta"></div>
+              <p class="fitness-fatigue-note">Training-load model, not a complete readiness score.</p>
             </div>
-            <div id="weightChartStatus" class="weight-chart-status" aria-live="polite">Loading weight trend...</div>
-            <div id="weightChartCanvasWrap" class="weight-chart-canvas-wrap hidden">
-              <canvas id="weightChartCanvas" aria-label="Weight trend chart"></canvas>
-            </div>
-          </section>
         </div>
+    </section>
+    </div>
 
-        <div id="chartsVolumePanel" class="charts-category-panel hidden" role="tabpanel"
-          aria-labelledby="chartsVolumeTab">
-          <div class="charts-placeholder-panel">
-            <h3>Training Volume</h3>
-            <p>Explore monthly and annual training hours, cycling miles, and elevation trends across available years.
-            </p>
-            <div class="charts-placeholder-status">Volume charts are coming soon.</div>
+    <div id="chartsHealthPanel" class="charts-category-panel hidden" role="tabpanel" aria-labelledby="chartsHealthTab">
+      <section class="weight-chart-card" aria-labelledby="weightChartTitle">
+        <div class="weight-chart-header">
+          <div class="weight-chart-title-group">
+            <h3 id="weightChartTitle">Weight Trend</h3>
+            <div class="weight-chart-mode-control" aria-label="Weight trend display mode">
+              <button id="weightChartMonthlyMode" class="weight-chart-mode-button" type="button"
+                aria-pressed="true">Monthly</button>
+              <button id="weightChartAnnualMode" class="weight-chart-mode-button" type="button"
+                aria-pressed="false">Annual</button>
+            </div>
+            <div id="weightChartMonthlyControls" class="weight-chart-monthly-controls">
+              <label class="weight-chart-year-label" for="weightChartYearSelect">Weight chart year</label>
+              <select id="weightChartYearSelect" class="weight-chart-year-select"
+                aria-label="Weight chart year"></select>
+            </div>
+            <div id="weightChartMeta" class="weight-chart-meta">Target range loading...</div>
           </div>
+          <div id="weightChartLegend" class="weight-chart-legend" aria-label="Weight chart legend"></div>
+          <div id="weightChartLatest" class="weight-chart-latest"></div>
         </div>
+        <div id="weightChartStatus" class="weight-chart-status" aria-live="polite">Loading weight trend...</div>
+        <div id="weightChartCanvasWrap" class="weight-chart-canvas-wrap hidden">
+          <canvas id="weightChartCanvas" aria-label="Weight trend chart"></canvas>
+        </div>
+      </section>
+    </div>
+
+    <div id="chartsVolumePanel" class="charts-category-panel hidden" role="tabpanel" aria-labelledby="chartsVolumeTab">
+      <div class="charts-placeholder-panel">
+        <h3>Training Volume</h3>
+        <p>Explore monthly and annual training hours, cycling miles, and elevation trends across available years.
+        </p>
+        <div class="charts-placeholder-status">Volume charts are coming soon.</div>
       </div>
+    </div>
+    </div>
     </section>
 
     <section id="dailyPane">

@@ -1,5 +1,7 @@
 (function () {
     let weightChart = null;
+    let fitnessFatigueRequestId = 0;
+    let fitnessFatigueLoaded = false;
     const WEIGHT_YEAR_KEY = "trainingWeightChartYear";
     const WEIGHT_MODE_KEY = "trainingWeightChartMode";
 
@@ -15,7 +17,95 @@
             monthlyControls: document.getElementById("weightChartMonthlyControls"),
             monthlyModeButton: document.getElementById("weightChartMonthlyMode"),
             annualModeButton: document.getElementById("weightChartAnnualMode"),
+            fitnessFatigueStatus: document.getElementById("fitnessFatigueStatus"),
+            fitnessFatigueContent: document.getElementById("fitnessFatigueContent"),
+            fitnessFatigueFitness: document.getElementById("fitnessFatigueFitness"),
+            fitnessFatigueFatigue: document.getElementById("fitnessFatigueFatigue"),
+            fitnessFatigueForm: document.getElementById("fitnessFatigueForm"),
+            fitnessFatigueChange7: document.getElementById("fitnessFatigueChange7"),
+            fitnessFatigueChange28: document.getElementById("fitnessFatigueChange28"),
+            fitnessFatigueChange90: document.getElementById("fitnessFatigueChange90"),
+            fitnessFatigueMeta: document.getElementById("fitnessFatigueMeta"),
         };
+    }
+
+    function formatWholeValue(value, signed = false) {
+        const numeric = Number(value);
+        if (!Number.isFinite(numeric)) {
+            return "Not available";
+        }
+        const rounded = Math.round(numeric);
+        return signed && rounded > 0 ? `+${rounded}` : String(rounded);
+    }
+
+    function formatFitnessFatigueDate(value) {
+        if (typeof value !== "string") {
+            return "Not available";
+        }
+        const parsed = new Date(`${value}T12:00:00`);
+        return Number.isNaN(parsed.getTime())
+            ? value
+            : parsed.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
+    }
+
+    function setFitnessFatigueStatus(message, state = "") {
+        const { fitnessFatigueStatus, fitnessFatigueContent } = getElements();
+        fitnessFatigueContent.classList.add("hidden");
+        fitnessFatigueStatus.textContent = message;
+        fitnessFatigueStatus.className = `fitness-fatigue-status ${state}`.trim();
+        fitnessFatigueStatus.classList.remove("hidden");
+    }
+
+    function renderFitnessFatigueSummary(payload) {
+        const { fitnessFatigueStatus, fitnessFatigueContent,
+            fitnessFatigueFitness, fitnessFatigueFatigue, fitnessFatigueForm,
+            fitnessFatigueChange7, fitnessFatigueChange28, fitnessFatigueChange90,
+            fitnessFatigueMeta } = getElements();
+
+        if (!payload || !payload.current || !payload.model || !payload.coverage) {
+            setFitnessFatigueStatus("Fitness and freshness data are not available yet.", "is-empty");
+            return;
+        }
+
+        const current = payload.current;
+        const change = payload.fitness_change || {};
+        fitnessFatigueFitness.textContent = formatWholeValue(current.fitness);
+        fitnessFatigueFitness.title = `Fitness ${current.fitness}`;
+        fitnessFatigueFatigue.textContent = formatWholeValue(current.fatigue);
+        fitnessFatigueFatigue.title = `Fatigue ${current.fatigue}`;
+        fitnessFatigueForm.textContent = formatWholeValue(current.form, true);
+        fitnessFatigueForm.title = `Form ${current.form}`;
+        fitnessFatigueChange7.textContent = formatWholeValue(change.days_7, true);
+        fitnessFatigueChange28.textContent = formatWholeValue(change.days_28, true);
+        fitnessFatigueChange90.textContent = formatWholeValue(change.days_90, true);
+        fitnessFatigueChange7.title = change.days_7 === null ? "7-day Fitness change not available" : `7-day Fitness change ${change.days_7}`;
+        fitnessFatigueChange28.title = change.days_28 === null ? "28-day Fitness change not available" : `28-day Fitness change ${change.days_28}`;
+        fitnessFatigueChange90.title = change.days_90 === null ? "90-day Fitness change not available" : `90-day Fitness change ${change.days_90}`;
+        fitnessFatigueMeta.textContent = `Model ${payload.model.version} · Daily load through ${formatFitnessFatigueDate(payload.coverage.through_date)}`;
+        fitnessFatigueStatus.classList.add("hidden");
+        fitnessFatigueContent.classList.remove("hidden");
+    }
+
+    async function loadFitnessFatigue() {
+        if (fitnessFatigueLoaded) {
+            return;
+        }
+
+        const requestId = ++fitnessFatigueRequestId;
+        setFitnessFatigueStatus("Loading fitness and freshness...", "is-loading");
+        try {
+            const payload = await window.api.getFitnessFatigueSummary();
+            if (requestId !== fitnessFatigueRequestId) {
+                return;
+            }
+            renderFitnessFatigueSummary(payload);
+            fitnessFatigueLoaded = true;
+        } catch (error) {
+            if (requestId !== fitnessFatigueRequestId) {
+                return;
+            }
+            setFitnessFatigueStatus("Fitness and freshness are currently unavailable.", "is-error");
+        }
     }
 
     function destroyWeightChart() {
@@ -638,7 +728,11 @@
     }
 
     setWeightChartMode(getWeightChartMode());
-    window.ChartsController = { load: loadCharts, render: renderWeightChart };
+    window.ChartsController = {
+        load: loadCharts,
+        loadFitnessFatigue,
+        render: renderWeightChart,
+    };
 
     new MutationObserver(() => {
         if (weightChart) {

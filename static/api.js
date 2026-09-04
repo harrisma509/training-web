@@ -224,6 +224,10 @@
       return fetchJson("/api/charts/weight/annual");
     },
 
+    async getFitnessFatigueSummary() {
+      return fetchJson("/api/charts/load/fitness-fatigue");
+    },
+
     async fetchWeeklyAuditItems(weekStart) {
       return fetchJson(`/api/weekly-audit/${encodeURIComponent(weekStart)}/items`);
     },

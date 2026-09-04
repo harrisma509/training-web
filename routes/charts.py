@@ -14,6 +14,14 @@ router = APIRouter()
 MIN_CHART_YEAR = 2000
 MAX_CHART_YEAR = 2100
 
+FITNESS_FATIGUE_METADATA = {
+    "version": "v1",
+    "fitness_days": 42,
+    "fatigue_days": 7,
+    "form_timing": "start_of_day",
+    "timezone": "America/Denver",
+}
+
 
 def _is_partial_month(month_start: date, through_date: date) -> bool:
     month_end = date(month_start.year, month_start.month, calendar.monthrange(month_start.year, month_start.month)[1])
@@ -25,6 +33,119 @@ def _is_partial_year(year: int, first_date: date, last_date: date) -> bool:
         return True
 
     return first_date > date(year, 1, 14) or last_date < date(year, 12, 17)
+
+
+@router.get("/api/charts/load/fitness-fatigue")
+def api_fitness_fatigue_summary():
+    summary_sql = """
+        WITH latest AS (
+            SELECT
+                "date",
+                daily_load,
+                fitness,
+                fatigue,
+                form,
+                model_version
+            FROM public.daily_fitness_fatigue
+            ORDER BY "date" DESC
+            LIMIT 1
+        ), coverage AS (
+            SELECT
+                MIN("date") AS first_date,
+                MAX("date") AS last_date,
+                COUNT(*) AS row_count
+            FROM public.daily_fitness_fatigue
+        )
+        SELECT
+            latest."date",
+            latest.daily_load,
+            latest.fitness,
+            latest.fatigue,
+            latest.form,
+            latest.model_version,
+            coverage.first_date,
+            coverage.last_date,
+            coverage.row_count,
+            seven.fitness AS fitness_7_days,
+            twenty_eight.fitness AS fitness_28_days,
+            ninety.fitness AS fitness_90_days
+        FROM latest
+        CROSS JOIN coverage
+        LEFT JOIN LATERAL (
+            SELECT fitness
+            FROM public.daily_fitness_fatigue
+            WHERE "date" <= latest."date" - INTERVAL '7 days'
+            ORDER BY "date" DESC
+            LIMIT 1
+        ) seven ON TRUE
+        LEFT JOIN LATERAL (
+            SELECT fitness
+            FROM public.daily_fitness_fatigue
+            WHERE "date" <= latest."date" - INTERVAL '28 days'
+            ORDER BY "date" DESC
+            LIMIT 1
+        ) twenty_eight ON TRUE
+        LEFT JOIN LATERAL (
+            SELECT fitness
+            FROM public.daily_fitness_fatigue
+            WHERE "date" <= latest."date" - INTERVAL '90 days'
+            ORDER BY "date" DESC
+            LIMIT 1
+        ) ninety ON TRUE
+    """
+
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(summary_sql)
+            row = cur.fetchone()
+
+    if not row:
+        return JSONResponse({
+            "current": None,
+            "fitness_change": {"days_7": None, "days_28": None, "days_90": None},
+            "model": FITNESS_FATIGUE_METADATA,
+            "coverage": None,
+            "warmup": {
+                "first_date": "2025-01-01",
+                "last_date": "2025-02-11",
+                "days": 42,
+            },
+        })
+
+    current = {
+        "date": row["date"],
+        "daily_load": row["daily_load"],
+        "fitness": row["fitness"],
+        "fatigue": row["fatigue"],
+        "form": row["form"],
+    }
+    changes = {
+        "days_7": difference(row["fitness"], row["fitness_7_days"]),
+        "days_28": difference(row["fitness"], row["fitness_28_days"]),
+        "days_90": difference(row["fitness"], row["fitness_90_days"]),
+    }
+
+    return JSONResponse({
+        "current": rows_to_json([current])[0],
+        "fitness_change": changes,
+        "model": FITNESS_FATIGUE_METADATA,
+        "coverage": {
+            "first_date": row["first_date"].isoformat(),
+            "through_date": row["last_date"].isoformat(),
+            "row_count": row["row_count"],
+        },
+        "warmup": {
+            "first_date": "2025-01-01",
+            "last_date": "2025-02-11",
+            "days": 42,
+        },
+    })
+
+
+def difference(latest, reference):
+    if latest is None or reference is None:
+        return None
+    return round(float(latest - reference), 2)
 
 
 @router.get("/api/charts/weight")
