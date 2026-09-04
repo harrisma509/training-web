@@ -22,6 +22,10 @@ FITNESS_FATIGUE_METADATA = {
     "timezone": "America/Denver",
 }
 
+FITNESS_FATIGUE_RANGES = {"3m", "6m", "1y", "2025"}
+FITNESS_FATIGUE_WARMUP_FIRST_DATE = date(2025, 1, 1)
+FITNESS_FATIGUE_WARMUP_LAST_DATE = date(2025, 2, 11)
+
 
 def _is_partial_month(month_start: date, through_date: date) -> bool:
     month_end = date(month_start.year, month_start.month, calendar.monthrange(month_start.year, month_start.month)[1])
@@ -33,6 +37,23 @@ def _is_partial_year(year: int, first_date: date, last_date: date) -> bool:
         return True
 
     return first_date > date(year, 1, 14) or last_date < date(year, 12, 17)
+
+
+def _subtract_calendar_months(value: date, months: int) -> date:
+    total_months = value.year * 12 + value.month - 1 - months
+    year, month_index = divmod(total_months, 12)
+    month = month_index + 1
+    return date(year, month, min(value.day, calendar.monthrange(year, month)[1]))
+
+
+def _fitness_fatigue_range_bounds(selected_range: str, through_date: date) -> tuple[date, date]:
+    if selected_range == "2025":
+        return date(2025, 1, 1), min(through_date, date(2025, 12, 31))
+    if selected_range == "3m":
+        return _subtract_calendar_months(through_date, 3), through_date
+    if selected_range == "1y":
+        return _subtract_calendar_months(through_date, 12), through_date
+    return _subtract_calendar_months(through_date, 6), through_date
 
 
 @router.get("/api/charts/load/fitness-fatigue")
@@ -146,6 +167,64 @@ def difference(latest, reference):
     if latest is None or reference is None:
         return None
     return round(float(latest - reference), 2)
+
+
+@router.get("/api/charts/load/fitness-fatigue/trend")
+def api_fitness_fatigue_trend(range: str = "6m"):
+    selected_range = range.lower()
+    if selected_range not in FITNESS_FATIGUE_RANGES:
+        raise HTTPException(status_code=422, detail="range must be one of: 3m, 6m, 1y, 2025")
+
+    latest_sql = """
+        SELECT MAX("date") AS through_date
+        FROM public.daily_fitness_fatigue
+    """
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(latest_sql)
+            latest_row = cur.fetchone()
+            through_date = latest_row["through_date"] if latest_row else None
+            if not through_date:
+                return JSONResponse({
+                    "range": selected_range,
+                    "series": [],
+                    "chart": {
+                        "first_date": None,
+                        "last_date": None,
+                        "row_count": 0,
+                        "is_warmup_visible": False,
+                        "warmup_first_date": FITNESS_FATIGUE_WARMUP_FIRST_DATE.isoformat(),
+                        "warmup_last_date": FITNESS_FATIGUE_WARMUP_LAST_DATE.isoformat(),
+                    },
+                })
+
+            first_date, last_date = _fitness_fatigue_range_bounds(selected_range, through_date)
+            trend_sql = """
+                SELECT "date", daily_load, fitness, fatigue, form
+                FROM public.daily_fitness_fatigue
+                WHERE "date" >= %s AND "date" <= %s
+                ORDER BY "date" ASC
+            """
+            cur.execute(trend_sql, (first_date, last_date))
+            rows = cur.fetchall()
+
+    first_row_date = rows[0]["date"] if rows else None
+    last_row_date = rows[-1]["date"] if rows else None
+    is_warmup_visible = bool(first_row_date and last_row_date and
+                             first_row_date <= FITNESS_FATIGUE_WARMUP_LAST_DATE and
+                             last_row_date >= FITNESS_FATIGUE_WARMUP_FIRST_DATE)
+    return JSONResponse({
+        "range": selected_range,
+        "series": rows_to_json(rows),
+        "chart": {
+            "first_date": first_row_date.isoformat() if first_row_date else None,
+            "last_date": last_row_date.isoformat() if last_row_date else None,
+            "row_count": len(rows),
+            "is_warmup_visible": is_warmup_visible,
+            "warmup_first_date": FITNESS_FATIGUE_WARMUP_FIRST_DATE.isoformat(),
+            "warmup_last_date": FITNESS_FATIGUE_WARMUP_LAST_DATE.isoformat(),
+        },
+    })
 
 
 @router.get("/api/charts/weight")

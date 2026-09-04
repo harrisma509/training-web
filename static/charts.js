@@ -1,9 +1,16 @@
 (function () {
     let weightChart = null;
+    let fitnessFatigueChart = null;
     let fitnessFatigueRequestId = 0;
+    let fitnessFatigueTrendRequestId = 0;
     let fitnessFatigueLoaded = false;
+    let fitnessFatigueTrendPayload = null;
+    const fitnessFatigueTrendCache = new Map();
     const WEIGHT_YEAR_KEY = "trainingWeightChartYear";
     const WEIGHT_MODE_KEY = "trainingWeightChartMode";
+    const FITNESS_FATIGUE_RANGE_KEY = "trainingFitnessFatigueChartRange";
+    const FITNESS_FATIGUE_LEGEND_KEY = "trainingFitnessFatigueLegendState";
+    const FITNESS_FATIGUE_RANGES = ["3m", "6m", "1y", "2025"];
 
     function getElements() {
         return {
@@ -28,7 +35,11 @@
             fitnessFatigueDirection7: document.getElementById("fitnessFatigueDirection7"),
             fitnessFatigueDirection28: document.getElementById("fitnessFatigueDirection28"),
             fitnessFatigueDirection90: document.getElementById("fitnessFatigueDirection90"),
-            fitnessFatigueMeta: document.getElementById("fitnessFatigueMeta"),
+            fitnessFatigueChartCanvas: document.getElementById("fitnessFatigueChartCanvas"),
+            fitnessFatigueChartCanvasWrap: document.getElementById("fitnessFatigueChartCanvasWrap"),
+            fitnessFatigueChartStatus: document.getElementById("fitnessFatigueChartStatus"),
+            fitnessFatigueChartLegend: document.getElementById("fitnessFatigueChartLegend"),
+            fitnessFatigueRangeButtons: document.querySelectorAll("[data-fitness-fatigue-range]"),
         };
     }
 
@@ -59,16 +70,6 @@
         }
     }
 
-    function formatFitnessFatigueDate(value) {
-        if (typeof value !== "string") {
-            return "Not available";
-        }
-        const parsed = new Date(`${value}T12:00:00`);
-        return Number.isNaN(parsed.getTime())
-            ? value
-            : parsed.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
-    }
-
     function setFitnessFatigueStatus(message, state = "") {
         const { fitnessFatigueStatus, fitnessFatigueContent } = getElements();
         fitnessFatigueContent.classList.add("hidden");
@@ -81,8 +82,7 @@
         const { fitnessFatigueStatus, fitnessFatigueContent,
             fitnessFatigueFitness, fitnessFatigueFatigue, fitnessFatigueForm,
             fitnessFatigueChange7, fitnessFatigueChange28, fitnessFatigueChange90,
-            fitnessFatigueDirection7, fitnessFatigueDirection28, fitnessFatigueDirection90,
-            fitnessFatigueMeta } = getElements();
+            fitnessFatigueDirection7, fitnessFatigueDirection28, fitnessFatigueDirection90 } = getElements();
 
         if (!payload || !payload.current || !payload.model || !payload.coverage) {
             setFitnessFatigueStatus("Fitness and freshness data are not available yet.", "is-empty");
@@ -106,30 +106,274 @@
         fitnessFatigueChange7.title = change.days_7 === null ? "7-day Fitness change not available" : `7-day Fitness change ${change.days_7}`;
         fitnessFatigueChange28.title = change.days_28 === null ? "28-day Fitness change not available" : `28-day Fitness change ${change.days_28}`;
         fitnessFatigueChange90.title = change.days_90 === null ? "90-day Fitness change not available" : `90-day Fitness change ${change.days_90}`;
-        fitnessFatigueMeta.textContent = `Model ${payload.model.version} · Daily load through ${formatFitnessFatigueDate(payload.coverage.through_date)}`;
         fitnessFatigueStatus.classList.add("hidden");
         fitnessFatigueContent.classList.remove("hidden");
     }
 
     async function loadFitnessFatigue() {
-        if (fitnessFatigueLoaded) {
+        if (!fitnessFatigueLoaded) {
+            const requestId = ++fitnessFatigueRequestId;
+            setFitnessFatigueStatus("Loading fitness and freshness...", "is-loading");
+            try {
+                const payload = await window.api.getFitnessFatigueSummary();
+                if (requestId !== fitnessFatigueRequestId) {
+                    return;
+                }
+                renderFitnessFatigueSummary(payload);
+                fitnessFatigueLoaded = true;
+            } catch (error) {
+                if (requestId !== fitnessFatigueRequestId) {
+                    return;
+                }
+                setFitnessFatigueStatus("Fitness and freshness are currently unavailable.", "is-error");
+            }
+        }
+        loadFitnessFatigueTrend();
+    }
+
+    function getFitnessFatigueRange() {
+        const savedRange = sessionStorage.getItem(FITNESS_FATIGUE_RANGE_KEY);
+        return FITNESS_FATIGUE_RANGES.includes(savedRange) ? savedRange : "6m";
+    }
+
+    function setFitnessFatigueRange(range) {
+        const selectedRange = FITNESS_FATIGUE_RANGES.includes(range) ? range : "6m";
+        const { fitnessFatigueRangeButtons } = getElements();
+        sessionStorage.setItem(FITNESS_FATIGUE_RANGE_KEY, selectedRange);
+        fitnessFatigueRangeButtons.forEach((button) => {
+            button.setAttribute("aria-pressed", String(button.dataset.fitnessFatigueRange === selectedRange));
+        });
+        return selectedRange;
+    }
+
+    function destroyFitnessFatigueChart() {
+        const { fitnessFatigueChartCanvas } = getElements();
+        const activeChart = window.Chart?.getChart(fitnessFatigueChartCanvas);
+        if (activeChart) {
+            activeChart.destroy();
+        }
+        fitnessFatigueChart = null;
+    }
+
+    function setFitnessFatigueTrendStatus(message, state = "") {
+        const { fitnessFatigueChartCanvasWrap, fitnessFatigueChartStatus, fitnessFatigueChartLegend } = getElements();
+        destroyFitnessFatigueChart();
+        fitnessFatigueChartStatus.textContent = message;
+        fitnessFatigueChartStatus.className = `fitness-fatigue-chart-status ${state}`.trim();
+        fitnessFatigueChartStatus.classList.remove("hidden");
+        fitnessFatigueChartCanvasWrap.classList.add("hidden");
+        if (fitnessFatigueChartLegend) {
+            fitnessFatigueChartLegend.innerHTML = "";
+        }
+    }
+
+    function getFitnessFatigueLegendState() {
+        try {
+            return JSON.parse(sessionStorage.getItem(FITNESS_FATIGUE_LEGEND_KEY) || "{}");
+        } catch (error) {
+            return {};
+        }
+    }
+
+    function applyFitnessFatigueLegendState(chart) {
+        const state = getFitnessFatigueLegendState();
+        chart.data.datasets.forEach((dataset, index) => {
+            if (Object.prototype.hasOwnProperty.call(state, dataset.label)) {
+                chart.getDatasetMeta(index).hidden = Boolean(state[dataset.label]);
+            }
+        });
+    }
+
+    function updateFitnessFatigueLegend(chart) {
+        const { fitnessFatigueChartLegend } = getElements();
+        if (!chart || !fitnessFatigueChartLegend) {
+            return;
+        }
+        fitnessFatigueChartLegend.innerHTML = "";
+        chart.data.datasets.forEach((dataset, index) => {
+            const hidden = Boolean(chart.getDatasetMeta(index).hidden);
+            const button = document.createElement("button");
+            button.type = "button";
+            button.className = "fitness-fatigue-chart-legend-item";
+            button.setAttribute("aria-label", `Toggle ${dataset.label}`);
+            button.setAttribute("aria-pressed", String(!hidden));
+            button.title = dataset.label;
+            if (hidden) {
+                button.classList.add("is-hidden");
+            }
+            const swatch = document.createElement("span");
+            swatch.className = "fitness-fatigue-chart-legend-swatch";
+            swatch.style.color = dataset.legendColor;
+            const label = document.createElement("span");
+            label.textContent = dataset.label;
+            button.append(swatch, label);
+            button.addEventListener("click", () => {
+                const meta = chart.getDatasetMeta(index);
+                meta.hidden = !meta.hidden;
+                const state = {};
+                chart.data.datasets.forEach((item, itemIndex) => {
+                    state[item.label] = Boolean(chart.getDatasetMeta(itemIndex).hidden);
+                });
+                sessionStorage.setItem(FITNESS_FATIGUE_LEGEND_KEY, JSON.stringify(state));
+                chart.update();
+                updateFitnessFatigueLegend(chart);
+            });
+            fitnessFatigueChartLegend.appendChild(button);
+        });
+    }
+
+    function formatTrendDate(value) {
+        const parsed = new Date(`${value}T12:00:00`);
+        return Number.isNaN(parsed.getTime()) ? value : parsed.toLocaleDateString(undefined, {
+            month: "short", day: "numeric", year: "numeric",
+        });
+    }
+
+    function renderFitnessFatigueTrend(payload) {
+        const { fitnessFatigueChartCanvas, fitnessFatigueChartCanvasWrap, fitnessFatigueChartStatus } = getElements();
+        if (!window.Chart) {
+            setFitnessFatigueTrendStatus("Fitness, Fatigue, and Form trend is currently unavailable.", "is-error");
+            return;
+        }
+        const series = Array.isArray(payload?.series) ? payload.series.filter(row => (
+            typeof row?.date === "string" && Number.isFinite(Number(row.fitness)) &&
+            Number.isFinite(Number(row.fatigue)) && Number.isFinite(Number(row.form))
+        )) : [];
+        if (!series.length) {
+            setFitnessFatigueTrendStatus("No Fitness, Fatigue, and Form history is available for this period.", "is-empty");
             return;
         }
 
-        const requestId = ++fitnessFatigueRequestId;
-        setFitnessFatigueStatus("Loading fitness and freshness...", "is-loading");
+        destroyFitnessFatigueChart();
+        const colors = getThemeColors();
+        const labels = series.map(row => row.date);
+        const chartMeta = payload.chart || {};
+        const monthStarts = new Set(labels.filter(value => value.slice(-2) === "01"));
+        const zeroReference = {
+            id: "fitnessFatigueZeroReference",
+            afterDraw(chart) {
+                const { ctx, chartArea, scales } = chart;
+                const zeroY = scales.model.getPixelForValue(0);
+                if (zeroY < chartArea.top || zeroY > chartArea.bottom) {
+                    return;
+                }
+                ctx.save();
+                ctx.strokeStyle = colors.muted;
+                ctx.lineWidth = 1;
+                ctx.setLineDash([5, 4]);
+                ctx.beginPath();
+                ctx.moveTo(chartArea.left, zeroY);
+                ctx.lineTo(chartArea.right, zeroY);
+                ctx.stroke();
+                ctx.restore();
+            },
+        };
+        const warmupShade = {
+            id: "fitnessFatigueWarmupShade",
+            beforeDatasetsDraw(chart) {
+                if (!chartMeta.is_warmup_visible) {
+                    return;
+                }
+                const firstIndex = labels.findIndex(value => value >= chartMeta.warmup_first_date);
+                const lastIndex = labels.findLastIndex(value => value <= chartMeta.warmup_last_date);
+                if (firstIndex < 0 || lastIndex < firstIndex) {
+                    return;
+                }
+                const { ctx, chartArea, scales } = chart;
+                const firstX = Math.max(chartArea.left, scales.x.getPixelForValue(firstIndex) - 4);
+                const lastX = Math.min(chartArea.right, scales.x.getPixelForValue(lastIndex) + 4);
+                ctx.save();
+                ctx.fillStyle = "rgba(245, 158, 11, 0.12)";
+                ctx.fillRect(firstX, chartArea.top, lastX - firstX, chartArea.bottom - chartArea.top);
+                ctx.fillStyle = colors.muted;
+                ctx.font = "11px sans-serif";
+                ctx.fillText("Model warm-up", firstX + 5, chartArea.top + 14);
+                ctx.restore();
+            },
+        };
+
+        fitnessFatigueChartStatus.classList.add("hidden");
+        fitnessFatigueChartCanvasWrap.classList.remove("hidden");
+        fitnessFatigueChart = new window.Chart(fitnessFatigueChartCanvas, {
+            type: "bar",
+            data: {
+                labels,
+                datasets: [
+                    { label: "Daily Load", data: series.map(row => Number(row.daily_load) || 0), yAxisID: "load", backgroundColor: "rgba(148, 163, 184, 0.32)", borderWidth: 0, legendColor: "#94a3b8", order: 4 },
+                    { label: "Fitness", type: "line", data: series.map(row => Number(row.fitness)), yAxisID: "model", borderColor: colors.blue, backgroundColor: colors.blue, borderWidth: 3, pointRadius: 0, pointHoverRadius: 4, tension: 0.25, legendColor: colors.blue, order: 1 },
+                    { label: "Fatigue", type: "line", data: series.map(row => Number(row.fatigue)), yAxisID: "model", borderColor: "#f59e0b", backgroundColor: "#f59e0b", borderWidth: 2.5, pointRadius: 0, pointHoverRadius: 4, tension: 0.22, legendColor: "#f59e0b", order: 2 },
+                    { label: "Form", type: "line", data: series.map(row => Number(row.form)), yAxisID: "model", borderColor: "#2dd4bf", backgroundColor: "#2dd4bf", borderWidth: 2, pointRadius: 0, pointHoverRadius: 4, tension: 0.18, legendColor: "#2dd4bf", order: 3 },
+                ],
+            },
+            plugins: [warmupShade, zeroReference],
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                interaction: { mode: "index", intersect: false },
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        callbacks: {
+                            title(items) { return formatTrendDate(labels[items[0].dataIndex]); },
+                            label(context) {
+                                const value = Number(context.parsed.y);
+                                return context.dataset.label === "Daily Load"
+                                    ? `Daily Load: ${Math.round(value)}`
+                                    : `${context.dataset.label}: ${value.toFixed(2)}`;
+                            },
+                            afterBody() { return "Form is start-of-day; Fitness and Fatigue include that day’s load."; },
+                        },
+                    },
+                },
+                scales: {
+                    x: {
+                        ticks: {
+                            color: colors.muted, maxRotation: 0, autoSkip: false, callback(value) {
+                                const label = this.getLabelForValue(value);
+                                if (typeof label !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(label)) {
+                                    return "";
+                                }
+                                if (payload.range === "3m") {
+                                    return Number(value) % 14 === 0
+                                        ? new Date(`${label}T12:00:00`).toLocaleDateString(undefined, { month: "short", day: "numeric" }) : "";
+                                }
+                                return Number(value) === 0 || label.slice(-2) === "01"
+                                    ? new Date(`${label}T12:00:00`).toLocaleDateString(undefined, { month: "short", day: Number(value) === 0 ? "numeric" : undefined }) : "";
+                            }
+                        },
+                        grid: { color(context) { const label = context.tick ? context.scale.getLabelForValue(context.tick.value) : ""; return monthStarts.has(label) ? colors.line : "rgba(0, 0, 0, 0)"; }, drawBorder: false, drawTicks: false },
+                    },
+                    model: { position: "left", title: { display: true, text: "Fitness / Fatigue / Form", color: colors.text }, ticks: { color: colors.muted, precision: 0 }, grid: { color: colors.line } },
+                    load: { position: "right", beginAtZero: true, title: { display: true, text: "Daily Load", color: colors.text }, ticks: { color: colors.muted, precision: 0 }, grid: { drawOnChartArea: false, drawBorder: false } },
+                },
+            },
+        });
+        applyFitnessFatigueLegendState(fitnessFatigueChart);
+        fitnessFatigueChart.update();
+        updateFitnessFatigueLegend(fitnessFatigueChart);
+    }
+
+    async function loadFitnessFatigueTrend(force = false) {
+        const selectedRange = getFitnessFatigueRange();
+        if (!force && fitnessFatigueTrendCache.has(selectedRange)) {
+            fitnessFatigueTrendPayload = fitnessFatigueTrendCache.get(selectedRange);
+            renderFitnessFatigueTrend(fitnessFatigueTrendPayload);
+            return;
+        }
+        const requestId = ++fitnessFatigueTrendRequestId;
+        setFitnessFatigueTrendStatus("Loading Fitness, Fatigue & Form trend...", "is-loading");
         try {
-            const payload = await window.api.getFitnessFatigueSummary();
-            if (requestId !== fitnessFatigueRequestId) {
+            const payload = await window.api.getFitnessFatigueTrend(selectedRange);
+            if (requestId !== fitnessFatigueTrendRequestId || getFitnessFatigueRange() !== selectedRange) {
                 return;
             }
-            renderFitnessFatigueSummary(payload);
-            fitnessFatigueLoaded = true;
+            fitnessFatigueTrendCache.set(selectedRange, payload);
+            fitnessFatigueTrendPayload = payload;
+            renderFitnessFatigueTrend(payload);
         } catch (error) {
-            if (requestId !== fitnessFatigueRequestId) {
-                return;
+            if (requestId === fitnessFatigueTrendRequestId) {
+                setFitnessFatigueTrendStatus("Fitness, Fatigue, and Form trend is currently unavailable.", "is-error");
             }
-            setFitnessFatigueStatus("Fitness and freshness are currently unavailable.", "is-error");
         }
     }
 
@@ -752,7 +996,19 @@
         });
     }
 
+    const { fitnessFatigueRangeButtons } = getElements();
+    fitnessFatigueRangeButtons.forEach((button) => {
+        button.addEventListener("click", () => {
+            const nextRange = button.dataset.fitnessFatigueRange;
+            if (FITNESS_FATIGUE_RANGES.includes(nextRange) && nextRange !== getFitnessFatigueRange()) {
+                setFitnessFatigueRange(nextRange);
+                loadFitnessFatigueTrend();
+            }
+        });
+    });
+
     setWeightChartMode(getWeightChartMode());
+    setFitnessFatigueRange(getFitnessFatigueRange());
     window.ChartsController = {
         load: loadCharts,
         loadFitnessFatigue,
@@ -762,6 +1018,9 @@
     new MutationObserver(() => {
         if (weightChart) {
             loadCharts();
+        }
+        if (fitnessFatigueChart && fitnessFatigueTrendPayload) {
+            renderFitnessFatigueTrend(fitnessFatigueTrendPayload);
         }
     }).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
 })();

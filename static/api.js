@@ -228,6 +228,10 @@
       return fetchJson("/api/charts/load/fitness-fatigue");
     },
 
+    async getFitnessFatigueTrend(range) {
+      return fetchJson(`/api/charts/load/fitness-fatigue/trend?range=${encodeURIComponent(range)}`);
+    },
+
     async fetchWeeklyAuditItems(weekStart) {
       return fetchJson(`/api/weekly-audit/${encodeURIComponent(weekStart)}/items`);
     },
