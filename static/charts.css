@@ -349,6 +349,90 @@
     color: var(--red);
 }
 
+.weekly-load-chart-card {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    max-width: 960px;
+    padding: 18px;
+}
+
+.weekly-load-chart-header,
+.weekly-load-chart-controls {
+    align-items: center;
+    display: flex;
+    flex-wrap: wrap;
+}
+
+.weekly-load-chart-header {
+    gap: 12px;
+    justify-content: space-between;
+}
+
+.weekly-load-chart-header h3 {
+    color: var(--text);
+    font-size: 1.05rem;
+    margin: 0;
+}
+
+.weekly-load-chart-controls {
+    gap: 8px;
+}
+
+.weekly-load-control {
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    display: inline-flex;
+    overflow: hidden;
+}
+
+.weekly-load-range-button,
+.weekly-load-metric-button {
+    background: transparent;
+    border: 0;
+    border-right: 1px solid var(--line);
+    color: var(--muted);
+    cursor: pointer;
+    font: inherit;
+    font-size: 0.78rem;
+    line-height: 1.2;
+    padding: 4px 8px;
+}
+
+.weekly-load-range-button:last-child,
+.weekly-load-metric-button:last-child {
+    border-right: 0;
+}
+
+.weekly-load-range-button[aria-pressed="true"],
+.weekly-load-metric-button[aria-pressed="true"] {
+    background: var(--blue);
+    color: #fff;
+}
+
+.weekly-load-range-button:focus-visible,
+.weekly-load-metric-button:focus-visible {
+    outline: 2px solid var(--blue);
+    outline-offset: 2px;
+}
+
+.weekly-load-chart-canvas-wrap {
+    height: 390px;
+    position: relative;
+}
+
+.weekly-load-chart-status {
+    color: var(--muted);
+    display: grid;
+    min-height: 160px;
+    place-items: center;
+    text-align: center;
+}
+
+.weekly-load-chart-status.is-error {
+    color: var(--red);
+}
+
 @media (max-width: 640px) {
     .fitness-fatigue-card {
         padding: 14px;
@@ -381,6 +465,19 @@
 
     .fitness-fatigue-chart-canvas-wrap {
         height: 330px;
+    }
+
+    .weekly-load-chart-card {
+        padding: 14px;
+    }
+
+    .weekly-load-chart-header {
+        align-items: flex-start;
+        flex-direction: column;
+    }
+
+    .weekly-load-chart-canvas-wrap {
+        height: 320px;
     }
 }
 

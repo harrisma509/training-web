@@ -235,6 +235,9 @@ function showChartsCategory(category) {
     if (nextCategory === "fitness" && typeof window.ChartsController.loadFitnessFatigue === "function") {
       window.ChartsController.loadFitnessFatigue();
     }
+    if (nextCategory === "load" && typeof window.ChartsController.loadWeeklyLoad === "function") {
+      window.ChartsController.loadWeeklyLoad();
+    }
     if (nextCategory === "health" && typeof window.ChartsController.load === "function") {
       window.ChartsController.load();
     }

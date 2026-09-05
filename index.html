@@ -398,12 +398,34 @@
         </div>
 
         <div id="chartsLoadPanel" class="charts-category-panel hidden" role="tabpanel" aria-labelledby="chartsLoadTab">
-          <div class="charts-placeholder-panel">
-            <h3>Load Analysis</h3>
-            <p>Explore weekly training load, load trends, load comparisons, Acute/Chronic load relationships, and ramp
-              history.</p>
-            <div class="charts-placeholder-status">Load analytics are coming soon.</div>
-          </div>
+          <section class="weekly-load-chart-card" aria-labelledby="weeklyLoadChartTitle">
+            <div class="weekly-load-chart-header">
+              <h3 id="weeklyLoadChartTitle">Weekly Load Trend</h3>
+              <div class="weekly-load-chart-controls">
+                <div class="weekly-load-control" aria-label="Weekly load range">
+                  <button class="weekly-load-range-button" type="button" data-weekly-load-range="12w"
+                    aria-pressed="false">12W</button>
+                  <button class="weekly-load-range-button" type="button" data-weekly-load-range="26w"
+                    aria-pressed="true">26W</button>
+                  <button class="weekly-load-range-button" type="button" data-weekly-load-range="52w"
+                    aria-pressed="false">52W</button>
+                </div>
+                <div class="weekly-load-control" aria-label="Weekly load metric">
+                  <button class="weekly-load-metric-button" type="button" data-weekly-load-metric="total"
+                    aria-pressed="true">Total</button>
+                  <button class="weekly-load-metric-button" type="button" data-weekly-load-metric="ride"
+                    aria-pressed="false">Ride</button>
+                  <button class="weekly-load-metric-button" type="button" data-weekly-load-metric="other"
+                    aria-pressed="false">Other</button>
+                </div>
+              </div>
+            </div>
+            <div id="weeklyLoadChartStatus" class="weekly-load-chart-status" aria-live="polite">Loading weekly load
+              trend...</div>
+            <div id="weeklyLoadChartCanvasWrap" class="weekly-load-chart-canvas-wrap hidden">
+              <canvas id="weeklyLoadChartCanvas" aria-label="Weekly training load trend chart"></canvas>
+            </div>
+          </section>
         </div>
 
         <div id="chartsHealthPanel" class="charts-category-panel hidden" role="tabpanel"

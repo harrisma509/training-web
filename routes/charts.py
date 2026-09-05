@@ -1,7 +1,7 @@
 """Read-only chart data endpoints for the Charts tab."""
 
 import calendar
-from datetime import date
+from datetime import date, timedelta
 
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import JSONResponse
@@ -25,6 +25,12 @@ FITNESS_FATIGUE_METADATA = {
 FITNESS_FATIGUE_RANGES = {"3m", "6m", "1y", "2025"}
 FITNESS_FATIGUE_WARMUP_FIRST_DATE = date(2025, 1, 1)
 FITNESS_FATIGUE_WARMUP_LAST_DATE = date(2025, 2, 11)
+WEEKLY_LOAD_RANGES = {"12w": 12, "26w": 26, "52w": 52}
+WEEKLY_LOAD_METRICS = {
+    "total": "total_load",
+    "ride": "main_ride_load",
+    "other": "other_load",
+}
 
 
 def _is_partial_month(month_start: date, through_date: date) -> bool:
@@ -167,6 +173,44 @@ def difference(latest, reference):
     if latest is None or reference is None:
         return None
     return round(float(latest - reference), 2)
+
+
+@router.get("/api/charts/load/weekly")
+def api_weekly_load_chart(range: str = "26w", metric: str = "total"):
+    selected_range = range.lower()
+    selected_metric = metric.lower()
+    if selected_range not in WEEKLY_LOAD_RANGES:
+        raise HTTPException(status_code=422, detail="range must be one of: 12w, 26w, 52w")
+    if selected_metric not in WEEKLY_LOAD_METRICS:
+        raise HTTPException(status_code=422, detail="metric must be one of: total, ride, other")
+
+    load_column = WEEKLY_LOAD_METRICS[selected_metric]
+    weekly_load_sql = f"""
+        SELECT week_start, {load_column} AS load
+        FROM (
+            SELECT week_start, {load_column}
+            FROM public.weekly_training
+            WHERE {load_column} IS NOT NULL
+            ORDER BY week_start DESC
+            LIMIT %s
+        ) recent_weeks
+        ORDER BY week_start ASC
+    """
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(weekly_load_sql, (WEEKLY_LOAD_RANGES[selected_range],))
+            rows = cur.fetchall()
+
+    current_week_start = date.today() - timedelta(days=date.today().weekday())
+    series = rows_to_json(rows)
+    for row in series:
+        row["is_partial"] = row.get("week_start") == current_week_start.isoformat()
+
+    return JSONResponse({
+        "range": selected_range,
+        "metric": selected_metric,
+        "series": series,
+    })
 
 
 @router.get("/api/charts/load/fitness-fatigue/trend")

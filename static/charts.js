@@ -1,16 +1,23 @@
 (function () {
     let weightChart = null;
     let fitnessFatigueChart = null;
+    let weeklyLoadChart = null;
     let fitnessFatigueRequestId = 0;
     let fitnessFatigueTrendRequestId = 0;
+    let weeklyLoadRequestId = 0;
     let fitnessFatigueLoaded = false;
     let fitnessFatigueTrendPayload = null;
     const fitnessFatigueTrendCache = new Map();
+    const weeklyLoadCache = new Map();
     const WEIGHT_YEAR_KEY = "trainingWeightChartYear";
     const WEIGHT_MODE_KEY = "trainingWeightChartMode";
     const FITNESS_FATIGUE_RANGE_KEY = "trainingFitnessFatigueChartRange";
     const FITNESS_FATIGUE_LEGEND_KEY = "trainingFitnessFatigueLegendState";
+    const WEEKLY_LOAD_RANGE_KEY = "trainingWeeklyLoadChartRange";
+    const WEEKLY_LOAD_METRIC_KEY = "trainingWeeklyLoadChartMetric";
     const FITNESS_FATIGUE_RANGES = ["3m", "6m", "1y", "2025"];
+    const WEEKLY_LOAD_RANGES = ["12w", "26w", "52w"];
+    const WEEKLY_LOAD_METRICS = ["total", "ride", "other"];
 
     function getElements() {
         return {
@@ -40,6 +47,11 @@
             fitnessFatigueChartStatus: document.getElementById("fitnessFatigueChartStatus"),
             fitnessFatigueChartLegend: document.getElementById("fitnessFatigueChartLegend"),
             fitnessFatigueRangeButtons: document.querySelectorAll("[data-fitness-fatigue-range]"),
+            weeklyLoadChartCanvas: document.getElementById("weeklyLoadChartCanvas"),
+            weeklyLoadChartCanvasWrap: document.getElementById("weeklyLoadChartCanvasWrap"),
+            weeklyLoadChartStatus: document.getElementById("weeklyLoadChartStatus"),
+            weeklyLoadRangeButtons: document.querySelectorAll("[data-weekly-load-range]"),
+            weeklyLoadMetricButtons: document.querySelectorAll("[data-weekly-load-metric]"),
         };
     }
 
@@ -227,6 +239,144 @@
         return Number.isNaN(parsed.getTime()) ? value : parsed.toLocaleDateString(undefined, {
             month: "short", day: "numeric", year: "numeric",
         });
+    }
+
+    function getWeeklyLoadRange() {
+        const savedRange = sessionStorage.getItem(WEEKLY_LOAD_RANGE_KEY);
+        return WEEKLY_LOAD_RANGES.includes(savedRange) ? savedRange : "26w";
+    }
+
+    function getWeeklyLoadMetric() {
+        const savedMetric = sessionStorage.getItem(WEEKLY_LOAD_METRIC_KEY);
+        return WEEKLY_LOAD_METRICS.includes(savedMetric) ? savedMetric : "total";
+    }
+
+    function setWeeklyLoadSelection() {
+        const range = getWeeklyLoadRange();
+        const metric = getWeeklyLoadMetric();
+        const { weeklyLoadRangeButtons, weeklyLoadMetricButtons } = getElements();
+        weeklyLoadRangeButtons.forEach(button => button.setAttribute("aria-pressed", String(button.dataset.weeklyLoadRange === range)));
+        weeklyLoadMetricButtons.forEach(button => button.setAttribute("aria-pressed", String(button.dataset.weeklyLoadMetric === metric)));
+        return { range, metric };
+    }
+
+    function destroyWeeklyLoadChart() {
+        const { weeklyLoadChartCanvas } = getElements();
+        const activeChart = window.Chart?.getChart(weeklyLoadChartCanvas);
+        if (activeChart) {
+            activeChart.destroy();
+        }
+        weeklyLoadChart = null;
+    }
+
+    function setWeeklyLoadStatus(message, state = "") {
+        const { weeklyLoadChartCanvasWrap, weeklyLoadChartStatus } = getElements();
+        destroyWeeklyLoadChart();
+        weeklyLoadChartStatus.textContent = message;
+        weeklyLoadChartStatus.className = `weekly-load-chart-status ${state}`.trim();
+        weeklyLoadChartStatus.classList.remove("hidden");
+        weeklyLoadChartCanvasWrap.classList.add("hidden");
+    }
+
+    function formatWeekStart(value) {
+        const parsed = new Date(`${value}T12:00:00`);
+        return Number.isNaN(parsed.getTime()) ? value : `Week of ${parsed.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}`;
+    }
+
+    function withOpacity(color, opacity) {
+        const hex = String(color || "").trim().replace("#", "");
+        if (/^[0-9a-f]{6}$/i.test(hex)) {
+            const red = Number.parseInt(hex.slice(0, 2), 16);
+            const green = Number.parseInt(hex.slice(2, 4), 16);
+            const blue = Number.parseInt(hex.slice(4, 6), 16);
+            return `rgba(${red}, ${green}, ${blue}, ${opacity})`;
+        }
+        return color;
+    }
+
+    function renderWeeklyLoadChart(payload) {
+        const { weeklyLoadChartCanvas, weeklyLoadChartCanvasWrap, weeklyLoadChartStatus } = getElements();
+        if (!window.Chart) {
+            setWeeklyLoadStatus("Weekly load trend is currently unavailable.", "is-error");
+            return;
+        }
+        const series = Array.isArray(payload?.series) ? payload.series.filter(row => (
+            typeof row?.week_start === "string" && Number.isFinite(Number(row.load))
+        )) : [];
+        if (!series.length) {
+            setWeeklyLoadStatus("No weekly load history is available for this period.", "is-empty");
+            return;
+        }
+
+        destroyWeeklyLoadChart();
+        const colors = getThemeColors();
+        const metricColors = { total: colors.blue, ride: "#f59e0b", other: "#2dd4bf" };
+        const selectedColor = metricColors[payload.metric] || colors.blue;
+        weeklyLoadChartStatus.classList.add("hidden");
+        weeklyLoadChartCanvasWrap.classList.remove("hidden");
+        weeklyLoadChart = new window.Chart(weeklyLoadChartCanvas, {
+            type: "bar",
+            data: {
+                labels: series.map(row => row.week_start),
+                datasets: [{
+                    label: "Weekly Load",
+                    data: series.map(row => Number(row.load)),
+                    backgroundColor: series.map(row => row.is_partial ? withOpacity(selectedColor, 0.5) : selectedColor),
+                    borderColor: selectedColor,
+                    borderWidth: 1,
+                    borderDash: series.map(row => row.is_partial ? [5, 3] : []),
+                }],
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        callbacks: {
+                            title(items) { return formatWeekStart(series[items[0].dataIndex].week_start); },
+                            label(context) { return `Load: ${Math.round(context.parsed.y)}`; },
+                            afterBody(items) { return series[items[0].dataIndex].is_partial ? "Status: Partial week" : "Status: Complete week"; },
+                        },
+                    },
+                },
+                scales: {
+                    x: {
+                        ticks: {
+                            color: colors.muted, maxRotation: 0, autoSkip: true, callback(value) {
+                                const label = this.getLabelForValue(value);
+                                return typeof label === "string" ? new Date(`${label}T12:00:00`).toLocaleDateString(undefined, { month: "short", day: "numeric" }) : "";
+                            }
+                        },
+                        grid: { color: "rgba(0, 0, 0, 0)", drawBorder: false, drawTicks: false },
+                    },
+                    y: { beginAtZero: true, title: { display: true, text: "Weekly Load", color: colors.text }, ticks: { color: colors.muted, precision: 0 }, grid: { color: colors.line } },
+                },
+            },
+        });
+    }
+
+    async function loadWeeklyLoad() {
+        const { range, metric } = setWeeklyLoadSelection();
+        const cacheKey = `${range}:${metric}`;
+        if (weeklyLoadCache.has(cacheKey)) {
+            renderWeeklyLoadChart(weeklyLoadCache.get(cacheKey));
+            return;
+        }
+        const requestId = ++weeklyLoadRequestId;
+        setWeeklyLoadStatus("Loading weekly load trend...", "is-loading");
+        try {
+            const payload = await window.api.getWeeklyLoadTrend(range, metric);
+            if (requestId !== weeklyLoadRequestId || getWeeklyLoadRange() !== range || getWeeklyLoadMetric() !== metric) {
+                return;
+            }
+            weeklyLoadCache.set(cacheKey, payload);
+            renderWeeklyLoadChart(payload);
+        } catch (error) {
+            if (requestId === weeklyLoadRequestId) {
+                setWeeklyLoadStatus("Weekly load trend is currently unavailable.", "is-error");
+            }
+        }
     }
 
     function renderFitnessFatigueTrend(payload) {
@@ -1007,11 +1157,33 @@
         });
     });
 
+    const { weeklyLoadRangeButtons, weeklyLoadMetricButtons } = getElements();
+    weeklyLoadRangeButtons.forEach((button) => {
+        button.addEventListener("click", () => {
+            const nextRange = button.dataset.weeklyLoadRange;
+            if (WEEKLY_LOAD_RANGES.includes(nextRange) && nextRange !== getWeeklyLoadRange()) {
+                sessionStorage.setItem(WEEKLY_LOAD_RANGE_KEY, nextRange);
+                loadWeeklyLoad();
+            }
+        });
+    });
+    weeklyLoadMetricButtons.forEach((button) => {
+        button.addEventListener("click", () => {
+            const nextMetric = button.dataset.weeklyLoadMetric;
+            if (WEEKLY_LOAD_METRICS.includes(nextMetric) && nextMetric !== getWeeklyLoadMetric()) {
+                sessionStorage.setItem(WEEKLY_LOAD_METRIC_KEY, nextMetric);
+                loadWeeklyLoad();
+            }
+        });
+    });
+
     setWeightChartMode(getWeightChartMode());
     setFitnessFatigueRange(getFitnessFatigueRange());
+    setWeeklyLoadSelection();
     window.ChartsController = {
         load: loadCharts,
         loadFitnessFatigue,
+        loadWeeklyLoad,
         render: renderWeightChart,
     };
 
@@ -1021,6 +1193,9 @@
         }
         if (fitnessFatigueChart && fitnessFatigueTrendPayload) {
             renderFitnessFatigueTrend(fitnessFatigueTrendPayload);
+        }
+        if (weeklyLoadChart) {
+            loadWeeklyLoad();
         }
     }).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
 })();

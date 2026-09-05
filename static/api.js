@@ -232,6 +232,11 @@
       return fetchJson(`/api/charts/load/fitness-fatigue/trend?range=${encodeURIComponent(range)}`);
     },
 
+    async getWeeklyLoadTrend(range, metric) {
+      const params = new URLSearchParams({ range, metric });
+      return fetchJson(`/api/charts/load/weekly?${params.toString()}`);
+    },
+
     async fetchWeeklyAuditItems(weekStart) {
       return fetchJson(`/api/weekly-audit/${encodeURIComponent(weekStart)}/items`);
     },
