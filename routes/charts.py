@@ -44,10 +44,10 @@ WEEKLY_LOAD_COMMENTARY_FIELDS = {
     "status_override": "Status Override",
 }
 WEEKLY_LOAD_FLAGS = (
-    ("is_injury_week", "⚠", "Injury Week"),
-    ("is_sick_week", "🏥", "Sick Week"),
+    ("is_injury_week", "🤕", "Injury Week"),
+    ("is_sick_week", "😷", "Sick Week"),
     ("is_goal_week", "🎯", "Goal Week"),
-    ("is_bike_park_week", "🚵", "Bike Park Week"),
+    ("is_bike_park_week", "🚀", "Bike Park Week"),
     ("is_travel_week", "✈", "Travel Week"),
     ("is_recovery_week", "↺", "Recovery Week"),
 )
@@ -224,6 +224,7 @@ def api_weekly_load_chart(range: str = "26w", metric: str = "total"):
         SELECT
             wt.week_start,
             wt.{load_column} AS load,
+            wt.chronic_weekly_cw AS chronic,
             daw.training_hours,
             daw.total_distance_mi,
             daw.total_elevation_ft,
@@ -244,7 +245,7 @@ def api_weekly_load_chart(range: str = "26w", metric: str = "total"):
             wc.is_recovery_week,
             wc.is_goal_week
         FROM (
-            SELECT week_start, {load_column}
+            SELECT week_start, {load_column}, chronic_weekly_cw
             FROM public.weekly_training
             WHERE {load_column} IS NOT NULL
             ORDER BY week_start DESC

@@ -409,8 +409,8 @@
                 <strong id="weeklyLoadAverageValue">Not available</strong>
               </div>
               <div class="weekly-load-summary-item">
-                <span>Difference</span>
-                <strong id="weeklyLoadDifferenceValue">Not available</strong>
+                <span>Achievement</span>
+                <strong id="weeklyLoadAchievementValue">Not available</strong>
               </div>
             </div>
             <div class="weekly-load-chart-header">
@@ -439,6 +439,19 @@
               trend...</div>
             <div id="weeklyLoadChartCanvasWrap" class="weekly-load-chart-canvas-wrap hidden">
               <canvas id="weeklyLoadChartCanvas" aria-label="Weekly training load trend chart"></canvas>
+            </div>
+            <div class="weekly-load-target-key" role="group" aria-label="Load versus Chronic key">
+              <h4>Load vs Chronic</h4>
+              <ul>
+                <li><span class="weekly-load-target-swatch is-met" aria-hidden="true"></span>Met / exceeded Chronic
+                  (100%+)</li>
+                <li><span class="weekly-load-target-swatch is-close" aria-hidden="true"></span>Close to Chronic (80-99%)
+                </li>
+                <li><span class="weekly-load-target-swatch is-below" aria-hidden="true"></span>Below Chronic (60-79%)
+                </li>
+                <li><span class="weekly-load-target-swatch is-far" aria-hidden="true"></span>Far below Chronic (&lt;60%)
+                </li>
+              </ul>
             </div>
           </section>
         </div>

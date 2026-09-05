@@ -489,6 +489,61 @@
     color: var(--red);
 }
 
+.weekly-load-target-key {
+    border-top: 1px solid var(--line);
+    color: var(--muted);
+    margin-top: 6px;
+    padding-top: 10px;
+}
+
+.weekly-load-target-key h4 {
+    color: var(--text);
+    font-size: 0.78rem;
+    font-weight: 600;
+    margin: 0 0 7px;
+}
+
+.weekly-load-target-key ul {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px 16px;
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+.weekly-load-target-key li {
+    align-items: center;
+    display: inline-flex;
+    font-size: 0.74rem;
+    gap: 6px;
+}
+
+.weekly-load-target-swatch {
+    background: var(--blue);
+    border-radius: 2px;
+    display: inline-block;
+    flex: 0 0 9px;
+    height: 9px;
+    width: 9px;
+}
+
+.weekly-load-target-swatch.is-met {
+    background: var(--blue);
+}
+
+.weekly-load-target-swatch.is-close {
+    background: #64748b;
+}
+
+.weekly-load-target-swatch.is-below {
+    background: var(--yellow);
+}
+
+.weekly-load-target-swatch.is-far {
+    background: var(--red);
+}
+
 @media (max-width: 640px) {
     .fitness-fatigue-card {
         padding: 14px;

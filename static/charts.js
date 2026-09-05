@@ -53,7 +53,7 @@
             weeklyLoadCurrentLabel: document.getElementById("weeklyLoadCurrentLabel"),
             weeklyLoadCurrentValue: document.getElementById("weeklyLoadCurrentValue"),
             weeklyLoadAverageValue: document.getElementById("weeklyLoadAverageValue"),
-            weeklyLoadDifferenceValue: document.getElementById("weeklyLoadDifferenceValue"),
+            weeklyLoadAchievementValue: document.getElementById("weeklyLoadAchievementValue"),
             weeklyLoadRangeButtons: document.querySelectorAll("[data-weekly-load-range]"),
             weeklyLoadMetricButtons: document.querySelectorAll("[data-weekly-load-metric]"),
         };
@@ -303,8 +303,44 @@
         return Number.isFinite(numeric) ? Math.round(numeric).toLocaleString() : "Not available";
     }
 
-    function getWeeklyLoadTooltipLines(row) {
-        const lines = [];
+    function getWeeklyLoadAchievement(row) {
+        const load = Number(row?.load);
+        const chronic = Number(row?.chronic);
+        return Number.isFinite(load) && Number.isFinite(chronic) && chronic > 0
+            ? (load / chronic) * 100
+            : null;
+    }
+
+    function getWeeklyLoadChronicStatus(achievement) {
+        if (!Number.isFinite(achievement)) {
+            return null;
+        }
+        return achievement >= 100 ? "Met / Exceeded Chronic"
+            : achievement >= 80 ? "Close to Chronic"
+                : achievement >= 60 ? "Below Chronic"
+                    : "Far Below Chronic";
+    }
+
+    function getWeeklyLoadValueLines(row) {
+        const lines = [`Load: ${formatWeeklyLoadValue(row.load)}`];
+        const chronic = Number(row.chronic);
+        const load = Number(row.load);
+        if (Number.isFinite(chronic)) {
+            lines.push(`Chronic: ${formatWeeklyLoadValue(chronic)}`);
+        }
+        if (Number.isFinite(load) && Number.isFinite(chronic)) {
+            lines.push(`Difference: ${formatWholeValue(Math.round(load) - Math.round(chronic), true)}`);
+        }
+        const achievement = getWeeklyLoadAchievement(row);
+        if (Number.isFinite(achievement)) {
+            lines.push(`Achievement: ${Math.round(achievement)}%`);
+        } else {
+            lines.push("Achievement: Not available");
+        }
+        const chronicStatus = getWeeklyLoadChronicStatus(achievement);
+        if (chronicStatus) {
+            lines.push("", "Chronic Status:", chronicStatus);
+        }
         const trainingHours = Number(row.training_hours);
         const totalDistance = Number(row.total_distance_mi);
         const totalElevation = Number(row.total_elevation_ft);
@@ -317,7 +353,11 @@
         if (Number.isFinite(totalElevation)) {
             lines.push(`Ft: ${Math.round(totalElevation).toLocaleString()}`);
         }
-        lines.push("", row.is_partial ? "Status: Partial week" : "Status: Complete week");
+        return lines;
+    }
+
+    function getWeeklyLoadTooltipLines(row) {
+        const lines = ["", row.is_partial ? "Status: Partial week" : "Status: Complete week"];
         const flags = Array.isArray(row.active_flags) ? row.active_flags : [];
         const commentary = row.commentary && typeof row.commentary === "object" ? row.commentary : {};
         if (flags.length) {
@@ -325,13 +365,13 @@
         }
         const commentaryLabels = [
             ["weekly_comment", "Weekly Comment"],
-            ["risk_note", "Risk Note"],
-            ["lesson_learned", "Lesson Learned"],
             ["event", "Event"],
+            ["risk_note", "Risk Note"],
+            ["coach_note", "Coach Note"],
+            ["lesson_learned", "Lesson Learned"],
             ["planned_focus", "Planned Focus"],
             ["actual_focus", "Actual Focus"],
             ["week_type", "Week Type"],
-            ["coach_note", "Coach Note"],
             ["task_note", "Task Note"],
             ["status_override", "Status Override"],
         ];
@@ -344,21 +384,28 @@
         return lines;
     }
 
+    function getWeeklyLoadBarColor(row, colors, fallbackColor) {
+        let color = fallbackColor;
+        const achievement = getWeeklyLoadAchievement(row);
+        if (Number.isFinite(achievement)) {
+            color = achievement >= 100 ? colors.blue
+                : achievement >= 80 ? colors.neutral
+                    : achievement >= 60 ? colors.yellow
+                        : colors.red;
+        }
+        return row.is_partial ? withOpacity(color, 0.5) : color;
+    }
+
     function renderWeeklyLoadSummary(payload) {
-        const { weeklyLoadCurrentLabel, weeklyLoadCurrentValue, weeklyLoadAverageValue, weeklyLoadDifferenceValue } = getElements();
+        const { weeklyLoadCurrentLabel, weeklyLoadCurrentValue, weeklyLoadAverageValue, weeklyLoadAchievementValue } = getElements();
         const latestWeek = payload?.latest_week;
-        const difference = Number(payload?.difference_pct);
+        const achievement = getWeeklyLoadAchievement(latestWeek);
         weeklyLoadCurrentLabel.textContent = latestWeek?.is_partial ? "Current Week (Partial)" : "Current Week";
         weeklyLoadCurrentValue.textContent = formatWeeklyLoadValue(payload?.current_week_load);
         weeklyLoadAverageValue.textContent = formatWeeklyLoadValue(payload?.four_week_average);
-        weeklyLoadDifferenceValue.classList.remove("is-positive", "is-negative", "is-zero");
-        if (!Number.isFinite(difference)) {
-            weeklyLoadDifferenceValue.textContent = "Not available";
-            return;
-        }
-        const roundedDifference = Math.round(difference);
-        weeklyLoadDifferenceValue.textContent = `${roundedDifference > 0 ? "+" : ""}${roundedDifference}%`;
-        weeklyLoadDifferenceValue.classList.add(roundedDifference > 0 ? "is-positive" : roundedDifference < 0 ? "is-negative" : "is-zero");
+        weeklyLoadAchievementValue.textContent = Number.isFinite(achievement)
+            ? `${Math.round(achievement)}%`
+            : "Not available";
     }
 
     function renderWeeklyLoadChart(payload) {
@@ -412,8 +459,8 @@
                 datasets: [{
                     label: "Weekly Load",
                     data: series.map(row => Number(row.load)),
-                    backgroundColor: series.map(row => row.is_partial ? withOpacity(selectedColor, 0.5) : selectedColor),
-                    borderColor: selectedColor,
+                    backgroundColor: series.map(row => getWeeklyLoadBarColor(row, colors, selectedColor)),
+                    borderColor: series.map(row => getWeeklyLoadBarColor(row, colors, selectedColor)),
                     borderWidth: 1,
                     borderDash: series.map(row => row.is_partial ? [5, 3] : []),
                     order: 2,
@@ -442,7 +489,7 @@
                             label(context) {
                                 return context.dataset.label === "4W Average"
                                     ? `4W Average: ${Math.round(context.parsed.y)}`
-                                    : `Load: ${Math.round(context.parsed.y)}`;
+                                    : getWeeklyLoadValueLines(series[context.dataIndex]);
                             },
                             afterBody(items) { return getWeeklyLoadTooltipLines(series[items[0].dataIndex]); },
                         },
@@ -708,6 +755,9 @@
             muted: styles.getPropertyValue("--muted").trim(),
             line: styles.getPropertyValue("--line").trim(),
             blue: styles.getPropertyValue("--blue").trim(),
+            neutral: "#64748b",
+            yellow: styles.getPropertyValue("--yellow").trim(),
+            red: styles.getPropertyValue("--red").trim(),
         };
     }
 
