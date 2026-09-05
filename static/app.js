@@ -58,6 +58,7 @@ const planTab = document.getElementById("planTab");
 const goalsTab = document.getElementById("goalsTab");
 const kpisTab = document.getElementById("kpisTab");
 const chartsTab = document.getElementById("chartsTab");
+const chartsFitnessTab = document.getElementById("chartsFitnessTab");
 const chartsLoadTab = document.getElementById("chartsLoadTab");
 const chartsHealthTab = document.getElementById("chartsHealthTab");
 const chartsVolumeTab = document.getElementById("chartsVolumeTab");
@@ -73,6 +74,7 @@ const planPane = document.getElementById("planPane");
 const goalsPane = document.getElementById("goalsPane");
 const kpisPane = document.getElementById("kpisPane");
 const chartsPane = document.getElementById("chartsPane");
+const chartsFitnessPanel = document.getElementById("chartsFitnessPanel");
 const chartsLoadPanel = document.getElementById("chartsLoadPanel");
 const chartsHealthPanel = document.getElementById("chartsHealthPanel");
 const chartsVolumePanel = document.getElementById("chartsVolumePanel");
@@ -175,7 +177,7 @@ function showYearlyView(view) {
 
 function normalizeChartsCategory(category) {
   const normalized = String(category || "").trim().toLowerCase();
-  return ["load", "health", "volume"].includes(normalized) ? normalized : "load";
+  return ["fitness", "load", "health", "volume"].includes(normalized) ? normalized : "fitness";
 }
 
 function getChartsCategory() {
@@ -200,12 +202,14 @@ function showChartsCategory(category) {
   }
 
   const panels = {
+    fitness: chartsFitnessPanel,
     load: chartsLoadPanel,
     health: chartsHealthPanel,
     volume: chartsVolumePanel,
   };
 
   const tabs = {
+    fitness: chartsFitnessTab,
     load: chartsLoadTab,
     health: chartsHealthTab,
     volume: chartsVolumeTab,
@@ -223,12 +227,12 @@ function showChartsCategory(category) {
       const selected = name === nextCategory;
       tab.classList.toggle("active", selected);
       tab.setAttribute("aria-selected", String(selected));
-      tab.setAttribute("aria-controls", `${name === "load" ? "chartsLoadPanel" : name === "health" ? "chartsHealthPanel" : "chartsVolumePanel"}`);
+      tab.setAttribute("aria-controls", `charts${name[0].toUpperCase()}${name.slice(1)}Panel`);
     }
   });
 
   if (window.ChartsController) {
-    if (nextCategory === "load" && typeof window.ChartsController.loadFitnessFatigue === "function") {
+    if (nextCategory === "fitness" && typeof window.ChartsController.loadFitnessFatigue === "function") {
       window.ChartsController.loadFitnessFatigue();
     }
     if (nextCategory === "health" && typeof window.ChartsController.load === "function") {
@@ -239,6 +243,7 @@ function showChartsCategory(category) {
 
 window.showChartsCategory = showChartsCategory;
 
+chartsFitnessTab?.addEventListener("click", () => showChartsCategory("fitness"));
 chartsLoadTab?.addEventListener("click", () => showChartsCategory("load"));
 chartsHealthTab?.addEventListener("click", () => showChartsCategory("health"));
 chartsVolumeTab?.addEventListener("click", () => showChartsCategory("volume"));

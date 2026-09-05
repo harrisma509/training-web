@@ -308,15 +308,17 @@
     <section id="chartsPane" class="hidden">
       <div class="charts-shell">
         <div class="charts-category-tabs" role="tablist" aria-label="Charts categories">
-          <button id="chartsLoadTab" class="charts-category-tab active" type="button" role="tab" aria-selected="true"
-            aria-controls="chartsLoadPanel" data-charts-category="load">Fitness</button>
+          <button id="chartsFitnessTab" class="charts-category-tab active" type="button" role="tab" aria-selected="true"
+            aria-controls="chartsFitnessPanel" data-charts-category="fitness">Fitness</button>
+          <button id="chartsLoadTab" class="charts-category-tab" type="button" role="tab" aria-selected="false"
+            aria-controls="chartsLoadPanel" data-charts-category="load">Load</button>
           <button id="chartsHealthTab" class="charts-category-tab" type="button" role="tab" aria-selected="false"
             aria-controls="chartsHealthPanel" data-charts-category="health">Health</button>
           <button id="chartsVolumeTab" class="charts-category-tab" type="button" role="tab" aria-selected="false"
             aria-controls="chartsVolumePanel" data-charts-category="volume">Volume</button>
         </div>
 
-        <div id="chartsLoadPanel" class="charts-category-panel" role="tabpanel" aria-labelledby="chartsLoadTab">
+        <div id="chartsFitnessPanel" class="charts-category-panel" role="tabpanel" aria-labelledby="chartsFitnessTab">
           <section class="fitness-fatigue-card" aria-labelledby="fitnessFatigueTitle">
             <div id="fitnessFatigueStatus" class="fitness-fatigue-status" aria-live="polite">Loading fitness and
               freshness...</div>
@@ -386,8 +388,6 @@
                 aria-label="Fitness trend legend">
               </div>
             </div>
-            <p class="fitness-fatigue-chart-note">Daily Load with 42-day Fitness, 7-day Fatigue, and start-of-day Form.
-            </p>
             <div id="fitnessFatigueChartStatus" class="fitness-fatigue-chart-status" aria-live="polite">Loading Fitness,
               Fatigue &amp; Form trend...</div>
             <div id="fitnessFatigueChartCanvasWrap" class="fitness-fatigue-chart-canvas-wrap hidden">
@@ -395,6 +395,15 @@
                 aria-label="Fitness, Fatigue, Form, and Daily Load trend chart"></canvas>
             </div>
           </section>
+        </div>
+
+        <div id="chartsLoadPanel" class="charts-category-panel hidden" role="tabpanel" aria-labelledby="chartsLoadTab">
+          <div class="charts-placeholder-panel">
+            <h3>Load Analysis</h3>
+            <p>Explore weekly training load, load trends, load comparisons, Acute/Chronic load relationships, and ramp
+              history.</p>
+            <div class="charts-placeholder-status">Load analytics are coming soon.</div>
+          </div>
         </div>
 
         <div id="chartsHealthPanel" class="charts-category-panel hidden" role="tabpanel"

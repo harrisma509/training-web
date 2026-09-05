@@ -332,12 +332,6 @@
     width: 10px;
 }
 
-.fitness-fatigue-chart-note {
-    color: var(--muted);
-    font-size: 0.83rem;
-    margin: 10px 0;
-}
-
 .fitness-fatigue-chart-canvas-wrap {
     height: 410px;
     position: relative;

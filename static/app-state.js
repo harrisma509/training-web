@@ -11,7 +11,8 @@
     activeTab: "daily",
     rememberLastTab: true,
     startupTab: "daily",
-    chartsCategory: "load",
+    chartsCategory: "fitness",
+    chartsCategoryMigrationVersion: 1,
     defaultBikeGearId: "",
     componentsSelectedGearId: "",
     hideShoes: true,
@@ -74,7 +75,9 @@
   }
 
   function sanitizePreferences(rawPreferences = {}) {
-    const next = { ...window.DEFAULT_PREFERENCES, ...(rawPreferences || {}) };
+    const raw = rawPreferences || {};
+    const next = { ...window.DEFAULT_PREFERENCES, ...raw };
+    const hasChartsCategoryMigration = raw.chartsCategoryMigrationVersion === 1;
 
     const normalizeTabValue = (tabValue) => {
       const value = tabValue === "overview" ? "plan" : tabValue;
@@ -85,7 +88,14 @@
     next.activeTab = ["plan", "goals", "kpis", "charts", "daily", "weekly", "zones", "gear", "components", "yearly"].includes(normalizeTabValue(next.activeTab)) ? normalizeTabValue(next.activeTab) : "daily";
     next.rememberLastTab = next.rememberLastTab !== false;
     next.startupTab = ["plan", "goals", "kpis", "charts", "daily", "weekly", "zones", "gear", "components", "yearly"].includes(normalizeTabValue(next.startupTab)) ? normalizeTabValue(next.startupTab) : "daily";
-    next.chartsCategory = ["load", "health", "volume"].includes(String(next.chartsCategory || "").trim().toLowerCase()) ? String(next.chartsCategory).trim().toLowerCase() : "load";
+    const storedChartsCategory = String(next.chartsCategory || "").trim().toLowerCase();
+    const migratedChartsCategory = !hasChartsCategoryMigration && storedChartsCategory === "load"
+      ? "fitness"
+      : storedChartsCategory;
+    next.chartsCategory = ["fitness", "load", "health", "volume"].includes(migratedChartsCategory)
+      ? migratedChartsCategory
+      : "fitness";
+    next.chartsCategoryMigrationVersion = 1;
     next.yearlyView = ["annual", "monthly"].includes(next.yearlyView) ? next.yearlyView : "annual";
     next.defaultBikeGearId = next.defaultBikeGearId == null ? "" : String(next.defaultBikeGearId).trim();
     next.componentsSelectedGearId = next.componentsSelectedGearId == null ? "" : String(next.componentsSelectedGearId).trim();
@@ -119,6 +129,7 @@
       rememberLastTab: window.AppState.rememberLastTab,
       startupTab: window.AppState.startupTab,
       chartsCategory: window.AppState.chartsCategory,
+      chartsCategoryMigrationVersion: window.AppState.chartsCategoryMigrationVersion,
       defaultBikeGearId: window.AppState.defaultBikeGearId,
       componentsSelectedGearId: window.AppState.componentsSelectedGearId,
       hideShoes: window.AppState.hideShoes,
