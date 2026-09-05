@@ -50,6 +50,10 @@
             weeklyLoadChartCanvas: document.getElementById("weeklyLoadChartCanvas"),
             weeklyLoadChartCanvasWrap: document.getElementById("weeklyLoadChartCanvasWrap"),
             weeklyLoadChartStatus: document.getElementById("weeklyLoadChartStatus"),
+            weeklyLoadCurrentLabel: document.getElementById("weeklyLoadCurrentLabel"),
+            weeklyLoadCurrentValue: document.getElementById("weeklyLoadCurrentValue"),
+            weeklyLoadAverageValue: document.getElementById("weeklyLoadAverageValue"),
+            weeklyLoadDifferenceValue: document.getElementById("weeklyLoadDifferenceValue"),
             weeklyLoadRangeButtons: document.querySelectorAll("[data-weekly-load-range]"),
             weeklyLoadMetricButtons: document.querySelectorAll("[data-weekly-load-metric]"),
         };
@@ -294,6 +298,69 @@
         return color;
     }
 
+    function formatWeeklyLoadValue(value) {
+        const numeric = Number(value);
+        return Number.isFinite(numeric) ? Math.round(numeric).toLocaleString() : "Not available";
+    }
+
+    function getWeeklyLoadTooltipLines(row) {
+        const lines = [];
+        const trainingHours = Number(row.training_hours);
+        const totalDistance = Number(row.total_distance_mi);
+        const totalElevation = Number(row.total_elevation_ft);
+        if (Number.isFinite(trainingHours)) {
+            lines.push(`Hours: ${trainingHours.toFixed(1)}`);
+        }
+        if (Number.isFinite(totalDistance)) {
+            lines.push(`Miles: ${totalDistance.toFixed(1)}`);
+        }
+        if (Number.isFinite(totalElevation)) {
+            lines.push(`Ft: ${Math.round(totalElevation).toLocaleString()}`);
+        }
+        lines.push("", row.is_partial ? "Status: Partial week" : "Status: Complete week");
+        const flags = Array.isArray(row.active_flags) ? row.active_flags : [];
+        const commentary = row.commentary && typeof row.commentary === "object" ? row.commentary : {};
+        if (flags.length) {
+            lines.push("", "Flags:", ...flags.map(flag => `${flag.icon} ${flag.label}`));
+        }
+        const commentaryLabels = [
+            ["weekly_comment", "Weekly Comment"],
+            ["risk_note", "Risk Note"],
+            ["lesson_learned", "Lesson Learned"],
+            ["event", "Event"],
+            ["planned_focus", "Planned Focus"],
+            ["actual_focus", "Actual Focus"],
+            ["week_type", "Week Type"],
+            ["coach_note", "Coach Note"],
+            ["task_note", "Task Note"],
+            ["status_override", "Status Override"],
+        ];
+        commentaryLabels.forEach(([key, label]) => {
+            const value = commentary[key];
+            if (value !== null && value !== undefined && String(value).trim() !== "") {
+                lines.push("", `${label}:`, String(value));
+            }
+        });
+        return lines;
+    }
+
+    function renderWeeklyLoadSummary(payload) {
+        const { weeklyLoadCurrentLabel, weeklyLoadCurrentValue, weeklyLoadAverageValue, weeklyLoadDifferenceValue } = getElements();
+        const latestWeek = payload?.latest_week;
+        const difference = Number(payload?.difference_pct);
+        weeklyLoadCurrentLabel.textContent = latestWeek?.is_partial ? "Current Week (Partial)" : "Current Week";
+        weeklyLoadCurrentValue.textContent = formatWeeklyLoadValue(payload?.current_week_load);
+        weeklyLoadAverageValue.textContent = formatWeeklyLoadValue(payload?.four_week_average);
+        weeklyLoadDifferenceValue.classList.remove("is-positive", "is-negative", "is-zero");
+        if (!Number.isFinite(difference)) {
+            weeklyLoadDifferenceValue.textContent = "Not available";
+            return;
+        }
+        const roundedDifference = Math.round(difference);
+        weeklyLoadDifferenceValue.textContent = `${roundedDifference > 0 ? "+" : ""}${roundedDifference}%`;
+        weeklyLoadDifferenceValue.classList.add(roundedDifference > 0 ? "is-positive" : roundedDifference < 0 ? "is-negative" : "is-zero");
+    }
+
     function renderWeeklyLoadChart(payload) {
         const { weeklyLoadChartCanvas, weeklyLoadChartCanvasWrap, weeklyLoadChartStatus } = getElements();
         if (!window.Chart) {
@@ -312,6 +379,30 @@
         const colors = getThemeColors();
         const metricColors = { total: colors.blue, ride: "#f59e0b", other: "#2dd4bf" };
         const selectedColor = metricColors[payload.metric] || colors.blue;
+        renderWeeklyLoadSummary(payload);
+        const weeklyLoadMarkers = {
+            id: "weeklyLoadMarkers",
+            afterDatasetsDraw(chart) {
+                const bars = chart.getDatasetMeta(0).data;
+                const { ctx, chartArea } = chart;
+                ctx.save();
+                ctx.font = "13px sans-serif";
+                ctx.textAlign = "center";
+                ctx.textBaseline = "middle";
+                series.forEach((row, index) => {
+                    const flags = Array.isArray(row.active_flags) ? row.active_flags.slice(0, 3) : [];
+                    const bar = bars[index];
+                    if (!bar || !flags.length) {
+                        return;
+                    }
+                    const markerY = Math.max(chartArea.top + 9, bar.y - 10);
+                    const markerText = flags.map(flag => flag.icon).join("");
+                    ctx.fillStyle = colors.text;
+                    ctx.fillText(markerText, bar.x, markerY);
+                });
+                ctx.restore();
+            },
+        };
         weeklyLoadChartStatus.classList.add("hidden");
         weeklyLoadChartCanvasWrap.classList.remove("hidden");
         weeklyLoadChart = new window.Chart(weeklyLoadChartCanvas, {
@@ -325,8 +416,21 @@
                     borderColor: selectedColor,
                     borderWidth: 1,
                     borderDash: series.map(row => row.is_partial ? [5, 3] : []),
+                    order: 2,
+                }, {
+                    label: "4W Average",
+                    type: "line",
+                    data: series.map(row => Number(row.rolling_average)),
+                    borderColor: "#f97316",
+                    backgroundColor: "#f97316",
+                    borderWidth: 2.5,
+                    pointRadius: 0,
+                    pointHoverRadius: 4,
+                    tension: 0.12,
+                    order: 1,
                 }],
             },
+            plugins: [weeklyLoadMarkers],
             options: {
                 responsive: true,
                 maintainAspectRatio: false,
@@ -335,8 +439,12 @@
                     tooltip: {
                         callbacks: {
                             title(items) { return formatWeekStart(series[items[0].dataIndex].week_start); },
-                            label(context) { return `Load: ${Math.round(context.parsed.y)}`; },
-                            afterBody(items) { return series[items[0].dataIndex].is_partial ? "Status: Partial week" : "Status: Complete week"; },
+                            label(context) {
+                                return context.dataset.label === "4W Average"
+                                    ? `4W Average: ${Math.round(context.parsed.y)}`
+                                    : `Load: ${Math.round(context.parsed.y)}`;
+                            },
+                            afterBody(items) { return getWeeklyLoadTooltipLines(series[items[0].dataIndex]); },
                         },
                     },
                 },

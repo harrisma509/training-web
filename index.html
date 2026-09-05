@@ -399,8 +399,23 @@
 
         <div id="chartsLoadPanel" class="charts-category-panel hidden" role="tabpanel" aria-labelledby="chartsLoadTab">
           <section class="weekly-load-chart-card" aria-labelledby="weeklyLoadChartTitle">
+            <div class="weekly-load-summary" aria-label="Weekly load summary">
+              <div class="weekly-load-summary-item">
+                <span id="weeklyLoadCurrentLabel">Current Week</span>
+                <strong id="weeklyLoadCurrentValue">Not available</strong>
+              </div>
+              <div class="weekly-load-summary-item">
+                <span>4W Avg</span>
+                <strong id="weeklyLoadAverageValue">Not available</strong>
+              </div>
+              <div class="weekly-load-summary-item">
+                <span>Difference</span>
+                <strong id="weeklyLoadDifferenceValue">Not available</strong>
+              </div>
+            </div>
             <div class="weekly-load-chart-header">
               <h3 id="weeklyLoadChartTitle">Weekly Load Trend</h3>
+              <span class="weekly-load-average-key"><span aria-hidden="true"></span>4W Average</span>
               <div class="weekly-load-chart-controls">
                 <div class="weekly-load-control" aria-label="Weekly load range">
                   <button class="weekly-load-range-button" type="button" data-weekly-load-range="12w"

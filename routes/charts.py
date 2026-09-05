@@ -31,6 +31,26 @@ WEEKLY_LOAD_METRICS = {
     "ride": "main_ride_load",
     "other": "other_load",
 }
+WEEKLY_LOAD_COMMENTARY_FIELDS = {
+    "week_type": "Week Type",
+    "event": "Event",
+    "planned_focus": "Planned Focus",
+    "actual_focus": "Actual Focus",
+    "weekly_comment": "Weekly Comment",
+    "risk_note": "Risk Note",
+    "coach_note": "Coach Note",
+    "task_note": "Task Note",
+    "lesson_learned": "Lesson Learned",
+    "status_override": "Status Override",
+}
+WEEKLY_LOAD_FLAGS = (
+    ("is_injury_week", "⚠", "Injury Week"),
+    ("is_sick_week", "🏥", "Sick Week"),
+    ("is_goal_week", "🎯", "Goal Week"),
+    ("is_bike_park_week", "🚵", "Bike Park Week"),
+    ("is_travel_week", "✈", "Travel Week"),
+    ("is_recovery_week", "↺", "Recovery Week"),
+)
 
 
 def _is_partial_month(month_start: date, through_date: date) -> bool:
@@ -186,15 +206,55 @@ def api_weekly_load_chart(range: str = "26w", metric: str = "total"):
 
     load_column = WEEKLY_LOAD_METRICS[selected_metric]
     weekly_load_sql = f"""
-        SELECT week_start, {load_column} AS load
+        WITH daily_activity_week AS (
+            SELECT
+                date - (extract(isodow from date)::integer - 1) AS week_start,
+                ROUND(
+                    SUM(
+                        COALESCE(EXTRACT(EPOCH FROM NULLIF(main_ride_time, '')::interval), 0)
+                        + COALESCE(EXTRACT(EPOCH FROM NULLIF(other_time, '')::interval), 0)
+                    ) / 3600.0,
+                    1
+                ) AS training_hours,
+                ROUND(SUM(COALESCE(main_ride_miles, 0) + COALESCE(other_miles, 0))::numeric, 1) AS total_distance_mi,
+                SUM(COALESCE(main_ride_elevation_ft, 0) + COALESCE(other_elevation_ft, 0)) AS total_elevation_ft
+            FROM public.daily_training
+            GROUP BY 1
+        )
+        SELECT
+            wt.week_start,
+            wt.{load_column} AS load,
+            daw.training_hours,
+            daw.total_distance_mi,
+            daw.total_elevation_ft,
+            wc.week_type,
+            wc.event,
+            wc.planned_focus,
+            wc.actual_focus,
+            wc.weekly_comment,
+            wc.risk_note,
+            wc.coach_note,
+            wc.task_note,
+            wc.lesson_learned,
+            wc.status_override,
+            wc.is_travel_week,
+            wc.is_sick_week,
+            wc.is_injury_week,
+            wc.is_bike_park_week,
+            wc.is_recovery_week,
+            wc.is_goal_week
         FROM (
             SELECT week_start, {load_column}
             FROM public.weekly_training
             WHERE {load_column} IS NOT NULL
             ORDER BY week_start DESC
             LIMIT %s
-        ) recent_weeks
-        ORDER BY week_start ASC
+        ) wt
+        LEFT JOIN public.weekly_commentary wc
+            ON wc.week_start = wt.week_start
+        LEFT JOIN daily_activity_week daw
+            ON daw.week_start = wt.week_start
+        ORDER BY wt.week_start ASC
     """
     with db_conn() as conn:
         with conn.cursor() as cur:
@@ -203,13 +263,43 @@ def api_weekly_load_chart(range: str = "26w", metric: str = "total"):
 
     current_week_start = date.today() - timedelta(days=date.today().weekday())
     series = rows_to_json(rows)
-    for row in series:
+    rolling_values = []
+    for index, row in enumerate(series):
+        load_value = float(row["load"] or 0)
+        rolling_values.append(load_value)
+        window = rolling_values[max(0, index - 3):]
+        row["load"] = load_value
+        row["rolling_average"] = round(sum(window) / len(window), 2)
         row["is_partial"] = row.get("week_start") == current_week_start.isoformat()
+        commentary = {
+            key: row.pop(key)
+            for key in WEEKLY_LOAD_COMMENTARY_FIELDS
+            if row.get(key) not in (None, "")
+        }
+        for key in WEEKLY_LOAD_COMMENTARY_FIELDS:
+            row.pop(key, None)
+        row["commentary"] = commentary
+        row["active_flags"] = [
+            {"icon": icon, "label": label}
+            for field, icon, label in WEEKLY_LOAD_FLAGS
+            if row.pop(field, False)
+        ]
+
+    latest_week = series[-1] if series else None
+    four_week_average = latest_week.get("rolling_average") if latest_week else None
+    current_week_load = latest_week.get("load") if latest_week else None
+    difference_pct = None
+    if current_week_load is not None and four_week_average:
+        difference_pct = round(((current_week_load - four_week_average) / four_week_average) * 100)
 
     return JSONResponse({
         "range": selected_range,
         "metric": selected_metric,
         "series": series,
+        "latest_week": latest_week,
+        "current_week_load": current_week_load,
+        "four_week_average": four_week_average,
+        "difference_pct": difference_pct,
     })
 
 
