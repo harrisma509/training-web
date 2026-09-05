@@ -237,6 +237,11 @@
       return fetchJson(`/api/charts/load/weekly?${params.toString()}`);
     },
 
+    async fetchMonthlyVolume(year, metric) {
+      const params = new URLSearchParams({ year: String(year), metric });
+      return fetchJson(`/api/charts/volume/monthly?${params.toString()}`);
+    },
+
     async fetchWeeklyAuditItems(weekStart) {
       return fetchJson(`/api/weekly-audit/${encodeURIComponent(weekStart)}/items`);
     },

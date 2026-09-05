@@ -2,9 +2,11 @@
     let weightChart = null;
     let fitnessFatigueChart = null;
     let weeklyLoadChart = null;
+    let volumeChart = null;
     let fitnessFatigueRequestId = 0;
     let fitnessFatigueTrendRequestId = 0;
     let weeklyLoadRequestId = 0;
+    let volumeRequestId = 0;
     let fitnessFatigueLoaded = false;
     let fitnessFatigueTrendPayload = null;
     const fitnessFatigueTrendCache = new Map();
@@ -18,6 +20,9 @@
     const FITNESS_FATIGUE_RANGES = ["3m", "6m", "1y", "2025"];
     const WEEKLY_LOAD_RANGES = ["12w", "26w", "52w"];
     const WEEKLY_LOAD_METRICS = ["total", "ride", "other"];
+    const VOLUME_YEAR_KEY = "trainingVolumeChartYear";
+    const VOLUME_METRIC_KEY = "trainingVolumeChartMetric";
+    const VOLUME_METRICS = ["hours", "miles", "elevation"];
 
     function getElements() {
         return {
@@ -56,6 +61,14 @@
             weeklyLoadAchievementValue: document.getElementById("weeklyLoadAchievementValue"),
             weeklyLoadRangeButtons: document.querySelectorAll("[data-weekly-load-range]"),
             weeklyLoadMetricButtons: document.querySelectorAll("[data-weekly-load-metric]"),
+            volumeChartCanvas: document.getElementById("volumeChartCanvas"),
+            volumeChartCanvasWrap: document.getElementById("volumeChartCanvasWrap"),
+            volumeChartStatus: document.getElementById("volumeChartStatus"),
+            volumeCurrentValue: document.getElementById("volumeCurrentValue"),
+            volumeYtdValue: document.getElementById("volumeYtdValue"),
+            volumeAverageValue: document.getElementById("volumeAverageValue"),
+            volumeYearSelect: document.getElementById("volumeYearSelect"),
+            volumeMetricButtons: document.querySelectorAll("[data-volume-metric]"),
         };
     }
 
@@ -679,6 +692,186 @@
             if (requestId === fitnessFatigueTrendRequestId) {
                 setFitnessFatigueTrendStatus("Fitness, Fatigue, and Form trend is currently unavailable.", "is-error");
             }
+        }
+    }
+
+    function getVolumeMetric() {
+        const savedMetric = sessionStorage.getItem(VOLUME_METRIC_KEY);
+        return VOLUME_METRICS.includes(savedMetric) ? savedMetric : "hours";
+    }
+
+    function setVolumeMetric(metric) {
+        const selectedMetric = VOLUME_METRICS.includes(metric) ? metric : "hours";
+        const { volumeMetricButtons } = getElements();
+        sessionStorage.setItem(VOLUME_METRIC_KEY, selectedMetric);
+        volumeMetricButtons.forEach((button) => {
+            button.setAttribute("aria-pressed", String(button.dataset.volumeMetric === selectedMetric));
+        });
+        return selectedMetric;
+    }
+
+    function formatVolumeValue(value, metric) {
+        const numeric = Number(value);
+        if (!Number.isFinite(numeric)) {
+            return "Not available";
+        }
+        if (metric === "hours") {
+            return numeric.toFixed(1);
+        }
+        return Math.round(numeric).toLocaleString();
+    }
+
+    function getVolumeUnit(metric) {
+        return metric === "hours" ? "hours" : metric === "miles" ? "miles" : "ft";
+    }
+
+    function populateVolumeYears(availableYears, selectedYear) {
+        const { volumeYearSelect } = getElements();
+        if (!volumeYearSelect) {
+            return;
+        }
+        volumeYearSelect.innerHTML = "";
+        const years = availableYears.length ? availableYears : [selectedYear];
+        years.forEach((year) => {
+            const option = document.createElement("option");
+            option.value = String(year);
+            option.textContent = String(year);
+            volumeYearSelect.appendChild(option);
+        });
+        volumeYearSelect.value = String(years.includes(selectedYear) ? selectedYear : years[0]);
+    }
+
+    function destroyVolumeChart() {
+        if (volumeChart) {
+            volumeChart.destroy();
+            volumeChart = null;
+        }
+    }
+
+    function setVolumeStatus(message, state = "") {
+        const { volumeChartCanvasWrap, volumeChartStatus } = getElements();
+        destroyVolumeChart();
+        volumeChartStatus.textContent = message;
+        volumeChartStatus.className = `volume-chart-status ${state}`.trim();
+        volumeChartStatus.classList.remove("hidden");
+        volumeChartCanvasWrap.classList.add("hidden");
+    }
+
+    function renderVolumeSummary(payload) {
+        const { volumeCurrentValue, volumeYtdValue, volumeAverageValue } = getElements();
+        const metric = payload.metric;
+        const summary = payload.summary || {};
+        volumeCurrentValue.textContent = formatVolumeValue(summary.current_month, metric);
+        volumeYtdValue.textContent = formatVolumeValue(summary.ytd, metric);
+        volumeAverageValue.textContent = formatVolumeValue(summary.monthly_average, metric);
+    }
+
+    function renderVolumeChart(payload) {
+        const { volumeChartCanvas, volumeChartCanvasWrap, volumeChartStatus } = getElements();
+        if (!window.Chart) {
+            setVolumeStatus("Monthly volume is currently unavailable.", "is-error");
+            return;
+        }
+        const series = Array.isArray(payload?.series) ? payload.series : [];
+        if (series.length !== 12) {
+            setVolumeStatus("No monthly volume history is available for this year.", "is-empty");
+            return;
+        }
+
+        destroyVolumeChart();
+        const colors = getThemeColors();
+        const metricColors = { hours: colors.blue, miles: "#2dd4bf", elevation: "#f59e0b" };
+        const selectedColor = metricColors[payload.metric] || colors.blue;
+        const unit = getVolumeUnit(payload.metric);
+        renderVolumeSummary(payload);
+        volumeChartStatus.classList.add("hidden");
+        volumeChartCanvasWrap.classList.remove("hidden");
+        volumeChart = new window.Chart(volumeChartCanvas, {
+            type: "bar",
+            data: {
+                labels: series.map(row => row.label),
+                datasets: [{
+                    label: payload.axis_label,
+                    data: series.map(row => row.value === null ? null : Number(row.value)),
+                    backgroundColor: series.map(row => row.is_partial ? withOpacity(selectedColor, 0.5) : selectedColor),
+                    borderColor: selectedColor,
+                    borderWidth: 1,
+                }],
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        callbacks: {
+                            title(items) {
+                                return new Date(2000, items[0].dataIndex, 1).toLocaleDateString(undefined, { month: "long" });
+                            },
+                            label(context) {
+                                return `${formatVolumeValue(context.parsed.y, payload.metric)} ${unit}`;
+                            },
+                            afterBody(items) {
+                                return series[items[0].dataIndex]?.is_partial ? ["", "Partial Month"] : [];
+                            },
+                        },
+                    },
+                },
+                scales: {
+                    x: {
+                        ticks: { color: colors.muted, maxRotation: 0 },
+                        grid: { color: "rgba(0, 0, 0, 0)", drawBorder: false, drawTicks: false },
+                    },
+                    y: {
+                        beginAtZero: true,
+                        title: { display: true, text: payload.axis_label, color: colors.text },
+                        ticks: { color: colors.muted, precision: payload.metric === "hours" ? 1 : 0 },
+                        grid: { color: colors.line },
+                    },
+                },
+            },
+        });
+    }
+
+    async function loadVolume() {
+        const { volumeYearSelect } = getElements();
+        const selectedMetric = getVolumeMetric();
+        const currentYear = new Date().getFullYear();
+        const savedYear = Number.parseInt(sessionStorage.getItem(VOLUME_YEAR_KEY), 10);
+        const selectedYear = Number.isInteger(savedYear) ? savedYear : currentYear;
+        const requestId = ++volumeRequestId;
+        setVolumeMetric(selectedMetric);
+        setVolumeStatus("Loading monthly volume...", "is-loading");
+        try {
+            const payload = await window.api.fetchMonthlyVolume(selectedYear, selectedMetric);
+            if (requestId !== volumeRequestId || getVolumeMetric() !== selectedMetric) {
+                return;
+            }
+            const availableYears = Array.isArray(payload.available_years)
+                ? payload.available_years.map(Number).filter(Number.isInteger).sort((a, b) => b - a)
+                : [];
+            const resolvedYear = availableYears.includes(selectedYear) ? selectedYear : (availableYears[0] || selectedYear);
+            sessionStorage.setItem(VOLUME_YEAR_KEY, String(resolvedYear));
+            populateVolumeYears(availableYears, resolvedYear);
+            if (resolvedYear !== selectedYear) {
+                const resolvedPayload = await window.api.fetchMonthlyVolume(resolvedYear, selectedMetric);
+                if (requestId !== volumeRequestId) {
+                    return;
+                }
+                if (volumeYearSelect) {
+                    volumeYearSelect.value = String(resolvedYear);
+                }
+                renderVolumeChart(resolvedPayload);
+                return;
+            }
+            renderVolumeChart(payload);
+        } catch (error) {
+            if (requestId === volumeRequestId) {
+                setVolumeStatus("Monthly volume is currently unavailable.", "is-error");
+            }
+        }
+        if (volumeYearSelect) {
+            volumeYearSelect.value = String(selectedYear);
         }
     }
 
@@ -1335,13 +1528,35 @@
         });
     });
 
+    const { volumeMetricButtons, volumeYearSelect } = getElements();
+    volumeMetricButtons.forEach((button) => {
+        button.addEventListener("click", () => {
+            const nextMetric = button.dataset.volumeMetric;
+            if (VOLUME_METRICS.includes(nextMetric) && nextMetric !== getVolumeMetric()) {
+                setVolumeMetric(nextMetric);
+                loadVolume();
+            }
+        });
+    });
+    if (volumeYearSelect) {
+        volumeYearSelect.addEventListener("change", () => {
+            const nextYear = Number.parseInt(volumeYearSelect.value, 10);
+            if (Number.isInteger(nextYear)) {
+                sessionStorage.setItem(VOLUME_YEAR_KEY, String(nextYear));
+                loadVolume();
+            }
+        });
+    }
+
     setWeightChartMode(getWeightChartMode());
     setFitnessFatigueRange(getFitnessFatigueRange());
     setWeeklyLoadSelection();
+    setVolumeMetric(getVolumeMetric());
     window.ChartsController = {
         load: loadCharts,
         loadFitnessFatigue,
         loadWeeklyLoad,
+        loadVolume,
         render: renderWeightChart,
     };
 
@@ -1354,6 +1569,9 @@
         }
         if (weeklyLoadChart) {
             loadWeeklyLoad();
+        }
+        if (volumeChart) {
+            loadVolume();
         }
     }).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
 })();

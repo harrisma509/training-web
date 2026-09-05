@@ -241,6 +241,9 @@ function showChartsCategory(category) {
     if (nextCategory === "health" && typeof window.ChartsController.load === "function") {
       window.ChartsController.load();
     }
+    if (nextCategory === "volume" && typeof window.ChartsController.loadVolume === "function") {
+      window.ChartsController.loadVolume();
+    }
   }
 }
 

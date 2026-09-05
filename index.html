@@ -487,12 +487,43 @@
 
         <div id="chartsVolumePanel" class="charts-category-panel hidden" role="tabpanel"
           aria-labelledby="chartsVolumeTab">
-          <div class="charts-placeholder-panel">
-            <h3>Training Volume</h3>
-            <p>Explore monthly and annual training hours, cycling miles, and elevation trends across available years.
-            </p>
-            <div class="charts-placeholder-status">Volume charts are coming soon.</div>
-          </div>
+          <section class="volume-chart-card" aria-labelledby="volumeChartTitle">
+            <div class="volume-summary" aria-label="Monthly volume summary">
+              <div class="volume-summary-item">
+                <span>Current Month</span>
+                <strong id="volumeCurrentValue">Not available</strong>
+              </div>
+              <div class="volume-summary-item">
+                <span>YTD</span>
+                <strong id="volumeYtdValue">Not available</strong>
+              </div>
+              <div class="volume-summary-item">
+                <span>Monthly Avg</span>
+                <strong id="volumeAverageValue">Not available</strong>
+              </div>
+            </div>
+            <div class="volume-chart-header">
+              <h3 id="volumeChartTitle">Monthly Volume</h3>
+              <div class="volume-chart-controls">
+                <div class="volume-metric-control" aria-label="Volume metric">
+                  <button class="volume-metric-button" type="button" data-volume-metric="hours"
+                    aria-pressed="true">Hours</button>
+                  <button class="volume-metric-button" type="button" data-volume-metric="miles"
+                    aria-pressed="false">Miles</button>
+                  <button class="volume-metric-button" type="button" data-volume-metric="elevation"
+                    aria-pressed="false">Elevation</button>
+                </div>
+                <label class="volume-year-control">
+                  <span>Year</span>
+                  <select id="volumeYearSelect" aria-label="Volume chart year"></select>
+                </label>
+              </div>
+            </div>
+            <div id="volumeChartStatus" class="volume-chart-status" aria-live="polite">Loading monthly volume...</div>
+            <div id="volumeChartCanvasWrap" class="volume-chart-canvas-wrap hidden">
+              <canvas id="volumeChartCanvas" aria-label="Monthly training volume chart"></canvas>
+            </div>
+          </section>
         </div>
       </div>
     </section>

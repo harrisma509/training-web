@@ -31,6 +31,11 @@ WEEKLY_LOAD_METRICS = {
     "ride": "main_ride_load",
     "other": "other_load",
 }
+VOLUME_METRICS = {
+    "hours": ("training_hours", "Training Hours"),
+    "miles": ("total_distance_mi", "Miles"),
+    "elevation": ("total_elevation_ft", "Elevation (ft)"),
+}
 WEEKLY_LOAD_COMMENTARY_FIELDS = {
     "week_type": "Week Type",
     "event": "Event",
@@ -497,4 +502,78 @@ def api_annual_weight_chart():
         "first_year": annual[0]["year"] if annual else None,
         "latest_year": latest_year,
         "annual": rows_to_json(annual),
+    })
+
+
+@router.get("/api/charts/volume/monthly")
+def api_monthly_volume_chart(year: int | None = None, metric: str = "hours"):
+    selected_year = date.today().year if year is None else year
+    selected_metric = metric.lower()
+    if not MIN_CHART_YEAR <= selected_year <= MAX_CHART_YEAR:
+        raise HTTPException(status_code=422, detail="year must be between 2000 and 2100")
+    if selected_metric not in VOLUME_METRICS:
+        raise HTTPException(status_code=422, detail="metric must be one of: hours, miles, elevation")
+
+    metric_column, axis_label = VOLUME_METRICS[selected_metric]
+    monthly_sql = f"""
+        SELECT
+            calendar_month AS month,
+            {metric_column} AS value,
+            is_complete
+        FROM public.training_year_month
+        WHERE calendar_year = %s
+        ORDER BY calendar_month ASC
+    """
+    years_sql = """
+        SELECT calendar_year
+        FROM public.training_year
+        ORDER BY calendar_year DESC
+    """
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(monthly_sql, (selected_year,))
+            monthly_rows = rows_to_json(cur.fetchall())
+            cur.execute(years_sql)
+            available_years = [int(row["calendar_year"]) for row in cur.fetchall()]
+
+    rows_by_month = {int(row["month"]): row for row in monthly_rows}
+    today = date.today()
+    series = []
+    for month in range(1, 13):
+        source_row = rows_by_month.get(month)
+        is_future = selected_year == today.year and month > today.month
+        value = None if is_future or source_row is None else source_row.get("value")
+        is_partial = bool(
+            selected_year == today.year
+            and month == today.month
+        )
+        series.append({
+            "month": month,
+            "label": calendar.month_abbr[month],
+            "value": value,
+            "is_partial": is_partial,
+        })
+
+    completed_values = [float(row["value"]) for row in series if row["value"] is not None]
+    current_month = today.month if selected_year == today.year else max(
+        (row["month"] for row in series if row["value"] is not None),
+        default=today.month,
+    )
+    ytd_total = round(sum(completed_values), 1) if completed_values else None
+    monthly_average = round(ytd_total / len(completed_values), 1) if completed_values else None
+
+    return JSONResponse({
+        "year": selected_year,
+        "metric": selected_metric,
+        "axis_label": axis_label,
+        "available_years": available_years,
+        "series": series,
+        "summary": {
+            "current_month": next(
+                (row["value"] for row in series if row["month"] == current_month),
+                None,
+            ),
+            "ytd": ytd_total,
+            "monthly_average": monthly_average,
+        },
     })
