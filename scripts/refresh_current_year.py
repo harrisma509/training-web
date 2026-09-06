@@ -23,7 +23,8 @@ def main():
         return 1
 
     run_id = result.get("training_year_run_id")
-    print(f"Yearly refresh {calendar_year}: {result.get('status', 'completed')} (run_id={run_id})")
+    completed_at = datetime.now(ZoneInfo("America/Denver")).strftime("%Y-%m-%d %H:%M:%S %Z")
+    print(f"Yearly refresh {calendar_year}: {result.get('status', 'completed')} (run_id={run_id}) at {completed_at}")
     return 0
 
 
