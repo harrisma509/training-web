@@ -14,7 +14,8 @@ from ai_provider import (
     AITimeoutError,
     AIProviderError,
 )
-from openai_adapter import configured_openai_provider
+from ai_factory import configured_ai_provider
+from coach_guards import ProviderCapacityError, provider_capacity
 
 router = APIRouter()
 
@@ -38,10 +39,12 @@ def test_provider_connection():
         input_text="Training AI connected",
         max_output_tokens=150,
         timeout_seconds=60.0,
+        reasoning_effort="none",
     )
     try:
-        provider: AIProvider = configured_openai_provider()
-        response = provider.complete(replace(request, model=provider.model))
+        provider: AIProvider = configured_ai_provider()
+        with provider_capacity():
+            response = provider.complete(replace(request, model=provider.model))
     except AIConfigurationError:
         return JSONResponse({"status": "unavailable", "connected": False}, status_code=503)
     except AIAuthenticationError:
@@ -50,6 +53,8 @@ def test_provider_connection():
         return JSONResponse({"status": "provider_rate_limited", "connected": False}, status_code=429)
     except AITimeoutError:
         return JSONResponse({"status": "provider_timeout", "connected": False}, status_code=504)
+    except ProviderCapacityError:
+        return JSONResponse({"status": "provider_capacity_unavailable", "connected": False}, status_code=429)
     except AIProviderError:
         return JSONResponse({"status": "provider_failed", "connected": False}, status_code=502)
 

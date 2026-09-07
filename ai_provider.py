@@ -11,6 +11,7 @@ class AIRequest:
     input_text: str
     max_output_tokens: int
     timeout_seconds: float
+    reasoning_effort: str | None = None
 
 
 @dataclass(frozen=True)

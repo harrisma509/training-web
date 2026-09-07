@@ -28,6 +28,14 @@ def _optional_int(value):
     return value if isinstance(value, int) and not isinstance(value, bool) else None
 
 
+def _reasoning_argument(value):
+    if value is None:
+        return {}
+    if value not in {"none", "low", "medium", "high"}:
+        raise AIConfigurationError("Unsupported reasoning effort.")
+    return {"reasoning": {"effort": value}}
+
+
 class OpenAIProvider:
     provider = "openai"
 
@@ -38,13 +46,16 @@ class OpenAIProvider:
     def complete(self, request: AIRequest) -> AIResponse:
         started = time.perf_counter()
         try:
+            request_args = {
+                "model": request.model,
+                "instructions": request.instructions,
+                "input": request.input_text,
+                "max_output_tokens": request.max_output_tokens,
+                "timeout": request.timeout_seconds,
+            }
+            request_args.update(_reasoning_argument(request.reasoning_effort))
             response = self._client.responses.create(
-                model=request.model,
-                instructions=request.instructions,
-                input=request.input_text,
-                reasoning={"effort": "none"},
-                max_output_tokens=request.max_output_tokens,
-                timeout=request.timeout_seconds,
+                **request_args,
             )
         except APITimeoutError as exc:
             raise AITimeoutError("AI provider request timed out.") from exc
@@ -91,4 +102,4 @@ def configured_openai_provider() -> OpenAIProvider:
     except AIConfigurationError:
         raise
     except Exception as exc:
-        raise AIProviderError("AI provider configuration failed.") from exc
+        raise AIConfigurationError("AI provider configuration failed.") from exc

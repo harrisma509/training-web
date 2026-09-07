@@ -42,6 +42,18 @@ DEFAULT_SESSION_LIMIT = 20
 MAX_SESSION_LIMIT = 100
 
 
+class CoachSessionNotFound(LookupError):
+    pass
+
+
+class CoachSessionArchived(RuntimeError):
+    pass
+
+
+class CoachActiveTurn(RuntimeError):
+    pass
+
+
 def _json_row(row):
     return None if row is None else {key: json_safe(value) for key, value in row.items()}
 
@@ -73,6 +85,68 @@ def _text_value(value, field_name, max_length):
     if len(value) > max_length:
         return None, f"{field_name} is too long."
     return value, None
+
+
+def _start_coach_turn(session_id, message_text, request_id):
+    parsed_id = _parse_positive_id(session_id)
+    if parsed_id is None:
+        raise ValueError("session_id must be a positive integer.")
+    message_text, error = _text_value(message_text, "message", MAX_MESSAGE_LENGTH)
+    if error:
+        raise ValueError(error)
+    if not isinstance(request_id, str) or not request_id.strip():
+        raise ValueError("request_id must be nonblank.")
+
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            session = _load_session(cur, parsed_id, lock=True)
+            if session is None:
+                raise CoachSessionNotFound()
+            if session["status"] == "archived":
+                raise CoachSessionArchived()
+            cur.execute(
+                """
+                SELECT coach_turn_id
+                FROM public.coach_turn
+                WHERE coach_session_id = %s AND status = 'started'
+                LIMIT 1
+                """,
+                (parsed_id,),
+            )
+            if cur.fetchone() is not None:
+                raise CoachActiveTurn()
+            cur.execute(
+                """
+                INSERT INTO public.coach_message (coach_session_id, role, message_kind, message_text)
+                VALUES (%s, 'user', 'text', %s)
+                RETURNING coach_message_id, coach_session_id, role, message_kind,
+                          message_text, structured_payload, created_at
+                """,
+                (parsed_id, message_text),
+            )
+            user_message = cur.fetchone()
+            cur.execute(
+                """
+                INSERT INTO public.coach_turn
+                    (coach_session_id, user_message_id, request_id, coaching_policy_version, status)
+                VALUES (%s, %s, %s, %s, 'started')
+                RETURNING coach_turn_id, coach_session_id, user_message_id, assistant_message_id,
+                          request_id, provider, model, coaching_policy_version, status,
+                          started_at, completed_at, created_at
+                """,
+                (parsed_id, user_message["coach_message_id"], request_id, COACHING_POLICY_VERSION),
+            )
+            turn = cur.fetchone()
+            cur.execute(
+                """
+                UPDATE public.coach_session
+                SET last_activity_at = now(), updated_at = now()
+                WHERE coach_session_id = %s
+                """,
+                (parsed_id,),
+            )
+        conn.commit()
+    return _json_row(session), _json_row(user_message), _json_row(turn)
 
 
 def _nonnegative_int(value, field_name):
@@ -303,47 +377,13 @@ async def create_coach_user_message(session_id: str, request: Request):
     if error:
         return JSONResponse({"detail": error}, status_code=400)
 
-    request_id = f"coach-{uuid.uuid4().hex}"
     try:
-        with db_conn() as conn:
-            with conn.cursor() as cur:
-                session = _load_session(cur, parsed_id, lock=True)
-                if session is None:
-                    return JSONResponse({"detail": "Coach session not found."}, status_code=404)
-                if session["status"] == "archived":
-                    return JSONResponse({"detail": "Archived Coach sessions cannot accept messages."}, status_code=409)
-                cur.execute(
-                    """
-                    INSERT INTO public.coach_message (coach_session_id, role, message_kind, message_text)
-                    VALUES (%s, 'user', 'text', %s)
-                    RETURNING coach_message_id, coach_session_id, role, message_kind,
-                              message_text, structured_payload, created_at
-                    """,
-                    (parsed_id, message_text),
-                )
-                user_message = cur.fetchone()
-                cur.execute(
-                    """
-                    INSERT INTO public.coach_turn
-                        (coach_session_id, user_message_id, request_id, coaching_policy_version, status)
-                    VALUES (%s, %s, %s, %s, 'started')
-                    RETURNING coach_turn_id, coach_session_id, user_message_id, assistant_message_id,
-                              request_id, provider, model, coaching_policy_version, status,
-                              started_at, completed_at, created_at
-                    """,
-                    (parsed_id, user_message["coach_message_id"], request_id, COACHING_POLICY_VERSION),
-                )
-                turn = cur.fetchone()
-                cur.execute(
-                    """
-                    UPDATE public.coach_session
-                    SET last_activity_at = now(), updated_at = now()
-                    WHERE coach_session_id = %s
-                    """,
-                    (parsed_id,),
-                )
-            conn.commit()
+        _, user_message, turn = _start_coach_turn(parsed_id, message_text, f"coach-{uuid.uuid4().hex}")
         return {"message": _json_row(user_message), "turn": _json_row(turn)}
+    except CoachSessionNotFound:
+        return JSONResponse({"detail": "Coach session not found."}, status_code=404)
+    except (CoachSessionArchived, CoachActiveTurn):
+        return JSONResponse({"detail": "Coach session cannot accept this message."}, status_code=409)
     except Exception:
         logger.exception("Failed to persist Coach user message")
         return JSONResponse({"detail": "Unable to persist Coach message."}, status_code=500)
@@ -451,7 +491,12 @@ def _complete_coach_turn(
                     output_tokens = %s, reasoning_tokens = %s, total_tokens = %s,
                     estimated_cost_usd = %s, tool_call_count = %s
                 WHERE coach_turn_id = %s AND status = 'started'
-                RETURNING coach_turn_id, status, assistant_message_id, completed_at
+                RETURNING coach_turn_id, coach_session_id, user_message_id,
+                          assistant_message_id, request_id, provider, model,
+                          coaching_policy_version, status, started_at, completed_at,
+                          elapsed_ms, input_tokens, cached_input_tokens, output_tokens,
+                          reasoning_tokens, total_tokens, estimated_cost_usd,
+                          tool_call_count, provider_response_id
                 """,
                 (
                     assistant_message["coach_message_id"], provider, model, provider_response_id,
@@ -516,3 +561,41 @@ def _fail_coach_turn(turn_id, status="failed", error_category="unknown_error", e
             )
         conn.commit()
     return _json_row(failed_turn)
+
+
+def _recent_coach_messages(session_id, current_message_id, limit=12, max_characters=12000):
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT coach_message_id, role, message_text, created_at
+                FROM public.coach_message
+                WHERE coach_session_id = %s
+                  AND coach_message_id <> %s
+                  AND role IN ('user', 'assistant')
+                ORDER BY created_at DESC, coach_message_id DESC
+                LIMIT %s
+                """,
+                (session_id, current_message_id, limit),
+            )
+            rows = cur.fetchall()
+    selected = []
+    characters = 0
+    for row in rows:
+        text = row["message_text"]
+        if characters + len(text) > max_characters:
+            break
+        selected.append(row)
+        characters += len(text)
+    selected.reverse()
+    return [_json_row(row) for row in selected]
+
+
+def _coach_session_snapshot(session_id):
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            session = _load_session(cur, session_id)
+            if session is None:
+                raise CoachSessionNotFound()
+            usage = _usage_for_session(cur, session_id)
+    return _usage_response(session, usage)
