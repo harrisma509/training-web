@@ -1,4 +1,24 @@
-"""Persistent Coach session routes and transaction helpers."""
+"""
+Browser-facing persistence routes for the Embedded AI Coach.
+
+This module owns Coach sessions, retained conversation messages, turn lifecycle,
+usage and estimated-cost accounting, and sanitized tool-call metadata. It provides
+the durable application state needed for multi-turn coaching while keeping
+PostgreSQL history separate from the bounded context later sent to an AI provider.
+
+The future AI integration must be provider-neutral: route handlers and persistence
+helpers should exchange application-level request, response, usage, and failure
+data through a small server-side adapter boundary rather than importing a vendor
+SDK or exposing vendor-specific objects in browser responses or database records.
+That boundary must allow the configured model/provider to change without changing
+Coach session, message, or turn persistence semantics.
+
+This module does not call an AI provider, calculate training metrics, query Strava,
+duplicate ETL or Weekly Audit logic, expose internal credentials, or provide
+arbitrary database access. Fresh authoritative training context remains owned by
+training-etl and is accessed through narrow training-api operations; future AI
+orchestration and response validation remain server-side in training-web.
+"""
 
 import logging
 import re
