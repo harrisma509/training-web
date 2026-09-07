@@ -309,8 +309,8 @@
     return Boolean(defaultCollapsed);
   }
 
-  function togglePlanWeekCollapse(weekKey) {
-    const nextState = !(PLAN_WEEK_COLLAPSE_STATE.get(weekKey) === true);
+  function togglePlanWeekCollapse(weekKey, currentlyCollapsed) {
+    const nextState = !Boolean(currentlyCollapsed);
     PLAN_WEEK_COLLAPSE_STATE.set(weekKey, nextState);
     renderPlanStrip();
   }
@@ -337,10 +337,11 @@
       const weekButton = event.target.closest("[data-plan-week-toggle]");
       if (weekButton) {
         const weekKey = weekButton.getAttribute("data-plan-week-toggle");
+        const currentlyCollapsed = weekButton.getAttribute("aria-expanded") === "false";
         if (!weekKey) {
           return;
         }
-        togglePlanWeekCollapse(weekKey);
+        togglePlanWeekCollapse(weekKey, currentlyCollapsed);
         return;
       }
 
@@ -531,24 +532,15 @@
     });
   }
 
+  function getWeekDatesOffset(weeksBack) {
+    const currentWeekStart = getWeekStart(new Date());
+    const targetWeekStart = new Date(currentWeekStart);
+    targetWeekStart.setDate(currentWeekStart.getDate() - (weeksBack * 7));
+    return getWeekDates(targetWeekStart);
+  }
+
   function getCurrentWeekDates() {
-    return getWeekDates(getWeekStart(new Date()));
-  }
-
-  function getPreviousWeekDates() {
-    const currentWeekStart = getWeekStart(new Date());
-    const previousWeekStart = new Date(currentWeekStart);
-    previousWeekStart.setDate(currentWeekStart.getDate() - 7);
-    return getWeekDates(previousWeekStart);
-  }
-
-  function getOlderWeekDates() {
-    const currentWeekStart = getWeekStart(new Date());
-    const previousWeekStart = new Date(currentWeekStart);
-    previousWeekStart.setDate(currentWeekStart.getDate() - 7);
-    const olderWeekStart = new Date(previousWeekStart);
-    olderWeekStart.setDate(previousWeekStart.getDate() - 7);
-    return getWeekDates(olderWeekStart);
+    return getWeekDatesOffset(0);
   }
 
   function buildPlanRowMap(rows) {
@@ -601,16 +593,14 @@
     const rowMap = buildPlanRowMap(rows);
     const weeklyRows = getPlanWeeklyRows();
     const weeklyRowMap = buildPlanWeeklyRowMap(weeklyRows);
-    const currentWeekDates = getCurrentWeekDates();
-    const previousWeekDates = getPreviousWeekDates();
-    const olderWeekDates = getOlderWeekDates();
-    const olderWeekKey = getPlanWeekKey(olderWeekDates[0]);
+    const weekOffsets = [0, 1, 2, 3];
 
-    const html = [
-      renderPlanWeekRow(currentWeekDates[0], rowMap, weeklyRowMap, false),
-      renderPlanWeekRow(previousWeekDates[0], rowMap, weeklyRowMap, false),
-      renderPlanWeekRow(olderWeekDates[0], rowMap, weeklyRowMap, !PLAN_WEEK_COLLAPSE_STATE.has(olderWeekKey)),
-    ].join("");
+    const html = weekOffsets.map((weeksBack) => {
+      const weekDates = getWeekDatesOffset(weeksBack);
+      const weekKey = getPlanWeekKey(weekDates[0]);
+      const defaultCollapsed = weeksBack >= 2 ? !PLAN_WEEK_COLLAPSE_STATE.has(weekKey) : false;
+      return renderPlanWeekRow(weekDates[0], rowMap, weeklyRowMap, defaultCollapsed);
+    }).join("");
 
     strip.innerHTML = html;
     setupPlanToggleHandlers();
@@ -657,7 +647,7 @@
         throw new Error("Daily API unavailable");
       }
 
-      const payload = await window.api.fetchDaily(21);
+      const payload = await window.api.fetchDaily(28);
       const rows = Array.isArray(payload) ? payload : (payload && Array.isArray(payload.rows) ? payload.rows : []);
       if (requestId !== PLAN_LOAD_REQUESTS.current) {
         return;
