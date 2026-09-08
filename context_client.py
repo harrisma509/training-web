@@ -2,6 +2,7 @@
 
 import json
 import os
+import socket
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
@@ -82,8 +83,10 @@ def fetch_current_context():
         if exc.code in {401, 403}:
             raise ContextAuthError("Context authorization failed.") from exc
         raise ContextUnavailableError("Context service returned an error.") from exc
-    except (TimeoutError, URLError):
-        raise ContextTimeoutError("Context service timed out.")
+    except URLError as exc:
+        if isinstance(exc.reason, (TimeoutError, socket.timeout)):
+            raise ContextTimeoutError("Context service timed out.") from exc
+        raise ContextUnavailableError("Context service is unavailable.") from exc
     except (UnicodeDecodeError, json.JSONDecodeError, ValueError):
         raise ContextInvalidResponseError("Context service returned invalid data.") from None
     except Exception as exc:

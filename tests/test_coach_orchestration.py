@@ -1,7 +1,10 @@
 import unittest
 from decimal import Decimal
+import os
+import socket
 import sys
 import types
+from urllib.error import HTTPError, URLError
 from unittest.mock import patch
 
 if "openai" not in sys.modules:
@@ -47,9 +50,22 @@ if "psycopg" not in sys.modules:
     sys.modules["psycopg.types.json"] = fake_json
 
 from ai_provider import AIRequest, AIResponse, AIProviderError, AITimeoutError
-from coach_cost import CostLimitError, estimated_cost, pricing_for_model
+from coach_cost import (
+    BudgetUnavailableError,
+    CostLimitError,
+    enforce_monthly_budget,
+    estimated_cost,
+    preflight_cost,
+    pricing_for_model,
+)
 from coach_orchestrator import respond_to_coach, validate_reasoning_effort
-from context_client import ContextUnavailableError
+from context_client import (
+    ContextAuthError,
+    ContextInvalidResponseError,
+    ContextUnavailableError,
+    ContextTimeoutError,
+    fetch_current_context,
+)
 from openai_adapter import _reasoning_argument
 from routes.coach import CoachActiveTurn, CoachSessionArchived, CoachSessionNotFound
 
@@ -84,6 +100,24 @@ class FakeProvider:
         if self.error:
             raise self.error
         return self.response
+
+
+class FakeContextResponse:
+    status = 200
+
+    def __init__(self, payload):
+        self.payload = payload
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        return False
+
+    def read(self):
+        import json
+
+        return json.dumps(self.payload).encode("utf-8")
 
 
 class CoachOrchestrationTests(unittest.TestCase):
@@ -176,6 +210,84 @@ class CoachOrchestrationTests(unittest.TestCase):
         )
         self.assertIsNone(pricing_for_model("other-model"))
         self.assertIsNone(estimated_cost("other-model", 1000, 200, 300))
+        self.assertEqual(preflight_cost("gpt-5.6-luna", 1000, 300), Decimal("0.000560"))
+        with self.assertRaises(BudgetUnavailableError):
+            preflight_cost("other-model", 1000, 300)
+
+    def test_monthly_budget_rejects_unknown_historical_costs(self):
+        with patch("coach_cost.check_monthly_budget", lambda: (Decimal("1.00"), 1)):
+            with self.assertRaises(BudgetUnavailableError):
+                enforce_monthly_budget(Decimal("0.01"))
+
+    def test_monthly_budget_allows_exact_ceiling_and_rejects_overage(self):
+        with patch("coach_cost.check_monthly_budget", lambda: (Decimal("4.99"), 0)):
+            enforce_monthly_budget(Decimal("0.01"))
+        with patch("coach_cost.check_monthly_budget", lambda: (Decimal("4.99"), 0)):
+            with self.assertRaises(CostLimitError):
+                enforce_monthly_budget(Decimal("0.02"))
+        with patch("coach_cost.check_monthly_budget", lambda: (Decimal("5.00"), 0)):
+            with self.assertRaises(CostLimitError):
+                enforce_monthly_budget(Decimal("0"))
+
+    def test_unknown_model_budget_failure_prevents_provider_call(self):
+        self.provider.model = "unknown-model"
+        with patch("coach_orchestrator._start_coach_turn", return_value=({}, self.user_message, self.started)), \
+             patch("coach_orchestrator._recent_coach_messages", return_value=[]), \
+             patch("coach_orchestrator._fail_coach_turn") as fail:
+            with self.assertRaises(Exception) as raised:
+                respond_to_coach(3, "Question", context_loader=lambda: CONTEXT, provider_factory=lambda: self.provider)
+        self.assertEqual(raised.exception.status_code, 503)
+        self.assertEqual(fail.call_args.kwargs["error_category"], "budget_unavailable")
+        self.assertEqual(self.provider.requests, [])
+
+    def test_unknown_historical_cost_budget_failure_prevents_provider_call(self):
+        with patch("coach_orchestrator._start_coach_turn", return_value=({}, self.user_message, self.started)), \
+             patch("coach_orchestrator._recent_coach_messages", return_value=[]), \
+             patch("coach_cost.check_monthly_budget", lambda: (Decimal("1.00"), 1)), \
+             patch("coach_orchestrator._fail_coach_turn") as fail:
+            with self.assertRaises(Exception) as raised:
+                respond_to_coach(3, "Question", context_loader=lambda: CONTEXT, provider_factory=lambda: self.provider)
+        self.assertEqual(raised.exception.status_code, 503)
+        self.assertEqual(fail.call_args.kwargs["error_category"], "budget_unavailable")
+        self.assertEqual(self.provider.requests, [])
+
+    def test_projected_monthly_limit_failure_prevents_provider_call(self):
+        with patch("coach_orchestrator._start_coach_turn", return_value=({}, self.user_message, self.started)), \
+             patch("coach_orchestrator._recent_coach_messages", return_value=[]), \
+             patch("coach_orchestrator.enforce_monthly_budget", side_effect=CostLimitError()), \
+             patch("coach_orchestrator._fail_coach_turn") as fail:
+            with self.assertRaises(Exception) as raised:
+                respond_to_coach(3, "Question", context_loader=lambda: CONTEXT, provider_factory=lambda: self.provider)
+        self.assertEqual(raised.exception.status_code, 429)
+        self.assertEqual(fail.call_args.kwargs["error_category"], "budget_limit")
+        self.assertEqual(self.provider.requests, [])
+
+    def test_context_client_uses_training_api_token_header(self):
+        with patch.dict(os.environ, {"TRAINING_API_BASE_URL": "https://training.example", "TRAINING_API_TOKEN": "secret"}, clear=True), \
+             patch("context_client.urlopen", return_value=FakeContextResponse(CONTEXT)) as open_url:
+            self.assertEqual(fetch_current_context(), CONTEXT)
+        request = open_url.call_args.args[0]
+        self.assertEqual(request.get_header("X-internal-token"), "secret")
+        self.assertNotIn("TRAINING_API_INTERNAL_TOKEN", os.environ)
+
+    def test_context_network_errors_are_classified(self):
+        with patch.dict(os.environ, {"TRAINING_API_BASE_URL": "https://training.example", "TRAINING_API_TOKEN": "secret"}, clear=True):
+            with patch("context_client.urlopen", side_effect=URLError(socket.timeout())):
+                with self.assertRaises(ContextTimeoutError):
+                    fetch_current_context()
+            with patch("context_client.urlopen", side_effect=URLError(ConnectionRefusedError())):
+                with self.assertRaises(ContextUnavailableError):
+                    fetch_current_context()
+
+    def test_context_http_errors_are_sanitized(self):
+        with patch.dict(os.environ, {"TRAINING_API_BASE_URL": "https://training.example", "TRAINING_API_TOKEN": "secret"}, clear=True):
+            for status in (401, 403):
+                with patch("context_client.urlopen", side_effect=HTTPError("https://training.example", status, "hidden", {}, None)):
+                    with self.assertRaises(ContextAuthError):
+                        fetch_current_context()
+            with patch("context_client.urlopen", side_effect=HTTPError("https://training.example", 500, "hidden", {}, None)):
+                with self.assertRaises(ContextUnavailableError):
+                    fetch_current_context()
 
     def test_existing_started_turn_conflict_is_rejected_before_provider(self):
         with patch("coach_orchestrator._start_coach_turn", side_effect=CoachActiveTurn()):

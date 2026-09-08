@@ -46,7 +46,7 @@ def estimated_cost(model, input_tokens, cached_input_tokens, output_tokens):
 def preflight_cost(model, input_characters, max_output_tokens):
     rates = pricing_for_model(model)
     if rates is None:
-        rates = (INPUT_RATE, CACHED_INPUT_RATE, OUTPUT_RATE)
+        raise BudgetUnavailableError()
     # One character per input token is intentionally conservative for the bound.
     estimate = Decimal(input_characters) * rates[0] + Decimal(max_output_tokens) * rates[2]
     if estimate > MAX_TURN_COST:
@@ -77,9 +77,17 @@ def check_monthly_budget():
     return recorded, int(row["unknown_cost_count"] or 0)
 
 
-def enforce_monthly_budget():
+def enforce_monthly_budget(proposed_cost):
+    try:
+        proposed_cost = Decimal(str(proposed_cost))
+    except (TypeError, ValueError, ArithmeticError) as exc:
+        raise BudgetUnavailableError() from exc
+    if proposed_cost < 0:
+        raise BudgetUnavailableError()
     recorded, unknown_count = check_monthly_budget()
-    if recorded >= MONTHLY_COST_LIMIT:
+    if unknown_count > 0:
+        raise BudgetUnavailableError()
+    if recorded >= MONTHLY_COST_LIMIT or recorded + proposed_cost > MONTHLY_COST_LIMIT:
         raise CostLimitError()
     return {"recorded_cost_usd": recorded, "unknown_cost_count": unknown_count}
 

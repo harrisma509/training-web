@@ -108,8 +108,8 @@ def respond_to_coach(
         input_text, context_characters, history_characters = _build_input(context, history, message)
         provider = provider_factory()
         model = provider.model
-        preflight_cost(model, len(input_text) + len(COACH_POLICY), MAX_OUTPUT_TOKENS)
-        enforce_monthly_budget()
+        proposed_cost = preflight_cost(model, len(input_text) + len(COACH_POLICY), MAX_OUTPUT_TOKENS)
+        enforce_monthly_budget(proposed_cost)
         request = AIRequest(
             model=model,
             instructions=COACH_POLICY,
