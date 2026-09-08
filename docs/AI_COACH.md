@@ -1083,13 +1083,8 @@ POST /api/coach/sessions/{session_id}/respond
 GET /api/coach/sessions/{session_id}/usage
 ```
 
-### Diagnostic
-
-```text
-POST /api/coach/provider/test
-```
-
-The diagnostic route is currently intended for trusted LAN use and should be disabled or protected before broader exposure.
+Provider connectivity is exercised only through the normal budget-controlled
+Coach response path.
 
 ---
 
