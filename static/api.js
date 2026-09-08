@@ -24,6 +24,44 @@
   const api = {
     fetchJson,
 
+    async fetchCoachSessions() {
+      return fetchJson("/api/coach/sessions");
+    },
+
+    async fetchCoachSession(sessionId) {
+      return fetchJson(`/api/coach/sessions/${encodeURIComponent(sessionId)}`);
+    },
+
+    async fetchCoachUsage(sessionId) {
+      return fetchJson(`/api/coach/sessions/${encodeURIComponent(sessionId)}/usage`);
+    },
+
+    async createCoachSession() {
+      return fetchJson("/api/coach/sessions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title: "New coaching session" }),
+      });
+    },
+
+    async respondToCoach(sessionId, message) {
+      const response = await fetch(`/api/coach/sessions/${encodeURIComponent(sessionId)}/respond`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json",
+        },
+        body: JSON.stringify({ message }),
+      });
+      if (!response.ok) {
+        const detail = await response.json().catch(() => ({}));
+        const error = new Error(detail.detail || `${response.status} ${response.statusText || "Coach request failed"}`);
+        error.status = response.status;
+        throw error;
+      }
+      return response.json();
+    },
+
     async fetchGearDashboard(limit = 10000) {
       return fetchJson(`/api/gear/dashboard?limit=${limit}`);
     },

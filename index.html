@@ -15,6 +15,7 @@
   <link rel="stylesheet" href="/static/settings.css">
   <link rel="stylesheet" href="/static/weekly.css">
   <link rel="stylesheet" href="/static/yearly.css">
+  <link rel="stylesheet" href="/static/coach.css">
 </head>
 
 <body>
@@ -36,6 +37,7 @@
         <button id="gearTab" type="button">Gear</button>
         <button id="componentsTab" type="button">Components</button>
         <button id="yearlyTab" type="button">Yearly</button>
+        <button id="coachTab" type="button">Coach</button>
       </nav>
 
       <div class="header-actions">
@@ -153,6 +155,7 @@
                   <option value="gear">Gear</option>
                   <option value="components">Components</option>
                   <option value="yearly">Yearly</option>
+                  <option value="coach">Coach</option>
                 </select>
               </div>
               <div class="settings-control-row" style="margin-top: 12px;">
@@ -607,6 +610,59 @@
       </div>
     </section>
 
+    <section id="coachPane" class="hidden" aria-labelledby="coachTab">
+      <div class="coach-workspace">
+        <div id="coachDrawerBackdrop" class="coach-drawer-backdrop hidden" aria-hidden="true"></div>
+        <aside id="coachSessionRail" class="coach-session-rail" aria-label="Coach sessions">
+          <div class="coach-rail-header">
+            <div>
+              <p class="coach-eyebrow">Training intelligence</p>
+              <h2>Coach</h2>
+            </div>
+            <button id="coachDrawerClose" class="coach-icon-button coach-mobile-only" type="button"
+              aria-label="Close Coach sessions">×</button>
+          </div>
+          <button id="coachNewChat" type="button" class="coach-new-chat"><span aria-hidden="true">+</span> New
+            chat</button>
+          <div id="coachSessionStatus" class="coach-inline-status" aria-live="polite"></div>
+          <div id="coachSessions" class="coach-sessions" role="list"></div>
+        </aside>
+
+        <div class="coach-main-panel">
+          <header class="coach-main-header">
+            <button id="coachDrawerOpen" class="coach-icon-button coach-mobile-only" type="button"
+              aria-label="Open Coach sessions" aria-expanded="false">☰</button>
+            <div class="coach-session-heading">
+              <span class="coach-status-mark" aria-hidden="true"></span>
+              <div>
+                <h2 id="coachSessionTitle">Training Coach</h2>
+                <p id="coachSessionMeta">Grounded in your current Training Intelligence</p>
+              </div>
+            </div>
+            <button id="coachUsageToggle" type="button" class="coach-usage-toggle" aria-expanded="false">Session
+              info</button>
+          </header>
+          <div id="coachUsagePanel" class="coach-usage-panel hidden" aria-live="polite"></div>
+          <div id="coachConversation" class="coach-conversation" aria-live="polite" aria-label="Coach conversation">
+          </div>
+          <div id="coachError" class="coach-error hidden" role="alert"></div>
+          <div id="coachComposerWrap" class="coach-composer-wrap">
+            <div id="coachLoadingStatus" class="coach-loading-status hidden" aria-live="polite"></div>
+            <form id="coachComposer" class="coach-composer">
+              <label class="sr-only" for="coachMessageInput">Ask your Coach</label>
+              <textarea id="coachMessageInput" rows="1" maxlength="12000"
+                placeholder="Ask your Coach about training, recovery, or what to do next"></textarea>
+              <div class="coach-composer-footer">
+                <span id="coachCharacterCount" class="coach-character-count"></span>
+                <button id="coachSend" type="submit" class="coach-send-button" aria-label="Send message"><span
+                    aria-hidden="true">↑</span><span>Send</span></button>
+              </div>
+            </form>
+          </div>
+        </div>
+      </div>
+    </section>
+
     <div id="weeklyDrawer" class="weekly-drawer hidden" aria-hidden="true">
       <div class="weekly-drawer-header">
         <div class="drawer-title-row">
@@ -645,6 +701,7 @@
   <script src="/static/kpis.js"></script>
   <script src="/static/vendor/chart.umd.min.js"></script>
   <script src="/static/charts.js"></script>
+  <script src="/static/coach.js"></script>
   <script src="/static/app.js"></script>
 </body>
 

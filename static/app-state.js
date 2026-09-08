@@ -25,6 +25,7 @@
     weeklyLimit: 52,
     zonesLimit: 60,
     yearlyView: "annual",
+    coachSessionId: "",
     yearlyRows: [],
     yearlyMonthlyRows: [],
   });
@@ -85,9 +86,9 @@
     };
 
     next.appearance = ["system", "light", "dark"].includes(next.appearance) ? next.appearance : "system";
-    next.activeTab = ["plan", "goals", "kpis", "charts", "daily", "weekly", "zones", "gear", "components", "yearly"].includes(normalizeTabValue(next.activeTab)) ? normalizeTabValue(next.activeTab) : "daily";
+    next.activeTab = ["plan", "goals", "kpis", "charts", "daily", "weekly", "zones", "gear", "components", "yearly", "coach"].includes(normalizeTabValue(next.activeTab)) ? normalizeTabValue(next.activeTab) : "daily";
     next.rememberLastTab = next.rememberLastTab !== false;
-    next.startupTab = ["plan", "goals", "kpis", "charts", "daily", "weekly", "zones", "gear", "components", "yearly"].includes(normalizeTabValue(next.startupTab)) ? normalizeTabValue(next.startupTab) : "daily";
+    next.startupTab = ["plan", "goals", "kpis", "charts", "daily", "weekly", "zones", "gear", "components", "yearly", "coach"].includes(normalizeTabValue(next.startupTab)) ? normalizeTabValue(next.startupTab) : "daily";
     const storedChartsCategory = String(next.chartsCategory || "").trim().toLowerCase();
     const migratedChartsCategory = !hasChartsCategoryMigration && storedChartsCategory === "load"
       ? "fitness"
@@ -99,6 +100,7 @@
     next.yearlyView = ["annual", "monthly"].includes(next.yearlyView) ? next.yearlyView : "annual";
     next.defaultBikeGearId = next.defaultBikeGearId == null ? "" : String(next.defaultBikeGearId).trim();
     next.componentsSelectedGearId = next.componentsSelectedGearId == null ? "" : String(next.componentsSelectedGearId).trim();
+    next.coachSessionId = next.coachSessionId == null ? "" : String(next.coachSessionId).trim();
     next.hideShoes = Boolean(next.hideShoes);
     next.hideRetired = Boolean(next.hideRetired);
     next.dailyLimit = normalizeStoredPreference(next.dailyLimit, 60, window.APP_ROW_LIMITS.daily);
@@ -138,6 +140,7 @@
       weeklyLimit: window.AppState.weeklyLimit,
       zonesLimit: window.AppState.zonesLimit,
       yearlyView: window.AppState.yearlyView,
+      coachSessionId: window.AppState.coachSessionId,
     };
 
     try {

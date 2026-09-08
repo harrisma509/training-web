@@ -53,6 +53,9 @@ if (window.ComponentsController) {
 if (window.SyncController) {
   window.TrainingApp.features.sync = window.SyncController;
 }
+if (window.CoachController) {
+  window.TrainingApp.features.coach = window.CoachController;
+}
 
 const planTab = document.getElementById("planTab");
 const goalsTab = document.getElementById("goalsTab");
@@ -68,6 +71,7 @@ const zonesTab = document.getElementById("zonesTab");
 const gearTab = document.getElementById("gearTab");
 const componentsTab = document.getElementById("componentsTab");
 const yearlyTab = document.getElementById("yearlyTab");
+const coachTab = document.getElementById("coachTab");
 const yearlyAnnualTab = document.getElementById("yearlyAnnualTab");
 const yearlyMonthlyTab = document.getElementById("yearlyMonthlyTab");
 const planPane = document.getElementById("planPane");
@@ -84,6 +88,7 @@ const zonesPane = document.getElementById("zonesPane");
 const gearPane = document.getElementById("gearPane");
 const componentsPane = document.getElementById("componentsPane");
 const yearlyPane = document.getElementById("yearlyPane");
+const coachPane = document.getElementById("coachPane");
 const yearlyAnnualView = document.getElementById("yearlyAnnualView");
 const yearlyMonthlyView = document.getElementById("yearlyMonthlyView");
 
@@ -135,6 +140,7 @@ zonesTab.addEventListener("click", () => showTab("zones"));
 gearTab.addEventListener("click", () => showTab("gear"));
 componentsTab.addEventListener("click", () => showTab("components"));
 yearlyTab.addEventListener("click", () => showTab("yearly"));
+coachTab?.addEventListener("click", () => showTab("coach"));
 yearlyAnnualTab?.addEventListener("click", () => showYearlyView("annual"));
 yearlyMonthlyTab?.addEventListener("click", () => showYearlyView("monthly"));
 gearRefresh.addEventListener("click", loadGear);
@@ -257,7 +263,7 @@ chartsVolumeTab?.addEventListener("click", () => showChartsCategory("volume"));
 window.showYearlyView = showYearlyView;
 
 function showTab(tab) {
-  const normalizedTab = ["plan", "goals", "kpis", "charts", "daily", "weekly", "zones", "gear", "components", "yearly"].includes(tab) ? tab : "daily";
+  const normalizedTab = ["plan", "goals", "kpis", "charts", "daily", "weekly", "zones", "gear", "components", "yearly", "coach"].includes(tab) ? tab : "daily";
   state.activeTab = normalizedTab;
   persistPreferences();
 
@@ -271,6 +277,7 @@ function showTab(tab) {
   const isGear = normalizedTab === "gear";
   const isComponents = normalizedTab === "components";
   const isYearly = normalizedTab === "yearly";
+  const isCoach = normalizedTab === "coach";
 
   planPane.classList.toggle("hidden", !isPlan);
   goalsPane.classList.toggle("hidden", !isGoals);
@@ -282,6 +289,7 @@ function showTab(tab) {
   gearPane.classList.toggle("hidden", !isGear);
   componentsPane.classList.toggle("hidden", !isComponents);
   yearlyPane.classList.toggle("hidden", !isYearly);
+  coachPane?.classList.toggle("hidden", !isCoach);
 
   dailyControls.classList.toggle("hidden", !isDaily);
   weeklyControls.classList.toggle("hidden", !isWeekly);
@@ -300,6 +308,7 @@ function showTab(tab) {
   gearTab.classList.toggle("active", isGear);
   componentsTab.classList.toggle("active", isComponents);
   yearlyTab.classList.toggle("active", isYearly);
+  coachTab?.classList.toggle("active", isCoach);
 
   if (isPlan && typeof window.loadPlan === "function") {
     window.loadPlan();
@@ -311,6 +320,10 @@ function showTab(tab) {
 
   if (isYearly) {
     showYearlyView(state.yearlyView || "annual");
+  }
+
+  if (isCoach && window.CoachController && typeof window.CoachController.activate === "function") {
+    window.CoachController.activate();
   }
 }
 
