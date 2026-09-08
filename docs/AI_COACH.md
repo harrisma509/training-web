@@ -263,6 +263,8 @@ Stores the lifecycle and accounting for one user-question/assistant-answer pair:
 
 Each real Coach turn sends a newly assembled request containing four major parts.
 
+Before the full authoritative context, `training-web` adds a deterministic temporal-reference block derived from the context's `as_of.current_date`, `as_of.timezone`, and `as_of.response_generated_at` fields. Relative dates are derived from the Training API context, not from the web server clock.
+
 ### 1. Stable Coach policy
 
 The server-side policy defines:
@@ -326,6 +328,8 @@ Current V1 bounds:
 - Most recent messages are preferred
 - Messages are kept in chronological order
 - The new current question is always included separately
+
+Activities and health measurements must be matched by their explicit dates rather than inferred from array position. The current repository evidence does not formally guarantee ordering for `recent_days` or `recovery_history`, so the temporal reference does not claim newest-first or oldest-first ordering; explicit dates remain authoritative.
 
 Twelve prior messages usually represent about six question/answer exchanges, but long Coach answers may reach the character limit sooner.
 
@@ -442,6 +446,8 @@ The stable policy in `coach_policy.py` distinguishes an initial question from a 
 - Follow-ups should avoid repeating unchanged assessments, metrics, restrictions, and warning signs.
 - Active injury restrictions, clinician guidance, urgent safety information, and facts essential to the immediate recommendation must remain in the answer.
 - The Coach may ask one concise follow-up question when missing subjective information could materially change the recommendation.
+
+Temporal grounding is also required for follow-ups: the Coach resolves today, yesterday, and tomorrow from the supplied temporal reference, states relevant calendar dates when sequence matters, and acknowledges uncertainty when temporal metadata conflicts or is insufficient.
 
 ---
 

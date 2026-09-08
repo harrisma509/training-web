@@ -1,6 +1,7 @@
 import unittest
 import asyncio
 from decimal import Decimal
+import json
 import os
 import socket
 import sys
@@ -104,6 +105,26 @@ CONTEXT = {
     "missing_subjective_context": [],
 }
 
+TEMPORAL_CONTEXT = {
+    **CONTEXT,
+    "as_of": {
+        "timezone": "America/Denver",
+        "current_date": "2026-09-08",
+        "response_generated_at": "2026-09-08T13:59:08.357321-06:00",
+    },
+    "recent_days": [
+        {"date": "2026-09-08", "activity": "Morning Walk"},
+        {"date": "2026-09-07", "activity": "Virginia Canyon ride"},
+    ],
+    "recovery_history": [
+        {"date": "2026-09-07", "weight": 197.0, "sleep_hours": 8.17},
+        {"date": "2026-09-08", "weight": 199.2, "sleep_hours": 6.40},
+    ],
+    "athlete_narrative": {
+        "injury": "Calf injury tied to the 2026-09-07 Virginia Canyon ride"
+    },
+}
+
 
 class FakeProvider:
     model = "gpt-5.6-luna"
@@ -191,6 +212,43 @@ class CoachPolicyTests(unittest.TestCase):
             "clinician guidance",
             "urgent safety information",
             "one concise follow-up question",
+        ):
+            self.assertIn(requirement, policy)
+
+    def test_temporal_reference_derives_dates_and_preserves_context(self):
+        input_text, context_characters, _ = _build_input(TEMPORAL_CONTEXT, [], "What happened yesterday?")
+
+        self.assertIn("Current local date: Tuesday, 2026-09-08", input_text)
+        self.assertIn("Today: 2026-09-08", input_text)
+        self.assertIn("Yesterday: 2026-09-07", input_text)
+        self.assertIn("Tomorrow: 2026-09-09", input_text)
+        self.assertIn("Context generated at: 2026-09-08T13:59:08.357321-06:00", input_text)
+        self.assertIn('"activity":"Morning Walk"', input_text)
+        self.assertIn('"activity":"Virginia Canyon ride"', input_text)
+        self.assertIn('"date":"2026-09-08","sleep_hours":6.4,"weight":199.2', input_text)
+        self.assertIn('"date":"2026-09-07","sleep_hours":8.17,"weight":197.0', input_text)
+        self.assertIn("Calf injury tied to the 2026-09-07 Virginia Canyon ride", input_text)
+        expected_context_json = json.dumps(TEMPORAL_CONTEXT, ensure_ascii=True, sort_keys=True, separators=(",", ":"))
+        self.assertEqual(context_characters, len(expected_context_json))
+
+    def test_invalid_current_date_does_not_use_server_date(self):
+        invalid_context = {**TEMPORAL_CONTEXT, "as_of": {"current_date": "not-a-date"}}
+
+        input_text, _, _ = _build_input(invalid_context, [], "What happened yesterday?")
+
+        self.assertIn("Current local date: unavailable; relative dates are unavailable", input_text)
+        self.assertNotIn("Yesterday: 2026-09-07", input_text)
+        self.assertNotIn("Tomorrow: 2026-09-09", input_text)
+
+    def test_policy_matches_temporal_facts_by_explicit_date(self):
+        policy = COACH_POLICY.lower()
+        for requirement in (
+            "temporal reference",
+            "today, yesterday, and tomorrow",
+            "explicit date",
+            "adjacent array position",
+            "relevant calendar dates",
+            "acknowledge the uncertainty rather than guessing",
         ):
             self.assertIn(requirement, policy)
 

@@ -4,6 +4,7 @@ import json
 import logging
 import time
 import uuid
+from datetime import date, timedelta
 
 from ai_factory import configured_ai_provider
 from ai_provider import (
@@ -50,13 +51,54 @@ def validate_reasoning_effort(value):
     return value
 
 
+def _temporal_reference(context):
+    as_of = context.get("as_of") if isinstance(context, dict) else None
+    as_of = as_of if isinstance(as_of, dict) else {}
+    timezone_name = as_of.get("timezone")
+    current_date_value = as_of.get("current_date")
+    generated_at = as_of.get("response_generated_at")
+    lines = [
+        "Temporal reference:",
+        f"Timezone: {timezone_name if isinstance(timezone_name, str) and timezone_name.strip() else 'unknown'}",
+    ]
+
+    parsed_date = None
+    if isinstance(current_date_value, str) and len(current_date_value) == 10:
+        try:
+            parsed_date = date.fromisoformat(current_date_value)
+        except ValueError:
+            parsed_date = None
+        if parsed_date is not None and parsed_date.isoformat() != current_date_value:
+            parsed_date = None
+
+    if parsed_date is None:
+        lines.append("Current local date: unavailable; relative dates are unavailable")
+    else:
+        lines.extend(
+            [
+                f"Current local date: {parsed_date.strftime('%A, %Y-%m-%d')}",
+                f"Today: {parsed_date.isoformat()}",
+                f"Yesterday: {(parsed_date - timedelta(days=1)).isoformat()}",
+                f"Tomorrow: {(parsed_date + timedelta(days=1)).isoformat()}",
+            ]
+        )
+
+    if isinstance(generated_at, str) and generated_at.strip():
+        lines.append(f"Context generated at: {generated_at}")
+    else:
+        lines.append("Context generated at: unknown")
+    lines.append("Collection ordering: array position is not authoritative; match every record by its explicit date")
+    return "\n".join(lines)
+
+
 def _build_input(context, history, message):
     context_json = json.dumps(context, ensure_ascii=True, sort_keys=True, separators=(",", ":"))
     if len(context_json) > MAX_CONTEXT_CHARS:
         raise CoachOrchestrationError(502, "Coach context is too large.", "context_too_large")
     history_json = json.dumps(history, ensure_ascii=True, sort_keys=True, separators=(",", ":"))
     return (
-        "Authoritative training context:\n" + context_json
+        _temporal_reference(context)
+        + "\n\nAuthoritative training context:\n" + context_json
         + "\nRecent conversation:\n" + history_json
         + "\nCurrent question:\n" + message
     ), len(context_json), len(history_json)
