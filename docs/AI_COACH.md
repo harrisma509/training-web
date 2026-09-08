@@ -321,8 +321,8 @@ The application includes both sides of recent conversation history:
 
 Current V1 bounds:
 
-- Maximum 12 prior messages
-- Maximum 12,000 characters across those messages
+- Maximum 24 prior messages
+- Maximum 24,000 characters across those messages
 - Most recent messages are preferred
 - Messages are kept in chronological order
 - The new current question is always included separately
