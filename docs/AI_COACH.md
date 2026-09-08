@@ -421,15 +421,27 @@ The model does not carry personal memory from one independent request to another
 
 Provider operational retention is a separate privacy topic from conversation state. Data sharing for model improvement should remain disabled for this application.
 
-### Recommended privacy setting
+### Implemented privacy setting
 
-The OpenAI adapter should explicitly use stateless response storage when supported:
+The OpenAI adapter explicitly uses stateless response storage for normal Responses API calls:
 
 ```python
 store=False
 ```
 
-This keeps provider-managed application state disabled. It does not necessarily eliminate provider abuse-monitoring retention or other legally required operational retention.
+This disables provider-managed application response storage. It does not promise zero provider retention; operational, abuse-monitoring, security, or legally required retention may still apply under the provider's policies and terms.
+
+The application does not use `previous_response_id`, the Conversations API, or equivalent provider-owned conversation state. PostgreSQL remains the durable owner of Coach sessions and messages, and `training-web` resends bounded local history on each turn.
+
+## Follow-up response behavior
+
+The stable policy in `coach_policy.py` distinguishes an initial question from a follow-up using the presence or absence of recent local conversation history.
+
+- An initial question should receive the full requested assessment and response structure.
+- A follow-up should acknowledge new information and focus on what changed in the recommendation.
+- Follow-ups should avoid repeating unchanged assessments, metrics, restrictions, and warning signs.
+- Active injury restrictions, clinician guidance, urgent safety information, and facts essential to the immediate recommendation must remain in the answer.
+- The Coach may ask one concise follow-up question when missing subjective information could materially change the recommendation.
 
 ---
 

@@ -28,8 +28,8 @@ from routes.coach import (
 )
 
 logger = logging.getLogger(__name__)
-MAX_HISTORY_CHARS = 12_000
-MAX_HISTORY_MESSAGES = 12
+MAX_HISTORY_CHARS = 24_000
+MAX_HISTORY_MESSAGES = 24
 MAX_OUTPUT_TOKENS = 1_200
 PROVIDER_TIMEOUT_SECONDS = 60.0
 SUPPORTED_REASONING_EFFORTS = {"none", "low", "medium", "high"}

@@ -52,6 +52,7 @@ class OpenAIProvider:
                 "input": request.input_text,
                 "max_output_tokens": request.max_output_tokens,
                 "timeout": request.timeout_seconds,
+                "store": False,
             }
             request_args.update(_reasoning_argument(request.reasoning_effort))
             response = self._client.responses.create(

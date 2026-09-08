@@ -7,6 +7,7 @@ import sys
 import types
 from urllib.error import HTTPError, URLError
 from unittest.mock import patch
+from types import SimpleNamespace
 
 if "openai" not in sys.modules:
     fake_openai = types.ModuleType("openai")
@@ -66,7 +67,8 @@ from coach_cost import (
     preflight_cost,
     pricing_for_model,
 )
-from coach_orchestrator import respond_to_coach, validate_reasoning_effort
+from coach_orchestrator import _build_input, respond_to_coach, validate_reasoning_effort
+from coach_policy import COACH_POLICY
 from context_client import (
     ContextAuthError,
     ContextInvalidResponseError,
@@ -74,7 +76,7 @@ from context_client import (
     ContextTimeoutError,
     fetch_current_context,
 )
-from openai_adapter import _reasoning_argument
+from openai_adapter import OpenAIProvider, _reasoning_argument
 from routes.coach import (
     CoachActiveTurn,
     CoachSessionArchived,
@@ -135,6 +137,71 @@ class FakeContextResponse:
         import json
 
         return json.dumps(self.payload).encode("utf-8")
+
+
+class FakeResponsesClient:
+    def __init__(self):
+        self.calls = []
+
+    def create(self, **kwargs):
+        self.calls.append(kwargs)
+        return SimpleNamespace(
+            output_text="Coach response",
+            model="gpt-5.6-luna",
+            id="resp-1",
+            status="completed",
+            usage=None,
+        )
+
+
+class FakeOpenAIClient:
+    def __init__(self):
+        self.responses = FakeResponsesClient()
+
+
+class OpenAIAdapterTests(unittest.TestCase):
+    def test_complete_disables_provider_managed_storage_without_network_call(self):
+        provider = OpenAIProvider.__new__(OpenAIProvider)
+        provider._client = FakeOpenAIClient()
+        provider.model = "gpt-5.6-luna"
+
+        response = provider.complete(
+            AIRequest(
+                model="gpt-5.6-luna",
+                instructions="Be concise.",
+                input_text="Question",
+                max_output_tokens=100,
+                timeout_seconds=5.0,
+            )
+        )
+
+        self.assertEqual(response.text, "Coach response")
+        self.assertEqual(provider._client.responses.calls[0]["store"], False)
+
+
+class CoachPolicyTests(unittest.TestCase):
+    def test_policy_compresses_follow_ups_without_dropping_safety_guidance(self):
+        policy = COACH_POLICY.lower()
+        for requirement in (
+            "initial question",
+            "follow-up",
+            "focus on what changed",
+            "do not repeat unchanged",
+            "active injury restrictions",
+            "clinician guidance",
+            "urgent safety information",
+            "one concise follow-up question",
+        ):
+            self.assertIn(requirement, policy)
+
+    def test_request_assembly_distinguishes_initial_and_follow_up_history(self):
+        initial_input, _, _ = _build_input(CONTEXT, [], "Initial question")
+        follow_up_history = [{"role": "assistant", "message_text": "Prior answer"}]
+        follow_up_input, _, _ = _build_input(CONTEXT, follow_up_history, "New information")
+
+        self.assertIn("Recent conversation:\n[]", initial_input)
+        self.assertIn('"message_text":"Prior answer"', follow_up_input)
+        self.assertIn("Current question:\nNew information", follow_up_input)
 
 
 class CoachOrchestrationTests(unittest.TestCase):
