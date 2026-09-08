@@ -1,5 +1,23 @@
 /* Coach workspace controller. Keeps persisted conversations server-backed and model output DOM-safe. */
 (function () {
+    function hasNewPersistedUserMessage(messages, message, existingMessageIds) {
+        return messages.some(item => {
+            const messageId = item && item.coach_message_id;
+            return item
+                && item.role === "user"
+                && item.message_text === message
+                && messageId !== null
+                && messageId !== undefined
+                && String(messageId).trim() !== ""
+                && !existingMessageIds.has(String(messageId));
+        });
+    }
+
+    if (typeof document === "undefined" && typeof module !== "undefined") {
+        module.exports = { hasNewPersistedUserMessage };
+        return;
+    }
+
     const MAX_MESSAGE_LENGTH = 12000;
     const SELECTED_SESSION_KEY = "coachSessionId";
     const STAGES = [
@@ -19,6 +37,7 @@
         responsePending: false,
         pendingMessage: "",
         error: "",
+        sessionsError: "",
         drawerOpen: false,
         loadToken: 0,
         stageTimer: null,
@@ -121,11 +140,32 @@
 
     function mapError(error) {
         const status = Number(error && error.status);
+        const detail = safeServerDetail(error && error.detail);
         if (status === 409) return "A coaching response is already being prepared for this session.";
+        if (status === 429) return detail || "The AI Coach is temporarily unable to accept another request.";
+        if (status === 502) return detail && /context|training data/i.test(detail) ? detail : "The Coach could not generate a response.";
+        if (status === 503) return detail && /context|training data/i.test(detail) ? detail : "The Coach is temporarily unavailable.";
         if (status === 504) return "The Coach took too long to respond. The turn was recorded as timed out.";
-        if (status === 429) return "The AI Coach budget limit has been reached. No additional provider request can be made.";
-        if (status === 502 || status === 503) return "Coach context is temporarily unavailable. Your message was saved, but the Coach could not load current training data.";
         return "The Coach could not complete this response.";
+    }
+
+    function safeServerDetail(detail) {
+        const value = text(detail).trim();
+        if (!value || value.length > 240 || /[\r\n\u0000-\u001f]/.test(value)) return "";
+        if (/(traceback|stack trace|exception|https?:\/\/|api[ _-]?key|access[ _-]?token|refresh[ _-]?token|authorization|secret|provider body)/i.test(value)) return "";
+        return value;
+    }
+
+    function sortSessions(sessions) {
+        return sessions.map((session, index) => ({ session, index, timestamp: Date.parse(session.last_activity_at || "") }))
+            .sort((left, right) => {
+                const leftValid = Number.isFinite(left.timestamp);
+                const rightValid = Number.isFinite(right.timestamp);
+                if (leftValid !== rightValid) return leftValid ? -1 : 1;
+                if (leftValid && left.timestamp !== right.timestamp) return right.timestamp - left.timestamp;
+                return left.index - right.index;
+            })
+            .map(entry => entry.session);
     }
 
     function sessionSummaryUsage(usage) {
@@ -153,14 +193,21 @@
         clearNode(refs.sessions);
         if (state.sessionsLoading) {
             refs.sessionStatus.textContent = "Loading conversations...";
-            return;
+        } else if (state.sessionsError) {
+            refs.sessionStatus.textContent = "Could not load conversations.";
+            refs.sessions.appendChild(makeElement("p", "coach-empty-sessions", state.sessionsError));
+            const retry = makeElement("button", "coach-copy-button", "Retry");
+            retry.type = "button";
+            retry.addEventListener("click", () => loadSessions());
+            refs.sessions.appendChild(retry);
         }
-        if (!state.sessions.length) {
+        if (!state.sessions.length && state.sessionsError) return;
+        if (!state.sessions.length && !state.sessionsLoading) {
             refs.sessionStatus.textContent = "No conversations yet.";
             refs.sessions.appendChild(makeElement("p", "coach-empty-sessions", "Start a new chat to begin."));
             return;
         }
-        refs.sessionStatus.textContent = "";
+        if (!state.sessionsError && !state.sessionsLoading) refs.sessionStatus.textContent = "";
         const groups = ["Today", "Previous 7 days", "Older"];
         groups.forEach(group => {
             const sessions = state.sessions.filter(session => groupName(session.last_activity_at) === group);
@@ -375,7 +422,7 @@
                 copy.addEventListener("click", () => copyResponse(message.message_text, copy));
                 actions.appendChild(copy);
                 const turn = findTurnForMessage(message);
-                if (turn) {
+                if (turn && turn.status === "completed") {
                     actions.appendChild(makeElement("span", "", `${humanModel(turn.model)} • ${formatLatency(turn.elapsed_ms)} • ${formatTokens(turn.total_tokens)} tokens • ${formatCost(turn.estimated_cost_usd)}`));
                 }
                 item.appendChild(actions);
@@ -404,6 +451,30 @@
     function findTurnForMessage(message) {
         const id = message.coach_message_id;
         return (state.session && Array.isArray(state.session.turns) ? state.session.turns : []).find(turn => text(turn.assistant_message_id) === text(id)) || null;
+    }
+
+    async function reconcileFailedResponse(sessionIdValue, message, existingMessageIds, composerValueAtRequest) {
+        if (sessionIdValue !== state.selectedSessionId) return false;
+        try {
+            const payload = await window.api.fetchCoachSession(sessionIdValue);
+            if (sessionIdValue !== state.selectedSessionId) return false;
+            const messages = Array.isArray(payload.messages) ? payload.messages : [];
+            const persisted = hasNewPersistedUserMessage(messages, message, existingMessageIds);
+            if (persisted) {
+                state.session = payload;
+                state.usage = payload.usage || state.usage;
+                state.pendingMessage = "";
+                return true;
+            }
+        } catch (error) {
+            // The original message remains retryable when reconciliation is unavailable.
+        }
+        state.pendingMessage = "";
+        if (refs.input.value === composerValueAtRequest) {
+            refs.input.value = message;
+            resizeComposer();
+        }
+        return false;
     }
 
     async function copyResponse(value, button) {
@@ -465,11 +536,12 @@
     }
 
     async function loadSessions(preferredId = "") {
+        state.sessionsError = "";
         state.sessionsLoading = true;
         renderSessions();
         try {
             const payload = await window.api.fetchCoachSessions();
-            state.sessions = Array.isArray(payload) ? payload : (payload.sessions || []);
+            state.sessions = sortSessions(Array.isArray(payload) ? payload : (payload.sessions || []));
             const stored = preferredId || window.AppState.coachSessionId || "";
             const selected = state.sessions.find(session => sessionId(session) === text(stored)) || state.sessions[0];
             if (selected) await selectSession(sessionId(selected), true);
@@ -482,12 +554,7 @@
                 updateHeader();
             }
         } catch (error) {
-            state.sessions = [];
-            refs.sessionStatus.textContent = "Could not load conversations.";
-            const retry = makeElement("button", "coach-copy-button", "Retry");
-            retry.type = "button";
-            retry.addEventListener("click", () => loadSessions(preferredId));
-            refs.sessions.appendChild(retry);
+            state.sessionsError = "Unable to load conversations. Try again.";
         } finally {
             state.sessionsLoading = false;
             renderSessions();
@@ -538,7 +605,7 @@
         try {
             const payload = await window.api.createCoachSession();
             const created = payload.session;
-            state.sessions = [created, ...state.sessions.filter(session => sessionId(session) !== sessionId(created))];
+            state.sessions = sortSessions([created, ...state.sessions.filter(session => sessionId(session) !== sessionId(created))]);
             await selectSession(sessionId(created), true);
             refs.input.focus();
         } catch (error) {
@@ -562,29 +629,35 @@
         startLoadingStages();
         renderConversation();
         const activeId = state.selectedSessionId;
+        const existingMessageIds = new Set(
+            (state.session && Array.isArray(state.session.messages) ? state.session.messages : [])
+                .map(item => String(item.coach_message_id))
+        );
+        const composerValueAtRequest = refs.input.value;
         try {
             const response = await window.api.respondToCoach(activeId, message);
             if (activeId !== state.selectedSessionId) return;
             state.usage = response.usage || state.usage;
-            await selectSession(activeId, true);
             state.pendingMessage = "";
+            await selectSession(activeId, true);
             state.sessions = state.sessions.map(session => sessionId(session) === activeId
                 ? { ...session, last_activity_at: new Date().toISOString() }
                 : session);
+            state.sessions = sortSessions(state.sessions);
             renderSessions();
         } catch (error) {
             if (activeId === state.selectedSessionId) {
-                refs.input.value = message;
-                resizeComposer();
                 showError(mapError(error));
+                await reconcileFailedResponse(activeId, message, existingMessageIds, composerValueAtRequest);
+            } else if (state.pendingMessage === message) {
+                state.pendingMessage = "";
             }
         } finally {
             stopLoadingStages();
             setPending(false);
-            if (!state.responsePending && state.pendingMessage === message && state.session && state.session.messages.some(item => item.message_text === message)) {
-                state.pendingMessage = "";
-            }
             renderConversation();
+            renderUsage();
+            updateHeader();
             refs.input.focus();
         }
     }

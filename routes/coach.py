@@ -40,6 +40,7 @@ MAX_SESSION_TITLE_LENGTH = 200
 MAX_MESSAGE_LENGTH = 12000
 DEFAULT_SESSION_LIMIT = 20
 MAX_SESSION_LIMIT = 100
+MAX_SESSION_MESSAGES = 200
 
 
 class CoachSessionNotFound(LookupError):
@@ -347,15 +348,40 @@ def get_coach_session(session_id: str):
                     FROM public.coach_message
                     WHERE coach_session_id = %s
                     ORDER BY created_at, coach_message_id
+                    LIMIT %s
                     """,
-                    (parsed_id,),
+                    (parsed_id, MAX_SESSION_MESSAGES),
                 )
                 messages = cur.fetchall()
+                cur.execute(
+                    """
+                    WITH bounded_messages AS (
+                        SELECT coach_message_id
+                        FROM public.coach_message
+                        WHERE coach_session_id = %s
+                        ORDER BY created_at, coach_message_id
+                        LIMIT %s
+                    )
+                    SELECT t.assistant_message_id, t.provider, t.model, t.status,
+                           t.elapsed_ms, t.total_tokens, t.estimated_cost_usd
+                    FROM public.coach_turn t
+                    JOIN public.coach_message assistant
+                      ON assistant.coach_message_id = t.assistant_message_id
+                     AND assistant.coach_session_id = t.coach_session_id
+                    JOIN bounded_messages bm
+                      ON bm.coach_message_id = t.assistant_message_id
+                    WHERE t.coach_session_id = %s
+                    ORDER BY assistant.created_at, assistant.coach_message_id
+                    """,
+                    (parsed_id, MAX_SESSION_MESSAGES, parsed_id),
+                )
+                turns = cur.fetchall()
                 usage = _usage_for_session(cur, parsed_id)
         return {
             "session": _json_row(session),
             "messages": [_json_row(message) for message in messages],
             "usage": _usage_response(session, usage),
+            "turns": [_json_row(turn) for turn in turns],
         }
     except Exception:
         logger.exception("Failed to load Coach session")

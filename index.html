@@ -27,6 +27,7 @@
       </div>
 
       <nav class="tabs header-tabs">
+        <button id="coachTab" type="button">Coach</button>
         <button id="planTab" type="button">Plan</button>
         <button id="weeklyTab" type="button">Weekly</button>
         <button id="dailyTab" class="active" type="button">Daily</button>
@@ -37,7 +38,6 @@
         <button id="gearTab" type="button">Gear</button>
         <button id="componentsTab" type="button">Components</button>
         <button id="yearlyTab" type="button">Yearly</button>
-        <button id="coachTab" type="button">Coach</button>
       </nav>
 
       <div class="header-actions">
@@ -649,9 +649,9 @@
           <div id="coachComposerWrap" class="coach-composer-wrap">
             <div id="coachLoadingStatus" class="coach-loading-status hidden" aria-live="polite"></div>
             <form id="coachComposer" class="coach-composer">
-              <label class="sr-only" for="coachMessageInput">Ask your Coach</label>
+              <label class="coach-composer-label" for="coachMessageInput">Ask your Coach</label>
               <textarea id="coachMessageInput" rows="1" maxlength="12000"
-                placeholder="Ask your Coach about training, recovery, or what to do next"></textarea>
+                placeholder="Training, recovery, or what to do next..."></textarea>
               <div class="coach-composer-footer">
                 <span id="coachCharacterCount" class="coach-character-count"></span>
                 <button id="coachSend" type="submit" class="coach-send-button" aria-label="Send message"><span

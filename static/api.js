@@ -57,6 +57,7 @@
         const detail = await response.json().catch(() => ({}));
         const error = new Error(detail.detail || `${response.status} ${response.statusText || "Coach request failed"}`);
         error.status = response.status;
+        error.detail = typeof detail.detail === "string" ? detail.detail : "";
         throw error;
       }
       return response.json();

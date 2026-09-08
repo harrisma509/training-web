@@ -67,7 +67,7 @@ from context_client import (
     fetch_current_context,
 )
 from openai_adapter import _reasoning_argument
-from routes.coach import CoachActiveTurn, CoachSessionArchived, CoachSessionNotFound
+from routes.coach import CoachActiveTurn, CoachSessionArchived, CoachSessionNotFound, get_coach_session
 
 
 CONTEXT = {
@@ -305,6 +305,113 @@ class CoachOrchestrationTests(unittest.TestCase):
         self.assertEqual(raised.exception.status_code, 429)
         self.assertEqual(fail.call_args.kwargs["error_category"], "budget_limit")
         self.assertEqual(self.provider.requests, [])
+
+    def test_session_detail_returns_bounded_turn_metadata_without_private_fields(self):
+        session = {
+            "coach_session_id": 3,
+            "title": "Injury check-in",
+            "status": "active",
+            "provider": "fake",
+            "default_model": "gpt-5.6-luna",
+            "coaching_policy_version": "coach-v1",
+            "summary": None,
+            "summary_through_message_id": None,
+            "compacted_at": None,
+            "compaction_count": 0,
+            "last_provider_response_id": None,
+            "last_activity_at": None,
+            "created_at": None,
+            "updated_at": None,
+        }
+        messages = [{
+            "coach_message_id": 11,
+            "coach_session_id": 3,
+            "role": "assistant",
+            "message_kind": "text",
+            "message_text": "Take an easy day.",
+            "structured_payload": None,
+            "created_at": None,
+        }]
+        turns = [{
+            "assistant_message_id": 11,
+            "provider": "fake",
+            "model": "gpt-5.6-luna",
+            "status": "completed",
+            "elapsed_ms": 9900,
+            "total_tokens": 32700,
+            "estimated_cost_usd": Decimal("0.0073"),
+        }]
+        usage = {
+            "message_count": 1,
+            "turn_count": 1,
+            "completed_turn_count": 1,
+            "failed_turn_count": 0,
+            "timed_out_turn_count": 0,
+            "input_tokens": 100,
+            "cached_input_tokens": 0,
+            "output_tokens": 100,
+            "reasoning_tokens": 0,
+            "total_tokens": 200,
+            "estimated_cost_usd": Decimal("0.0073"),
+            "latest_turn_status": "completed",
+            "latest_input_tokens": 100,
+            "latest_cached_input_tokens": 0,
+            "latest_output_tokens": 100,
+            "latest_reasoning_tokens": 0,
+            "latest_total_tokens": 200,
+            "latest_estimated_cost_usd": Decimal("0.0073"),
+        }
+
+        class FakeCursor:
+            def __init__(self):
+                self.results = iter([session, messages, turns, usage])
+                self.queries = []
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, exc_type, exc_value, traceback):
+                return False
+
+            def execute(self, query, params):
+                self.queries.append((query, params))
+
+            def fetchone(self):
+                return next(self.results) if len(self.queries) == 1 or len(self.queries) == 4 else None
+
+            def fetchall(self):
+                return next(self.results)
+
+        class FakeConnection:
+            def __init__(self):
+                self.cursor_instance = FakeCursor()
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, exc_type, exc_value, traceback):
+                return False
+
+            def cursor(self):
+                return self.cursor_instance
+
+        connection = FakeConnection()
+        with patch("routes.coach.db_conn", return_value=connection):
+            result = get_coach_session("3")
+
+        self.assertEqual(set(result), {"session", "messages", "usage", "turns"})
+        self.assertEqual(result["turns"], [{
+            "assistant_message_id": 11,
+            "provider": "fake",
+            "model": "gpt-5.6-luna",
+            "status": "completed",
+            "elapsed_ms": 9900,
+            "total_tokens": 32700,
+            "estimated_cost_usd": 0.0073,
+        }])
+        self.assertNotIn("request_id", result["turns"][0])
+        self.assertEqual(len(connection.cursor_instance.queries), 4)
+        self.assertIn("LIMIT", connection.cursor_instance.queries[2][0])
 
 
 if __name__ == "__main__":
