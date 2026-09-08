@@ -95,6 +95,7 @@
 
 .coach-session-row {
     display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
     gap: 5px;
     width: 100%;
     min-height: 58px;
@@ -104,7 +105,6 @@
     background: transparent;
     color: var(--text);
     text-align: left;
-    cursor: pointer;
 }
 
 .coach-session-row:hover,
@@ -123,7 +123,76 @@
     font-weight: 750;
 }
 
+.coach-session-select {
+    display: grid;
+    min-width: 0;
+    gap: 5px;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+
+.coach-session-select:focus-visible,
+.coach-session-edit:focus-visible,
+.coach-session-edit-input:focus-visible {
+    outline: 2px solid var(--blue);
+    outline-offset: 2px;
+}
+
+.coach-session-edit {
+    align-self: center;
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    border: 1px solid transparent;
+    border-radius: 7px;
+    background: transparent;
+    color: var(--muted);
+    cursor: pointer;
+    opacity: 0;
+}
+
+.coach-session-row:hover .coach-session-edit,
+.coach-session-row:focus-within .coach-session-edit {
+    opacity: 1;
+}
+
+.coach-session-edit:hover,
+.coach-session-edit:focus-visible {
+    border-color: var(--input-border);
+    background: var(--button-secondary-bg);
+    color: var(--text);
+}
+
+.coach-session-edit-form {
+    grid-column: 1 / -1;
+    min-width: 0;
+}
+
+.coach-session-edit-input {
+    width: 100%;
+    min-height: 32px;
+    padding: 5px 8px;
+    border: 1px solid var(--input-focus-border);
+    border-radius: 7px;
+    background: var(--input-bg);
+    color: var(--text);
+    font: inherit;
+    font-size: 13px;
+}
+
+.coach-session-rename-error {
+    display: block;
+    margin-top: 4px;
+    color: var(--red);
+    font-size: 11px;
+}
+
 .coach-session-title {
+    min-width: 0;
     overflow: hidden;
     font-size: 13px;
     font-weight: 650;

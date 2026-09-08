@@ -32,6 +32,25 @@
       return fetchJson(`/api/coach/sessions/${encodeURIComponent(sessionId)}`);
     },
 
+    async updateCoachSession(sessionId, payload = {}) {
+      const response = await fetch(`/api/coach/sessions/${encodeURIComponent(sessionId)}`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json",
+        },
+        body: JSON.stringify({ title: payload && payload.title }),
+      });
+      if (!response.ok) {
+        const detail = await response.json().catch(() => ({}));
+        const error = new Error(detail.detail || `${response.status} ${response.statusText || "Coach session update failed"}`);
+        error.status = response.status;
+        error.detail = typeof detail.detail === "string" ? detail.detail : "";
+        throw error;
+      }
+      return response.json();
+    },
+
     async fetchCoachUsage(sessionId) {
       return fetchJson(`/api/coach/sessions/${encodeURIComponent(sessionId)}/usage`);
     },

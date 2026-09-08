@@ -1,4 +1,5 @@
 import unittest
+import asyncio
 from decimal import Decimal
 import os
 import socket
@@ -29,11 +30,18 @@ if "fastapi" not in sys.modules:
             return lambda function: function
 
         post = get
+        patch = get
 
     fake_fastapi.APIRouter = FakeRouter
     fake_fastapi.Request = object
     fake_responses = types.ModuleType("fastapi.responses")
-    fake_responses.JSONResponse = object
+
+    class FakeJSONResponse:
+        def __init__(self, content, status_code=200):
+            self.content = content
+            self.status_code = status_code
+
+    fake_responses.JSONResponse = FakeJSONResponse
     sys.modules["fastapi"] = fake_fastapi
     sys.modules["fastapi.responses"] = fake_responses
 
@@ -67,7 +75,16 @@ from context_client import (
     fetch_current_context,
 )
 from openai_adapter import _reasoning_argument
-from routes.coach import CoachActiveTurn, CoachSessionArchived, CoachSessionNotFound, get_coach_session
+from routes.coach import (
+    CoachActiveTurn,
+    CoachSessionArchived,
+    CoachSessionNotFound,
+    DEFAULT_SESSION_TITLE,
+    _auto_title_session,
+    _derive_session_title,
+    get_coach_session,
+    update_coach_session,
+)
 
 
 CONTEXT = {
@@ -168,6 +185,195 @@ class CoachOrchestrationTests(unittest.TestCase):
         self.assertEqual(complete.call_args.kwargs["total_tokens"], 130)
         self.assertEqual(complete.call_args.kwargs["estimated_cost_usd"], Decimal("0.000052"))
         fail.assert_not_called()
+
+    def test_session_title_derivation_normalizes_and_bounds_text(self):
+        self.assertEqual(
+            _derive_session_title("  How\n am I doing this week?  "),
+            "How am I doing this week?",
+        )
+        self.assertEqual(
+            _derive_session_title("# How am I doing this week?"),
+            "How am I doing this week?",
+        )
+        title = _derive_session_title("This is a deliberately long question that should stop at a complete word boundary without leaking more text")
+        self.assertLessEqual(len(title), 60)
+        self.assertTrue(title.endswith("..."))
+        self.assertNotIn(" ", title[-4:-3])
+        self.assertEqual(_derive_session_title("\n`  `"), DEFAULT_SESSION_TITLE)
+
+    def test_auto_title_uses_parameterized_guard_and_does_not_touch_activity(self):
+        class FakeCursor:
+            rowcount = 1
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, exc_type, exc_value, traceback):
+                return False
+
+            def execute(self, query, params):
+                self.query = query
+                self.params = params
+
+        class FakeConnection:
+            def __init__(self):
+                self.cursor_instance = FakeCursor()
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, exc_type, exc_value, traceback):
+                return False
+
+            def cursor(self):
+                return self.cursor_instance
+
+            def commit(self):
+                pass
+
+        connection = FakeConnection()
+        with patch("routes.coach.db_conn", return_value=connection):
+            self.assertTrue(_auto_title_session(3, 10, "How am I doing this week?"))
+        self.assertEqual(connection.cursor_instance.params, (
+            "How am I doing this week?", 3, DEFAULT_SESSION_TITLE, 3, 10,
+        ))
+        self.assertIn("NOT EXISTS", connection.cursor_instance.query)
+        self.assertIn("SET title = %s, updated_at = now()", connection.cursor_instance.query)
+        self.assertNotIn("last_activity_at", connection.cursor_instance.query)
+
+    def test_auto_title_guard_returns_false_after_manual_rename(self):
+        class FakeCursor:
+            rowcount = 0
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, exc_type, exc_value, traceback):
+                return False
+
+            def execute(self, query, params):
+                pass
+
+        class FakeConnection:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, exc_type, exc_value, traceback):
+                return False
+
+            def cursor(self):
+                return FakeCursor()
+
+            def commit(self):
+                pass
+
+        with patch("routes.coach.db_conn", return_value=FakeConnection()):
+            self.assertFalse(_auto_title_session(3, 10, "A later question"))
+
+    def test_patch_session_title_validates_and_returns_public_session(self):
+        class FakeRequest:
+            async def json(self):
+                return {"title": "Calf recovery plan"}
+
+        session = {
+            "coach_session_id": 3,
+            "title": "Calf recovery plan",
+            "status": "active",
+            "provider": None,
+            "default_model": None,
+            "coaching_policy_version": "coach-v1",
+            "last_activity_at": None,
+            "created_at": None,
+            "updated_at": None,
+        }
+
+        class FakeCursor:
+            def __init__(self):
+                self.queries = []
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, exc_type, exc_value, traceback):
+                return False
+
+            def execute(self, query, params):
+                self.queries.append((query, params))
+
+            def fetchone(self):
+                return session
+
+        class FakeConnection:
+            def __init__(self):
+                self.cursor_instance = FakeCursor()
+                self.committed = False
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, exc_type, exc_value, traceback):
+                return False
+
+            def cursor(self):
+                return self.cursor_instance
+
+            def commit(self):
+                self.committed = True
+
+        connection = FakeConnection()
+        with patch("routes.coach.db_conn", return_value=connection):
+            result = asyncio.run(update_coach_session("3", FakeRequest()))
+        self.assertEqual(result["session"]["title"], "Calf recovery plan")
+        self.assertTrue(connection.committed)
+        query, params = connection.cursor_instance.queries[0]
+        self.assertEqual(params, ("Calf recovery plan", 3))
+        self.assertIn("SET title = %s, updated_at = now()", query)
+        self.assertNotIn("last_activity_at =", query)
+
+    def test_patch_session_title_rejects_invalid_and_unknown_requests(self):
+        class FakeRequest:
+            def __init__(self, payload):
+                self.payload = payload
+
+            async def json(self):
+                return self.payload
+
+        for payload in ({"title": " "}, {"title": 4}, {"title": "x" * 201}):
+            result = asyncio.run(update_coach_session("3", FakeRequest(payload)))
+            self.assertEqual(result.status_code, 400)
+
+        result = asyncio.run(update_coach_session("0", FakeRequest({"title": "Valid"})))
+        self.assertEqual(result.status_code, 400)
+
+        class EmptyCursor:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, exc_type, exc_value, traceback):
+                return False
+
+            def execute(self, query, params):
+                pass
+
+            def fetchone(self):
+                return None
+
+        class EmptyConnection:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, exc_type, exc_value, traceback):
+                return False
+
+            def cursor(self):
+                return EmptyCursor()
+
+            def rollback(self):
+                pass
+
+        with patch("routes.coach.db_conn", return_value=EmptyConnection()):
+            result = asyncio.run(update_coach_session("3", FakeRequest({"title": "Missing"})))
+        self.assertEqual(result.status_code, 404)
 
     def test_context_failure_marks_started_turn_and_does_not_call_provider(self):
         self.provider = FakeProvider(self.response)

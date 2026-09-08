@@ -88,6 +88,60 @@ def _text_value(value, field_name, max_length):
     return value, None
 
 
+def _derive_session_title(message_text, max_length=60):
+    normalized = re.sub(r"\s+", " ", message_text if isinstance(message_text, str) else "").strip()
+    normalized = re.sub(r"^(?:[#>*_`-]+|\d+[.)])\s*", "", normalized).strip()
+    normalized = re.sub(r"[*_`]+", "", normalized).strip()
+    if not normalized:
+        return DEFAULT_SESSION_TITLE
+
+    first_sentence = re.split(r"(?<=[.!?])\s+", normalized, maxsplit=1)[0].strip()
+    candidate = first_sentence or normalized
+    if len(candidate) <= max_length:
+        return candidate
+
+    truncated_length = max_length - 3
+    shortened = candidate[:truncated_length].rsplit(" ", 1)[0].rstrip(" ,;:-")
+    if not shortened:
+        shortened = candidate[:truncated_length].rstrip()
+    return f"{shortened}..." if shortened else DEFAULT_SESSION_TITLE
+
+
+def _auto_title_session(session_id, message_id, message_text):
+    title = _derive_session_title(message_text)
+    if title == DEFAULT_SESSION_TITLE:
+        return False
+    try:
+        with db_conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    UPDATE public.coach_session
+                    SET title = %s, updated_at = now()
+                    WHERE coach_session_id = %s
+                      AND title = %s
+                      AND NOT EXISTS (
+                          SELECT 1
+                          FROM public.coach_message
+                          WHERE coach_session_id = %s
+                            AND role = 'user'
+                            AND coach_message_id <> %s
+                      )
+                    """,
+                    (title, session_id, DEFAULT_SESSION_TITLE, session_id, message_id),
+                )
+                updated = cur.rowcount
+            conn.commit()
+        return updated > 0
+    except Exception:
+        logger.exception(
+            "Failed to auto-title Coach session session_id=%s message_id=%s",
+            session_id,
+            message_id,
+        )
+        return False
+
+
 def _start_coach_turn(session_id, message_text, request_id):
     parsed_id = _parse_positive_id(session_id)
     if parsed_id is None:
@@ -147,6 +201,7 @@ def _start_coach_turn(session_id, message_text, request_id):
                 (parsed_id,),
             )
         conn.commit()
+    _auto_title_session(parsed_id, user_message["coach_message_id"], message_text)
     return _json_row(session), _json_row(user_message), _json_row(turn)
 
 
@@ -386,6 +441,45 @@ def get_coach_session(session_id: str):
     except Exception:
         logger.exception("Failed to load Coach session")
         return JSONResponse({"detail": "Unable to load Coach session."}, status_code=500)
+
+
+@router.patch("/api/coach/sessions/{session_id}")
+async def update_coach_session(session_id: str, request: Request):
+    parsed_id = _parse_positive_id(session_id)
+    if parsed_id is None:
+        return JSONResponse({"detail": "session_id must be a positive integer."}, status_code=400)
+    try:
+        payload = await request.json()
+    except Exception:
+        return JSONResponse({"detail": "Invalid request body."}, status_code=400)
+    if not isinstance(payload, dict):
+        return JSONResponse({"detail": "Request body must be an object."}, status_code=400)
+    title, error = _text_value(payload.get("title"), "title", MAX_SESSION_TITLE_LENGTH)
+    if error:
+        return JSONResponse({"detail": error}, status_code=400)
+
+    try:
+        with db_conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    UPDATE public.coach_session
+                    SET title = %s, updated_at = now()
+                    WHERE coach_session_id = %s
+                    RETURNING coach_session_id, title, status, provider, default_model,
+                              coaching_policy_version, last_activity_at, created_at, updated_at
+                    """,
+                    (title, parsed_id),
+                )
+                session = cur.fetchone()
+            if session is None:
+                conn.rollback()
+                return JSONResponse({"detail": "Coach session not found."}, status_code=404)
+            conn.commit()
+        return {"session": _json_row(session)}
+    except Exception:
+        logger.exception("Failed to update Coach session session_id=%s", parsed_id)
+        return JSONResponse({"detail": "Unable to update Coach session."}, status_code=500)
 
 
 @router.post("/api/coach/sessions/{session_id}/messages")

@@ -43,6 +43,9 @@
         stageTimer: null,
         stageIndex: 0,
         previousFocus: null,
+        editingSessionId: "",
+        renamePending: false,
+        renameError: "",
     };
 
     const refs = {
@@ -215,19 +218,127 @@
             refs.sessions.appendChild(makeElement("div", "coach-session-group", group));
             sessions.forEach(session => {
                 const id = sessionId(session);
-                const button = makeElement("button", `coach-session-row${id === state.selectedSessionId ? " is-active" : ""}`);
-                button.type = "button";
-                button.setAttribute("role", "listitem");
-                button.setAttribute("aria-current", id === state.selectedSessionId ? "true" : "false");
-                button.disabled = state.responsePending;
-                button.append(
-                    makeElement("span", "coach-session-title", text(session.title, "New coaching session")),
+                const title = text(session.title, "New coaching session");
+                const row = makeElement("div", `coach-session-row${id === state.selectedSessionId ? " is-active" : ""}`);
+                row.setAttribute("role", "listitem");
+                if (state.editingSessionId === id) {
+                    const form = makeElement("form", "coach-session-edit-form");
+                    const input = makeElement("input", "coach-session-edit-input");
+                    input.type = "text";
+                    input.value = title;
+                    input.maxLength = 200;
+                    input.dataset.coachRenameInput = id;
+                    input.setAttribute("aria-label", `Rename ${title}`);
+                    input.setAttribute("aria-describedby", `coach-rename-error-${id}`);
+                    input.setAttribute("aria-busy", String(state.renamePending));
+                    input.disabled = state.renamePending;
+                    const error = makeElement("span", "coach-session-rename-error", state.renameError);
+                    error.id = `coach-rename-error-${id}`;
+                    error.setAttribute("role", "status");
+                    error.setAttribute("aria-live", "polite");
+                    error.hidden = !state.renameError;
+                    form.append(input, error);
+                    form.addEventListener("submit", event => {
+                        event.preventDefault();
+                        saveRename(id, input.value);
+                    });
+                    input.addEventListener("keydown", event => {
+                        if (event.key === "Escape") {
+                            event.preventDefault();
+                            cancelRename(true);
+                        }
+                    });
+                    row.appendChild(form);
+                    refs.sessions.appendChild(row);
+                    window.setTimeout(() => {
+                        input.focus();
+                        input.select();
+                    }, 0);
+                    return;
+                }
+                const select = makeElement("button", "coach-session-select");
+                select.type = "button";
+                select.setAttribute("aria-current", id === state.selectedSessionId ? "true" : "false");
+                select.disabled = state.responsePending;
+                select.append(
+                    makeElement("span", "coach-session-title", title),
                     makeElement("span", "coach-session-time", formatTime(session.last_activity_at)),
                 );
-                button.addEventListener("click", () => selectSession(id));
-                refs.sessions.appendChild(button);
+                select.addEventListener("click", () => selectSession(id));
+                const edit = makeElement("button", "coach-session-edit", "✎");
+                edit.type = "button";
+                edit.setAttribute("aria-label", `Rename ${title}`);
+                edit.dataset.coachEditSession = id;
+                edit.title = `Rename ${title}`;
+                edit.disabled = state.responsePending;
+                edit.addEventListener("click", event => {
+                    event.stopPropagation();
+                    startRename(id);
+                });
+                row.append(select, edit);
+                refs.sessions.appendChild(row);
             });
         });
+    }
+
+    function startRename(id) {
+        if (state.responsePending || state.renamePending || !validSessionId(id)) return;
+        state.editingSessionId = id;
+        state.renameError = "";
+        renderSessions();
+    }
+
+    function cancelRename(restoreFocus) {
+        const editingId = state.editingSessionId;
+        state.editingSessionId = "";
+        state.renameError = "";
+        renderSessions();
+        if (restoreFocus && editingId) {
+            const edit = refs.sessions.querySelector(`[data-coach-edit-session="${editingId}"]`);
+            if (edit) edit.focus();
+        }
+    }
+
+    async function saveRename(id, value) {
+        const title = text(value).trim();
+        if (!title) {
+            state.renameError = "Title cannot be blank.";
+            renderSessions();
+            return;
+        }
+        state.renamePending = true;
+        state.renameError = "";
+        renderSessions();
+        try {
+            const payload = await window.api.updateCoachSession(id, { title });
+            const updated = payload && payload.session;
+            state.sessions = state.sessions.map(session => sessionId(session) === id
+                ? { ...session, ...(updated || {}), title }
+                : session);
+            if (state.session && sessionId(state.session.session) === id) {
+                state.session.session = { ...state.session.session, ...(updated || {}), title };
+            }
+            state.editingSessionId = "";
+            state.renameError = "";
+            updateHeader();
+        } catch (error) {
+            state.renameError = safeServerDetail(error && error.detail) || "Could not rename this conversation.";
+        } finally {
+            state.renamePending = false;
+            renderSessions();
+            window.setTimeout(() => {
+                if (state.editingSessionId === id && state.renameError) {
+                    const input = refs.sessions.querySelector(`[data-coach-rename-input="${id}"]`);
+                    if (input) {
+                        input.focus();
+                        input.select();
+                    }
+                } else if (state.editingSessionId !== id) {
+                    const edit = refs.sessions.querySelector(`[data-coach-edit-session="${id}"]`);
+                    if (edit) edit.focus();
+                }
+            }, 0);
+        }
     }
 
     function renderWelcome() {
@@ -640,8 +751,13 @@
             state.usage = response.usage || state.usage;
             state.pendingMessage = "";
             await selectSession(activeId, true);
+            const refreshedSession = state.session && state.session.session;
             state.sessions = state.sessions.map(session => sessionId(session) === activeId
-                ? { ...session, last_activity_at: new Date().toISOString() }
+                ? {
+                    ...session,
+                    ...(refreshedSession || {}),
+                    last_activity_at: new Date().toISOString(),
+                }
                 : session);
             state.sessions = sortSessions(state.sessions);
             renderSessions();
