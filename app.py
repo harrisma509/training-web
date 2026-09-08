@@ -36,6 +36,7 @@ from routes.charts import router as charts_router
 from routes.coach import router as coach_router
 from routes.coach_provider import router as coach_provider_router
 from routes.coach_respond import router as coach_respond_router
+from routes.coach_settings import router as coach_settings_router
 
 configure_logging("training-web")
 
@@ -57,6 +58,7 @@ app.include_router(charts_router)
 app.include_router(coach_router)
 app.include_router(coach_provider_router)
 app.include_router(coach_respond_router)
+app.include_router(coach_settings_router)
 
 app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")
 

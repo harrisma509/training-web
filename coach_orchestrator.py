@@ -15,9 +15,19 @@ from ai_provider import (
     AIRateLimitError,
     AITimeoutError,
 )
-from coach_cost import BudgetUnavailableError, CostLimitError, estimated_cost, enforce_monthly_budget, preflight_cost
+from coach_cost import (
+    BudgetUnavailableError,
+    CostLimitError,
+    MonthlyBudgetDisabledError,
+    MonthlyBudgetLimitError,
+    TurnCostLimitError,
+    estimated_cost,
+    enforce_monthly_budget,
+    preflight_cost,
+)
 from coach_guards import ProviderCapacityError, provider_capacity
 from coach_policy import COACH_POLICY
+from routes.coach_settings import CoachSettingsUnavailableError, load_coach_settings
 from context_client import ContextError, MAX_CONTEXT_CHARS, fetch_current_context
 from routes.coach import (
     MAX_MESSAGE_LENGTH,
@@ -139,6 +149,7 @@ def respond_to_coach(
     *,
     context_loader=fetch_current_context,
     provider_factory=configured_ai_provider,
+    settings_loader=None,
 ):
     request_id = f"coach-{uuid.uuid4().hex}"
     _, user_message, started_turn = _start_coach_turn(session_id, message, request_id)
@@ -148,17 +159,23 @@ def respond_to_coach(
         context = context_loader()
         history = _recent_coach_messages(session_id, user_message["coach_message_id"], MAX_HISTORY_MESSAGES, MAX_HISTORY_CHARS)
         input_text, context_characters, history_characters = _build_input(context, history, message)
+        settings = (settings_loader or load_coach_settings)()
         provider = provider_factory()
         model = provider.model
-        proposed_cost = preflight_cost(model, len(input_text) + len(COACH_POLICY), MAX_OUTPUT_TOKENS)
-        enforce_monthly_budget(proposed_cost)
+        proposed_cost = preflight_cost(
+            model,
+            len(input_text) + len(COACH_POLICY),
+            settings.max_output_tokens,
+            settings.max_turn_cost_usd,
+        )
+        enforce_monthly_budget(proposed_cost, settings.monthly_cost_limit_usd)
         request = AIRequest(
             model=model,
             instructions=COACH_POLICY,
             input_text=input_text,
-            max_output_tokens=MAX_OUTPUT_TOKENS,
+            max_output_tokens=settings.max_output_tokens,
             timeout_seconds=PROVIDER_TIMEOUT_SECONDS,
-            reasoning_effort=validate_reasoning_effort("low"),
+            reasoning_effort=validate_reasoning_effort(settings.reasoning_effort),
         )
         with provider_capacity():
             response = provider.complete(request)
@@ -201,10 +218,39 @@ def respond_to_coach(
         _failure(turn_id, "failed", "provider_configuration", 503, "Coach provider is unavailable.", started)
     except ProviderCapacityError:
         _failure(turn_id, "failed", "provider_concurrency_limit", 429, "Coach provider capacity is unavailable.", started)
+    except MonthlyBudgetDisabledError:
+        _failure(
+            turn_id,
+            "failed",
+            "budget_disabled",
+            429,
+            "AI Coach is paused because the monthly budget limit is $0.00. Update it in Settings > AI Coach.",
+            started,
+        )
+    except MonthlyBudgetLimitError:
+        _failure(
+            turn_id,
+            "failed",
+            "monthly_budget_limit",
+            429,
+            "The AI Coach monthly budget has been reached. Increase the limit in Settings > AI Coach or wait until next month.",
+            started,
+        )
+    except TurnCostLimitError:
+        _failure(
+            turn_id,
+            "failed",
+            "turn_cost_limit",
+            429,
+            "This response exceeds the maximum estimated cost per turn. Increase the limit in Settings > AI Coach or request a shorter response.",
+            started,
+        )
     except CostLimitError:
         _failure(turn_id, "failed", "budget_limit", 429, "Coach budget capacity is unavailable.", started)
     except BudgetUnavailableError:
         _failure(turn_id, "failed", "budget_unavailable", 503, "Coach budget status is unavailable.", started)
+    except CoachSettingsUnavailableError:
+        _failure(turn_id, "failed", "settings_unavailable", 503, "Coach settings are unavailable.", started)
     except CoachOrchestrationError as exc:
         _failure(turn_id, "failed", exc.category, exc.status_code, exc.detail, started)
     except AIProviderError:

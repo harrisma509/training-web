@@ -646,11 +646,31 @@ No raw provider exception body is returned to the browser.
 ```text
 Maximum active turn per session: 1
 Maximum simultaneous provider calls per web process: 2
-Maximum Coach output tokens: 1,200
 Maximum provider timeout: 60 seconds
-Maximum theoretical cost per turn: $0.25
-Monthly application recorded-cost ceiling: $5.00
+Maximum Coach output tokens: 250-8,000, configured value defaults to 1,200
+Maximum theoretical cost per turn: $0.01-$1.00, configured value defaults to $0.25
+Monthly application recorded-cost ceiling: $0.00-$25.00, configured value defaults to $5.00
 ```
+
+The persisted settings singleton is read before every paid turn. The server also
+validates `reasoning_effort` as `none`, `low`, `medium`, or `high`. A monthly
+limit of `$0.00` deliberately blocks all paid turns. Missing, malformed, or
+unavailable settings fail closed before provider creation and reconcile the
+started turn as `settings_unavailable`; there is no silent runtime fallback.
+
+The trusted-network API is:
+
+```text
+GET /api/settings/ai-coach
+PUT /api/settings/ai-coach
+```
+
+The Settings browser tab is implemented as a dedicated `AI Coach` tab. It
+loads the PostgreSQL-backed singleton through the API, keeps a local draft only
+while editing, and never writes authoritative Coach settings to localStorage.
+Save and Cancel are local UI actions around the server-backed baseline; saving
+does not require a service restart and settings management makes no provider
+call.
 
 ### Pricing behavior
 
@@ -679,6 +699,14 @@ Recorded completed-turn cost
 Completed turns with unknown cost make budget status unavailable and prevent additional paid requests until reviewed.
 
 The application budget is a product guard, not an atomic provider billing reservation. The prepaid provider balance with auto-reload disabled remains the external financial backstop.
+
+Budget rejections are presented distinctly. A `$0.00` monthly limit reports
+that AI Coach is paused and points to Settings > AI Coach. A reached or
+exceeded monthly limit reports that the monthly budget has been reached. A
+per-turn estimate above its configured cap asks for a higher limit or shorter
+response. Accounting, unknown-pricing, malformed-cost, and database failures
+remain a generic unavailable error. All rejected cases make no provider call
+and expose no spend totals, secrets, SQL, or internal exception details.
 
 ### Observed V1 performance
 
@@ -822,18 +850,12 @@ Goals:
 - Preserve risk-sensitive details
 - Avoid optimizing solely for token count
 
-### V2.3 Configurable AI settings
+### V2.3 Additional controls
 
-Move safe constants into server-managed settings:
-
-```env
-TRAINING_AI_MONTHLY_COST_LIMIT_USD=5.00
-TRAINING_AI_MAX_TURN_COST_USD=0.25
-TRAINING_AI_MAX_OUTPUT_TOKENS=1200
-TRAINING_AI_REASONING_EFFORT=low
-```
-
-Browser users should not receive unrestricted control over cost-sensitive settings.
+The Settings > AI Coach tab now edits the bounded persisted settings. Future
+work may add additional read-only operational status where a verified safe
+backend route exists. Browser users must remain subject to the same server
+ceilings and must not receive provider credentials or deployment configuration.
 
 ### V2.4 Provider comparison
 

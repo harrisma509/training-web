@@ -25,7 +25,38 @@
   const settingsTabPanels = {
     general: document.getElementById("settingsGeneralTab"),
     yearly: document.getElementById("settingsYearlyTab"),
+    "ai-coach": document.getElementById("settingsAiCoachTab"),
   };
+  const aiCoachMonthlyLimit = document.getElementById("aiCoachMonthlyLimit");
+  const aiCoachTurnLimit = document.getElementById("aiCoachTurnLimit");
+  const aiCoachOutputTokens = document.getElementById("aiCoachOutputTokens");
+  const aiCoachReasoning = document.getElementById("aiCoachReasoning");
+  const aiCoachSettingsUpdated = document.getElementById("aiCoachSettingsUpdated");
+  const aiCoachSettingsStatus = document.getElementById("aiCoachSettingsStatus");
+  const aiCoachSettingsError = document.getElementById("aiCoachSettingsError");
+  const aiCoachSettingsRetry = document.getElementById("aiCoachSettingsRetry");
+  const aiCoachSettingsCancel = document.getElementById("aiCoachSettingsCancel");
+  const aiCoachSettingsSave = document.getElementById("aiCoachSettingsSave");
+  const aiCoachFields = [aiCoachMonthlyLimit, aiCoachTurnLimit, aiCoachOutputTokens, aiCoachReasoning].filter(Boolean);
+  const aiCoachFieldErrors = {
+    monthly_cost_limit_usd: document.getElementById("aiCoachMonthlyLimitError"),
+    max_turn_cost_usd: document.getElementById("aiCoachTurnLimitError"),
+    max_output_tokens: document.getElementById("aiCoachOutputTokensError"),
+    reasoning_effort: document.getElementById("aiCoachReasoningError"),
+  };
+  const aiCoachFieldIds = {
+    monthly_cost_limit_usd: aiCoachMonthlyLimit,
+    max_turn_cost_usd: aiCoachTurnLimit,
+    max_output_tokens: aiCoachOutputTokens,
+    reasoning_effort: aiCoachReasoning,
+  };
+  let selectedSettingsTab = "general";
+  let aiCoachBaseline = null;
+  let aiCoachDraft = null;
+  let aiCoachLoadPromise = null;
+  let aiCoachLoading = false;
+  let aiCoachSaving = false;
+  let aiCoachValidation = { valid: false, errors: {} };
   const settingsStatusSummary = document.getElementById("settingsStatusSummary");
   const refreshStatusBtn = document.getElementById("refreshStatusBtn");
   const copyDiagnosticsBtn = document.getElementById("copyDiagnosticsBtn");
@@ -40,6 +71,210 @@
       .replace(/>/g, "&gt;")
       .replace(/\"/g, "&quot;")
       .replace(/'/g, "&#39;");
+  }
+
+  const validateAiCoachSettingsDraft = window.AICoachSettingsValidation.validateAiCoachSettingsDraft;
+
+  function normalizeAiCoachSettings(settings) {
+    const normalized = settings || {};
+    const normalizeCurrency = (value) => {
+      const numericValue = Number(value);
+      return Number.isFinite(numericValue) ? numericValue.toFixed(2) : "";
+    };
+    return {
+      monthly_cost_limit_usd: normalizeCurrency(normalized.monthly_cost_limit_usd),
+      max_turn_cost_usd: normalizeCurrency(normalized.max_turn_cost_usd),
+      max_output_tokens: Number.isInteger(Number(normalized.max_output_tokens))
+        ? String(normalized.max_output_tokens)
+        : "",
+      reasoning_effort: String(normalized.reasoning_effort || ""),
+      updated_at: normalized.updated_at || "",
+    };
+  }
+
+  function cloneAiCoachSettings(settings) {
+    return settings ? { ...settings } : null;
+  }
+
+  function readAiCoachDraft() {
+    return {
+      monthly_cost_limit_usd: aiCoachMonthlyLimit?.value || "",
+      max_turn_cost_usd: aiCoachTurnLimit?.value || "",
+      max_output_tokens: aiCoachOutputTokens?.value || "",
+      reasoning_effort: aiCoachReasoning?.value || "",
+    };
+  }
+
+  function aiCoachDraftPayload(draft) {
+    return {
+      monthly_cost_limit_usd: Number(draft.monthly_cost_limit_usd),
+      max_turn_cost_usd: Number(draft.max_turn_cost_usd),
+      max_output_tokens: Number(draft.max_output_tokens),
+      reasoning_effort: draft.reasoning_effort,
+    };
+  }
+
+  function setAiCoachStatus(message, isError = false) {
+    if (!aiCoachSettingsStatus) {
+      return;
+    }
+    aiCoachSettingsStatus.textContent = message || "";
+    aiCoachSettingsStatus.classList.toggle("error", Boolean(isError));
+  }
+
+  function formatAiCoachUpdatedAt(value) {
+    if (!value) {
+      return "Last updated: unavailable";
+    }
+    const parsed = new Date(value);
+    if (Number.isNaN(parsed.getTime())) {
+      return "Last updated: unavailable";
+    }
+    return `Last updated: ${parsed.toLocaleString()}`;
+  }
+
+  function renderAiCoachSettings() {
+    const draft = aiCoachDraft || { monthly_cost_limit_usd: "", max_turn_cost_usd: "", max_output_tokens: "", reasoning_effort: "" };
+    const validation = validateAiCoachSettingsDraft(draft);
+    aiCoachValidation = validation;
+    const values = {
+      monthly_cost_limit_usd: aiCoachMonthlyLimit,
+      max_turn_cost_usd: aiCoachTurnLimit,
+      max_output_tokens: aiCoachOutputTokens,
+      reasoning_effort: aiCoachReasoning,
+    };
+
+    Object.entries(values).forEach(([field, element]) => {
+      if (element && element.value !== draft[field]) {
+        element.value = draft[field];
+      }
+      const errorElement = aiCoachFieldErrors[field];
+      const message = validation.errors[field] || "";
+      if (errorElement) {
+        errorElement.textContent = message;
+      }
+      if (element) {
+        element.setAttribute("aria-invalid", message ? "true" : "false");
+      }
+    });
+
+    if (aiCoachSettingsUpdated) {
+      aiCoachSettingsUpdated.textContent = formatAiCoachUpdatedAt(aiCoachBaseline?.updated_at);
+    }
+    const dirty = Boolean(aiCoachBaseline && JSON.stringify(draft) !== JSON.stringify({
+      monthly_cost_limit_usd: aiCoachBaseline.monthly_cost_limit_usd,
+      max_turn_cost_usd: aiCoachBaseline.max_turn_cost_usd,
+      max_output_tokens: aiCoachBaseline.max_output_tokens,
+      reasoning_effort: aiCoachBaseline.reasoning_effort,
+    }));
+    if (aiCoachSettingsSave) {
+      aiCoachSettingsSave.disabled = aiCoachLoading || aiCoachSaving || !aiCoachBaseline || !dirty || !validation.valid;
+    }
+    if (aiCoachSettingsCancel) {
+      aiCoachSettingsCancel.disabled = aiCoachLoading || aiCoachSaving || !aiCoachBaseline || !dirty;
+    }
+    if (aiCoachSettingsRetry) {
+      aiCoachSettingsRetry.disabled = aiCoachLoading || aiCoachSaving;
+    }
+    aiCoachFields.forEach((field) => {
+      field.disabled = aiCoachLoading || aiCoachSaving;
+    });
+  }
+
+  async function loadAiCoachSettings(force = false) {
+    if (aiCoachLoadPromise) {
+      return aiCoachLoadPromise;
+    }
+    if (!force && aiCoachBaseline) {
+      return aiCoachBaseline;
+    }
+    aiCoachLoading = true;
+    if (aiCoachSettingsError) {
+      aiCoachSettingsError.textContent = "";
+    }
+    setAiCoachStatus("Loading...");
+    renderAiCoachSettings();
+    aiCoachLoadPromise = (async () => {
+      try {
+        if (!window.api || typeof window.api.fetchAiCoachSettings !== "function") {
+          throw new Error("AI Coach settings are unavailable.");
+        }
+        const loaded = normalizeAiCoachSettings(await window.api.fetchAiCoachSettings());
+        if (!validateAiCoachSettingsDraft(loaded).valid) {
+          throw new Error("AI Coach settings response is invalid.");
+        }
+        aiCoachBaseline = loaded;
+        aiCoachDraft = cloneAiCoachSettings(loaded);
+        setAiCoachStatus("Loaded");
+        renderAiCoachSettings();
+        return loaded;
+      } catch (error) {
+        console.warn("Unable to load AI Coach settings.", error);
+        if (aiCoachSettingsError) {
+          aiCoachSettingsError.textContent = "Unable to load AI Coach settings.";
+        }
+        setAiCoachStatus("Settings are unavailable.", true);
+        renderAiCoachSettings();
+        throw error;
+      } finally {
+        aiCoachLoading = false;
+        aiCoachLoadPromise = null;
+        renderAiCoachSettings();
+      }
+    })();
+    return aiCoachLoadPromise;
+  }
+
+  async function saveAiCoachSettings() {
+    if (aiCoachLoading || aiCoachSaving || !aiCoachBaseline) {
+      return;
+    }
+    aiCoachDraft = readAiCoachDraft();
+    const validation = validateAiCoachSettingsDraft(aiCoachDraft);
+    aiCoachValidation = validation;
+    renderAiCoachSettings();
+    if (!validation.valid) {
+      const firstInvalid = Object.keys(validation.errors)[0];
+      aiCoachFieldIds[firstInvalid]?.focus();
+      return;
+    }
+
+    aiCoachSaving = true;
+    if (aiCoachSettingsError) {
+      aiCoachSettingsError.textContent = "";
+    }
+    setAiCoachStatus("Saving...");
+    renderAiCoachSettings();
+    try {
+      if (!window.api || typeof window.api.saveAiCoachSettings !== "function") {
+        throw new Error("AI Coach settings are unavailable.");
+      }
+      const saved = normalizeAiCoachSettings(await window.api.saveAiCoachSettings(aiCoachDraftPayload(aiCoachDraft)));
+      aiCoachBaseline = saved;
+      aiCoachDraft = cloneAiCoachSettings(saved);
+      setAiCoachStatus("Saved");
+    } catch (error) {
+      console.warn("Unable to save AI Coach settings.", error);
+      if (aiCoachSettingsError) {
+        aiCoachSettingsError.textContent = "Unable to save AI Coach settings. Review the values and try again.";
+      }
+      setAiCoachStatus("Save failed.", true);
+    } finally {
+      aiCoachSaving = false;
+      renderAiCoachSettings();
+    }
+  }
+
+  function cancelAiCoachSettings() {
+    if (!aiCoachBaseline || aiCoachLoading || aiCoachSaving) {
+      return;
+    }
+    aiCoachDraft = cloneAiCoachSettings(aiCoachBaseline);
+    if (aiCoachSettingsError) {
+      aiCoachSettingsError.textContent = "";
+    }
+    setAiCoachStatus("Changes canceled");
+    renderAiCoachSettings();
   }
 
   function syncFormCheckboxes() {
@@ -372,6 +607,9 @@
     settingsDrawer?.classList.remove("hidden");
     settingsDrawer?.setAttribute("aria-hidden", "false");
     loadSystemStatus();
+    if (selectedSettingsTab === "ai-coach") {
+      loadAiCoachSettings(true).catch(() => { });
+    }
   }
 
   function closeSettingsDrawer() {
@@ -384,6 +622,8 @@
     if (!selectedTab || !validTabs.includes(selectedTab)) {
       return;
     }
+
+    selectedSettingsTab = selectedTab;
 
     settingsTabButtons.forEach((tabButton) => {
       const isActive = tabButton.dataset.settingsTab === selectedTab;
@@ -400,6 +640,10 @@
       panel.classList.toggle("hidden", !isVisible);
       panel.setAttribute("aria-hidden", String(!isVisible));
     });
+
+    if (selectedTab === "ai-coach") {
+      loadAiCoachSettings(true).catch(() => { });
+    }
   }
 
   function attachSettingsEventListeners() {
@@ -410,6 +654,25 @@
         setSettingsTab(button.dataset.settingsTab);
       });
     });
+
+    aiCoachFields.forEach((field) => {
+      field.addEventListener("input", () => {
+        aiCoachDraft = readAiCoachDraft();
+        if (aiCoachSettingsError) {
+          aiCoachSettingsError.textContent = "";
+        }
+        renderAiCoachSettings();
+      });
+      field.addEventListener("change", () => {
+        aiCoachDraft = readAiCoachDraft();
+        renderAiCoachSettings();
+      });
+    });
+    aiCoachSettingsRetry?.addEventListener("click", () => {
+      loadAiCoachSettings(true).catch(() => { });
+    });
+    aiCoachSettingsCancel?.addEventListener("click", cancelAiCoachSettings);
+    aiCoachSettingsSave?.addEventListener("click", saveAiCoachSettings);
 
     settingsDrawer?.addEventListener("click", (event) => {
       if (event.target === settingsDrawer) {
@@ -563,6 +826,10 @@
   window.syncFormCheckboxes = syncFormCheckboxes;
   window.syncDefaultBikeSelect = syncDefaultBikeSelect;
   window.updateStartupTabVisibility = updateStartupTabVisibility;
+  window.validateAiCoachSettingsDraft = validateAiCoachSettingsDraft;
+  window.loadAiCoachSettings = loadAiCoachSettings;
+  window.saveAiCoachSettings = saveAiCoachSettings;
+  window.cancelAiCoachSettings = cancelAiCoachSettings;
 
   SettingsController.initialize();
 })();

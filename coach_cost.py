@@ -7,8 +7,8 @@ from zoneinfo import ZoneInfo
 INPUT_RATE = Decimal("0.20") / Decimal(1_000_000)
 CACHED_INPUT_RATE = Decimal("0.02") / Decimal(1_000_000)
 OUTPUT_RATE = Decimal("1.20") / Decimal(1_000_000)
-MAX_TURN_COST = Decimal("0.25")
-MONTHLY_COST_LIMIT = Decimal("5.00")
+DEFAULT_MAX_TURN_COST = Decimal("0.25")
+DEFAULT_MONTHLY_COST_LIMIT = Decimal("5.00")
 MODEL_PRICING = {
     "gpt-5.6-luna": (INPUT_RATE, CACHED_INPUT_RATE, OUTPUT_RATE),
     "gpt-5.6-luna-standard": (INPUT_RATE, CACHED_INPUT_RATE, OUTPUT_RATE),
@@ -18,6 +18,18 @@ MODEL_PRICING = {
 class CostLimitError(Exception):
     category = "budget_limit"
     status_code = 429
+
+
+class MonthlyBudgetDisabledError(CostLimitError):
+    category = "budget_disabled"
+
+
+class MonthlyBudgetLimitError(CostLimitError):
+    category = "monthly_budget_limit"
+
+
+class TurnCostLimitError(CostLimitError):
+    category = "turn_cost_limit"
 
 
 class BudgetUnavailableError(Exception):
@@ -43,14 +55,14 @@ def estimated_cost(model, input_tokens, cached_input_tokens, output_tokens):
     ).quantize(Decimal("0.000001"))
 
 
-def preflight_cost(model, input_characters, max_output_tokens):
+def preflight_cost(model, input_characters, max_output_tokens, max_turn_cost):
     rates = pricing_for_model(model)
     if rates is None:
         raise BudgetUnavailableError()
     # One character per input token is intentionally conservative for the bound.
     estimate = Decimal(input_characters) * rates[0] + Decimal(max_output_tokens) * rates[2]
-    if estimate > MAX_TURN_COST:
-        raise CostLimitError()
+    if estimate > Decimal(str(max_turn_cost)):
+        raise TurnCostLimitError()
     return estimate
 
 
@@ -73,22 +85,38 @@ def check_monthly_budget():
                 row = cur.fetchone()
     except Exception as exc:
         raise BudgetUnavailableError() from exc
-    recorded = Decimal(str(row["recorded_cost"] or 0))
-    return recorded, int(row["unknown_cost_count"] or 0)
+    try:
+        recorded = Decimal(str(row["recorded_cost"] or 0))
+        unknown_count = int(row["unknown_cost_count"] or 0)
+    except (KeyError, TypeError, ValueError, ArithmeticError) as exc:
+        raise BudgetUnavailableError() from exc
+    if not recorded.is_finite() or recorded < 0 or unknown_count < 0:
+        raise BudgetUnavailableError()
+    return recorded, unknown_count
 
 
-def enforce_monthly_budget(proposed_cost):
+def enforce_monthly_budget(proposed_cost, monthly_cost_limit):
     try:
         proposed_cost = Decimal(str(proposed_cost))
     except (TypeError, ValueError, ArithmeticError) as exc:
         raise BudgetUnavailableError() from exc
-    if proposed_cost < 0:
+    if not proposed_cost.is_finite() or proposed_cost < 0:
         raise BudgetUnavailableError()
+    try:
+        monthly_cost_limit = Decimal(str(monthly_cost_limit))
+    except (TypeError, ValueError, ArithmeticError) as exc:
+        raise BudgetUnavailableError() from exc
+    if not monthly_cost_limit.is_finite() or monthly_cost_limit < 0:
+        raise BudgetUnavailableError()
+    if monthly_cost_limit == 0:
+        raise MonthlyBudgetDisabledError()
     recorded, unknown_count = check_monthly_budget()
-    if unknown_count > 0:
+    if not isinstance(recorded, Decimal) or not recorded.is_finite() or recorded < 0:
         raise BudgetUnavailableError()
-    if recorded >= MONTHLY_COST_LIMIT or recorded + proposed_cost > MONTHLY_COST_LIMIT:
-        raise CostLimitError()
+    if unknown_count < 0 or unknown_count > 0:
+        raise BudgetUnavailableError()
+    if recorded >= monthly_cost_limit or recorded + proposed_cost > monthly_cost_limit:
+        raise MonthlyBudgetLimitError()
     return {"recorded_cost_usd": recorded, "unknown_cost_count": unknown_count}
 
 

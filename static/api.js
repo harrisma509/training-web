@@ -259,6 +259,31 @@
       return response.json();
     },
 
+    async fetchAiCoachSettings() {
+      return fetchJson("/api/settings/ai-coach");
+    },
+
+    async saveAiCoachSettings(payload = {}) {
+      const response = await fetch("/api/settings/ai-coach", {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json",
+        },
+        body: JSON.stringify(payload || {}),
+      });
+
+      if (!response.ok) {
+        const detail = await response.json().catch(() => ({}));
+        const error = new Error(detail.detail || `${response.status} ${response.statusText || "AI Coach settings save failed"}`);
+        error.status = response.status;
+        error.detail = typeof detail.detail === "string" ? detail.detail : "";
+        throw error;
+      }
+
+      return response.json();
+    },
+
     async requestSync() {
       return fetchJson("/api/sync-request", {
         method: "POST",

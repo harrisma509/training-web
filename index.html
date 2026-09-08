@@ -116,10 +116,12 @@
 
       <div class="settings-body">
         <div class="settings-tab-list" role="tablist" aria-label="Settings tabs">
-          <button class="settings-tab active" type="button" data-settings-tab="general" role="tab"
-            aria-selected="true">General</button>
-          <button class="settings-tab" type="button" data-settings-tab="yearly" role="tab"
-            aria-selected="false">Yearly</button>
+          <button class="settings-tab active" type="button" data-settings-tab="general" role="tab" aria-selected="true"
+            aria-controls="settingsGeneralTab">General</button>
+          <button class="settings-tab" type="button" data-settings-tab="yearly" role="tab" aria-selected="false"
+            aria-controls="settingsYearlyTab">Yearly</button>
+          <button class="settings-tab" type="button" data-settings-tab="ai-coach" role="tab" aria-selected="false"
+            aria-controls="settingsAiCoachTab">AI Coach</button>
         </div>
 
         <div id="settingsGeneralTab" class="settings-tab-panel">
@@ -276,6 +278,68 @@
               </table>
             </div>
           </div>
+        </div>
+
+        <div id="settingsAiCoachTab" class="settings-tab-panel hidden">
+          <section class="settings-section settings-ai-coach-card" aria-labelledby="settingsAiCoachTitle">
+            <div class="settings-ai-coach-heading">
+              <div>
+                <div id="settingsAiCoachTitle" class="settings-label">Usage and response controls</div>
+                <p class="settings-help-text">These limits apply to new Coach responses and are stored by the server.
+                </p>
+              </div>
+              <div id="aiCoachSettingsUpdated" class="settings-meta" aria-live="polite">Last updated: unavailable</div>
+            </div>
+
+            <div id="aiCoachSettingsStatus" class="settings-status-message" role="status" aria-live="polite"></div>
+            <div id="aiCoachSettingsError" class="settings-form-error" role="alert" aria-live="assertive"></div>
+
+            <div class="settings-ai-coach-fields">
+              <div class="settings-field">
+                <label for="aiCoachMonthlyLimit">Monthly application cost limit (USD)</label>
+                <input id="aiCoachMonthlyLimit" type="number" min="0" max="25" step="0.01" inputmode="decimal"
+                  aria-describedby="aiCoachMonthlyLimitHelp aiCoachMonthlyLimitError">
+                <div id="aiCoachMonthlyLimitHelp" class="settings-help-text">0.00 disables new paid Coach responses.
+                </div>
+                <div id="aiCoachMonthlyLimitError" class="settings-field-error" role="alert"></div>
+              </div>
+
+              <div class="settings-field">
+                <label for="aiCoachTurnLimit">Maximum estimated cost per turn (USD)</label>
+                <input id="aiCoachTurnLimit" type="number" min="0.01" max="1" step="0.01" inputmode="decimal"
+                  aria-describedby="aiCoachTurnLimitHelp aiCoachTurnLimitError">
+                <div id="aiCoachTurnLimitHelp" class="settings-help-text">An independent per-request safety cap.</div>
+                <div id="aiCoachTurnLimitError" class="settings-field-error" role="alert"></div>
+              </div>
+
+              <div class="settings-field">
+                <label for="aiCoachOutputTokens">Maximum output tokens</label>
+                <input id="aiCoachOutputTokens" type="number" min="250" max="8000" step="1" inputmode="numeric"
+                  aria-describedby="aiCoachOutputTokensHelp aiCoachOutputTokensError">
+                <div id="aiCoachOutputTokensHelp" class="settings-help-text">A maximum, not a requested answer length.
+                </div>
+                <div id="aiCoachOutputTokensError" class="settings-field-error" role="alert"></div>
+              </div>
+
+              <div class="settings-field">
+                <label for="aiCoachReasoning">Reasoning effort</label>
+                <select id="aiCoachReasoning" aria-describedby="aiCoachReasoningHelp aiCoachReasoningError">
+                  <option value="none">None</option>
+                  <option value="low">Low</option>
+                  <option value="medium">Medium</option>
+                  <option value="high">High</option>
+                </select>
+                <div id="aiCoachReasoningHelp" class="settings-help-text">Server-controlled reasoning setting.</div>
+                <div id="aiCoachReasoningError" class="settings-field-error" role="alert"></div>
+              </div>
+            </div>
+
+            <div class="settings-ai-coach-actions">
+              <button id="aiCoachSettingsRetry" type="button" class="button-secondary">Retry</button>
+              <button id="aiCoachSettingsCancel" type="button" class="button-secondary">Cancel</button>
+              <button id="aiCoachSettingsSave" type="button" class="button-primary">Save</button>
+            </div>
+          </section>
         </div>
       </div>
     </div>
@@ -694,6 +758,7 @@
   <script src="/static/components.js"></script>
   <script src="/static/sync.js"></script>
   <script src="/static/yearly.js"></script>
+  <script src="/static/ai-coach-settings-validation.js"></script>
   <script src="/static/settings.js"></script>
   <script src="/static/daily.js"></script>
   <script src="/static/plan.js"></script>

@@ -33,6 +33,7 @@ if "fastapi" not in sys.modules:
 
         post = get
         patch = get
+        put = get
 
     fake_fastapi.APIRouter = FakeRouter
     fake_fastapi.Request = object
@@ -63,6 +64,9 @@ from ai_provider import AIRequest, AIResponse, AIProviderError, AITimeoutError
 from coach_cost import (
     BudgetUnavailableError,
     CostLimitError,
+    MonthlyBudgetDisabledError,
+    MonthlyBudgetLimitError,
+    TurnCostLimitError,
     enforce_monthly_budget,
     estimated_cost,
     preflight_cost,
@@ -70,6 +74,8 @@ from coach_cost import (
 )
 from coach_orchestrator import _build_input, respond_to_coach, validate_reasoning_effort
 from coach_policy import COACH_POLICY
+from routes.coach_settings import CoachSettings, CoachSettingsUnavailableError, validate_coach_settings
+from routes.coach_settings import get_ai_coach_settings, update_ai_coach_settings
 from context_client import (
     ContextAuthError,
     ContextInvalidResponseError,
@@ -262,6 +268,119 @@ class CoachPolicyTests(unittest.TestCase):
         self.assertIn("Current question:\nNew information", follow_up_input)
 
 
+class CoachSettingsTests(unittest.TestCase):
+    def test_seed_defaults_and_server_boundaries_validate(self):
+        settings = validate_coach_settings({
+            "monthly_cost_limit_usd": Decimal("5.00"),
+            "max_turn_cost_usd": Decimal("0.25"),
+            "max_output_tokens": 1200,
+            "reasoning_effort": "low",
+        })
+        self.assertEqual(settings["monthly_cost_limit_usd"], Decimal("5.00"))
+        self.assertEqual(validate_coach_settings({
+            "monthly_cost_limit_usd": Decimal("0.00"),
+            "max_turn_cost_usd": Decimal("1.00"),
+            "max_output_tokens": 8000,
+            "reasoning_effort": "high",
+        })["max_output_tokens"], 8000)
+
+    def test_invalid_settings_reject_boundaries_booleans_and_fields(self):
+        base = {
+            "monthly_cost_limit_usd": Decimal("5.00"),
+            "max_turn_cost_usd": Decimal("0.25"),
+            "max_output_tokens": 1200,
+            "reasoning_effort": "low",
+        }
+        for field, value in (
+            ("monthly_cost_limit_usd", Decimal("25.01")),
+            ("max_turn_cost_usd", Decimal("1.01")),
+            ("max_output_tokens", 8001),
+            ("reasoning_effort", "unsupported"),
+            ("max_output_tokens", True),
+        ):
+            payload = {**base, field: value}
+            with self.assertRaises(ValueError):
+                validate_coach_settings(payload)
+        with self.assertRaises(ValueError):
+            validate_coach_settings({**base, "unexpected": 1})
+        with self.assertRaises(ValueError):
+            validate_coach_settings({key: value for key, value in base.items() if key != "reasoning_effort"})
+
+    def test_get_serializes_money_and_updated_at_without_provider(self):
+        row = {
+            "monthly_cost_limit_usd": Decimal("5.00"),
+            "max_turn_cost_usd": Decimal("0.25"),
+            "max_output_tokens": 1200,
+            "reasoning_effort": "low",
+            "updated_at": __import__("datetime").datetime(2026, 9, 8, 12, 0),
+        }
+
+        class Cursor:
+            def __enter__(self): return self
+            def __exit__(self, *args): return False
+            def execute(self, query): self.query = query
+            def fetchone(self): return row
+
+        class Connection:
+            def __enter__(self): return self
+            def __exit__(self, *args): return False
+            def cursor(self): return Cursor()
+
+        with patch("routes.coach_settings.db_conn", return_value=Connection()):
+            result = get_ai_coach_settings()
+        self.assertEqual(result["monthly_cost_limit_usd"], "5.00")
+        self.assertEqual(result["max_output_tokens"], 1200)
+        self.assertEqual(result["updated_at"], "2026-09-08T12:00:00")
+
+    def test_update_is_parameterized_and_scoped_to_singleton(self):
+        row = {
+            "monthly_cost_limit_usd": Decimal("0.00"),
+            "max_turn_cost_usd": Decimal("1.00"),
+            "max_output_tokens": 8000,
+            "reasoning_effort": "high",
+            "updated_at": __import__("datetime").datetime(2026, 9, 8, 12, 0),
+        }
+
+        class Request:
+            async def json(self):
+                return {
+                    "monthly_cost_limit_usd": "0.00",
+                    "max_turn_cost_usd": "1.00",
+                    "max_output_tokens": 8000,
+                    "reasoning_effort": "high",
+                }
+
+        class Cursor:
+            def __init__(self): self.calls = []
+            def __enter__(self): return self
+            def __exit__(self, *args): return False
+            def execute(self, query, params): self.calls.append((query, params))
+            def fetchone(self): return row
+
+        class Connection:
+            def __init__(self): self.cursor_instance = Cursor(); self.committed = False
+            def __enter__(self): return self
+            def __exit__(self, *args): return False
+            def cursor(self): return self.cursor_instance
+            def commit(self): self.committed = True
+
+        connection = Connection()
+        with patch("routes.coach_settings.db_conn", return_value=connection):
+            result = asyncio.run(update_ai_coach_settings(Request()))
+        query, params = connection.cursor_instance.calls[0]
+        self.assertTrue(connection.committed)
+        self.assertEqual(result["max_output_tokens"], 8000)
+        self.assertEqual(params, (Decimal("0.00"), Decimal("1.00"), 8000, "high"))
+        self.assertIn("WHERE settings_id = 1", query)
+        self.assertIn("%s", query)
+
+    def test_persistence_failure_is_sanitized(self):
+        with patch("routes.coach_settings.db_conn", side_effect=RuntimeError("hidden database error")):
+            result = get_ai_coach_settings()
+        self.assertEqual(result.status_code, 503)
+        self.assertEqual(result.content["detail"], "AI Coach settings are unavailable.")
+
+
 class CoachOrchestrationTests(unittest.TestCase):
     def setUp(self):
         self.response = AIResponse(
@@ -281,6 +400,16 @@ class CoachOrchestrationTests(unittest.TestCase):
         self.started = {"coach_turn_id": 9}
         self.user_message = {"coach_message_id": 10, "coach_session_id": 3, "message_text": "How am I doing?"}
         self.completed = {"coach_turn_id": 9, "status": "completed"}
+        self.settings = CoachSettings(
+            monthly_cost_limit_usd=Decimal("5.00"),
+            max_turn_cost_usd=Decimal("0.25"),
+            max_output_tokens=1200,
+            reasoning_effort="low",
+            updated_at="2026-09-08T00:00:00+00:00",
+        )
+        settings_patch = patch("coach_orchestrator.load_coach_settings", return_value=self.settings)
+        settings_patch.start()
+        self.addCleanup(settings_patch.stop)
 
     def test_success_uses_low_reasoning_and_persists_exact_usage_and_cost(self):
         with patch("coach_orchestrator._start_coach_turn", return_value=({}, self.user_message, self.started)), \
@@ -310,6 +439,61 @@ class CoachOrchestrationTests(unittest.TestCase):
         self.assertEqual(complete.call_args.kwargs["total_tokens"], 130)
         self.assertEqual(complete.call_args.kwargs["estimated_cost_usd"], Decimal("0.000052"))
         fail.assert_not_called()
+
+    def test_persisted_settings_reach_request_and_cost_guards(self):
+        settings = CoachSettings(
+            monthly_cost_limit_usd=Decimal("10.00"),
+            max_turn_cost_usd=Decimal("1.00"),
+            max_output_tokens=8000,
+            reasoning_effort="high",
+            updated_at="2026-09-08T00:00:00+00:00",
+        )
+        with patch("coach_orchestrator._start_coach_turn", return_value=({}, self.user_message, self.started)), \
+             patch("coach_orchestrator._recent_coach_messages", return_value=[]), \
+             patch("coach_orchestrator._complete_coach_turn", return_value=({"coach_message_id": 11}, self.completed)), \
+             patch("coach_orchestrator._coach_session_snapshot", return_value={"total_tokens": 130}), \
+             patch("coach_orchestrator.preflight_cost", return_value=Decimal("0.10")) as preflight, \
+             patch("coach_orchestrator.enforce_monthly_budget", return_value={"recorded_cost_usd": Decimal("0"), "unknown_cost_count": 0}) as monthly, \
+             patch("coach_orchestrator._fail_coach_turn"):
+            respond_to_coach(
+                3,
+                "Question",
+                context_loader=lambda: CONTEXT,
+                provider_factory=lambda: self.provider,
+                settings_loader=lambda: settings,
+            )
+
+        request = self.provider.requests[0]
+        self.assertEqual(request.max_output_tokens, 8000)
+        self.assertEqual(request.reasoning_effort, "high")
+        preflight.assert_called_once_with("gpt-5.6-luna", unittest.mock.ANY, 8000, Decimal("1.00"))
+        monthly.assert_called_once_with(Decimal("0.10"), Decimal("10.00"))
+
+    def test_zero_monthly_limit_blocks_provider(self):
+        settings = CoachSettings(Decimal("0.00"), Decimal("1.00"), 1200, "low", "now")
+        with patch("coach_orchestrator._start_coach_turn", return_value=({}, self.user_message, self.started)), \
+             patch("coach_orchestrator._recent_coach_messages", return_value=[]), \
+             patch("coach_orchestrator.enforce_monthly_budget", side_effect=CostLimitError()), \
+             patch("coach_orchestrator._fail_coach_turn") as fail:
+            with self.assertRaises(Exception) as raised:
+                respond_to_coach(3, "Question", context_loader=lambda: CONTEXT,
+                                 provider_factory=lambda: self.provider,
+                                 settings_loader=lambda: settings)
+        self.assertEqual(raised.exception.status_code, 429)
+        self.assertEqual(fail.call_args.kwargs["error_category"], "budget_limit")
+        self.assertEqual(self.provider.requests, [])
+
+    def test_unavailable_settings_blocks_provider_and_reconciles_turn(self):
+        with patch("coach_orchestrator._start_coach_turn", return_value=({}, self.user_message, self.started)), \
+               patch("coach_orchestrator._recent_coach_messages", return_value=[]), \
+             patch("coach_orchestrator._fail_coach_turn") as fail:
+            with self.assertRaises(Exception) as raised:
+                respond_to_coach(3, "Question", context_loader=lambda: CONTEXT,
+                                 provider_factory=lambda: self.provider,
+                                 settings_loader=lambda: (_ for _ in ()).throw(CoachSettingsUnavailableError()))
+        self.assertEqual(raised.exception.status_code, 503)
+        self.assertEqual(fail.call_args.kwargs["error_category"], "settings_unavailable")
+        self.assertEqual(self.provider.requests, [])
 
     def test_session_title_derivation_normalizes_and_bounds_text(self):
         self.assertEqual(
@@ -541,24 +725,102 @@ class CoachOrchestrationTests(unittest.TestCase):
         )
         self.assertIsNone(pricing_for_model("other-model"))
         self.assertIsNone(estimated_cost("other-model", 1000, 200, 300))
-        self.assertEqual(preflight_cost("gpt-5.6-luna", 1000, 300), Decimal("0.000560"))
+        self.assertEqual(preflight_cost("gpt-5.6-luna", 1000, 300, Decimal("0.25")), Decimal("0.000560"))
         with self.assertRaises(BudgetUnavailableError):
-            preflight_cost("other-model", 1000, 300)
+            preflight_cost("other-model", 1000, 300, Decimal("0.25"))
 
     def test_monthly_budget_rejects_unknown_historical_costs(self):
         with patch("coach_cost.check_monthly_budget", lambda: (Decimal("1.00"), 1)):
             with self.assertRaises(BudgetUnavailableError):
-                enforce_monthly_budget(Decimal("0.01"))
+                enforce_monthly_budget(Decimal("0.01"), Decimal("5.00"))
+
+    def test_malformed_proposed_cost_remains_budget_unavailable(self):
+        with self.assertRaises(BudgetUnavailableError):
+            enforce_monthly_budget("not-a-cost", Decimal("5.00"))
+
+    def test_nonfinite_accounting_cost_remains_budget_unavailable(self):
+        with patch("coach_cost.check_monthly_budget", return_value=(Decimal("NaN"), 0)):
+            with self.assertRaises(BudgetUnavailableError):
+                enforce_monthly_budget(Decimal("0.01"), Decimal("5.00"))
+
+    def test_zero_monthly_budget_short_circuits_accounting(self):
+        with patch("coach_cost.check_monthly_budget") as check_budget:
+            with self.assertRaises(MonthlyBudgetDisabledError):
+                enforce_monthly_budget(Decimal("0.01"), Decimal("0.00"))
+        check_budget.assert_not_called()
+
+    def test_monthly_budget_rejection_has_distinct_reason(self):
+        with patch("coach_cost.check_monthly_budget", return_value=(Decimal("5.00"), 0)):
+            with self.assertRaises(MonthlyBudgetLimitError):
+                enforce_monthly_budget(Decimal("0.00"), Decimal("5.00"))
+        with patch("coach_cost.check_monthly_budget", return_value=(Decimal("4.99"), 0)):
+            with self.assertRaises(MonthlyBudgetLimitError):
+                enforce_monthly_budget(Decimal("0.02"), Decimal("5.00"))
+
+    def test_preflight_rejection_has_distinct_per_turn_reason(self):
+        with self.assertRaises(TurnCostLimitError):
+            preflight_cost("gpt-5.6-luna", 2_000_000, 300, Decimal("0.25"))
+
+    def test_budget_error_messages_are_actionable_and_provider_is_not_called(self):
+        cases = (
+            (
+                MonthlyBudgetDisabledError(),
+                "budget_disabled",
+                "AI Coach is paused because the monthly budget limit is $0.00. Update it in Settings > AI Coach.",
+            ),
+            (
+                MonthlyBudgetLimitError(),
+                "monthly_budget_limit",
+                "The AI Coach monthly budget has been reached. Increase the limit in Settings > AI Coach or wait until next month.",
+            ),
+            (
+                TurnCostLimitError(),
+                "turn_cost_limit",
+                "This response exceeds the maximum estimated cost per turn. Increase the limit in Settings > AI Coach or request a shorter response.",
+            ),
+        )
+        for error, category, detail in cases:
+            with self.subTest(category=category), \
+                 patch("coach_orchestrator._start_coach_turn", return_value=({}, self.user_message, self.started)), \
+                 patch("coach_orchestrator._recent_coach_messages", return_value=[]), \
+                 patch("coach_orchestrator.preflight_cost", side_effect=error) as preflight, \
+                 patch("coach_orchestrator._fail_coach_turn") as fail:
+                with self.assertRaises(Exception) as raised:
+                    respond_to_coach(
+                        3,
+                        "Question",
+                        context_loader=lambda: CONTEXT,
+                        provider_factory=lambda: self.provider,
+                    )
+            self.assertEqual(raised.exception.status_code, 429)
+            self.assertEqual(raised.exception.category, category)
+            self.assertEqual(raised.exception.detail, detail)
+            self.assertEqual(fail.call_args.kwargs["error_category"], category)
+            preflight.assert_called_once()
+            self.assertEqual(self.provider.requests, [])
+
+    def test_unavailable_budget_remains_generic_and_distinct(self):
+        with patch("coach_orchestrator._start_coach_turn", return_value=({}, self.user_message, self.started)), \
+             patch("coach_orchestrator._recent_coach_messages", return_value=[]), \
+             patch("coach_orchestrator.preflight_cost", side_effect=BudgetUnavailableError()), \
+             patch("coach_orchestrator._fail_coach_turn") as fail:
+            with self.assertRaises(Exception) as raised:
+                respond_to_coach(3, "Question", context_loader=lambda: CONTEXT, provider_factory=lambda: self.provider)
+        self.assertEqual(raised.exception.status_code, 503)
+        self.assertEqual(raised.exception.category, "budget_unavailable")
+        self.assertEqual(raised.exception.detail, "Coach budget status is unavailable.")
+        self.assertEqual(fail.call_args.kwargs["error_category"], "budget_unavailable")
+        self.assertEqual(self.provider.requests, [])
 
     def test_monthly_budget_allows_exact_ceiling_and_rejects_overage(self):
         with patch("coach_cost.check_monthly_budget", lambda: (Decimal("4.99"), 0)):
-            enforce_monthly_budget(Decimal("0.01"))
+            enforce_monthly_budget(Decimal("0.01"), Decimal("5.00"))
         with patch("coach_cost.check_monthly_budget", lambda: (Decimal("4.99"), 0)):
             with self.assertRaises(CostLimitError):
-                enforce_monthly_budget(Decimal("0.02"))
+                enforce_monthly_budget(Decimal("0.02"), Decimal("5.00"))
         with patch("coach_cost.check_monthly_budget", lambda: (Decimal("5.00"), 0)):
             with self.assertRaises(CostLimitError):
-                enforce_monthly_budget(Decimal("0"))
+                enforce_monthly_budget(Decimal("0"), Decimal("5.00"))
 
     def test_unknown_model_budget_failure_prevents_provider_call(self):
         self.provider.model = "unknown-model"

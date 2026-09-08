@@ -255,6 +255,112 @@
   flex-wrap: wrap;
 }
 
+.settings-ai-coach-card {
+  background: var(--input-bg);
+  border: 1px solid var(--input-border);
+  border-radius: 12px;
+  padding: 16px;
+}
+
+.settings-ai-coach-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.settings-meta {
+  color: var(--muted);
+  font-size: 12px;
+  text-align: right;
+}
+
+.settings-ai-coach-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  margin-top: 4px;
+}
+
+.settings-field {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.settings-field label {
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.settings-field input,
+.settings-field select {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.settings-help-text {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.settings-form-error,
+.settings-field-error {
+  color: var(--danger, #f08b8b);
+  font-size: 12px;
+  line-height: 1.4;
+  min-height: 0;
+}
+
+.settings-form-error:empty,
+.settings-field-error:empty {
+  display: none;
+}
+
+.settings-field input[aria-invalid="true"],
+.settings-field select[aria-invalid="true"] {
+  border-color: var(--danger, #f08b8b);
+}
+
+.settings-status-message {
+  color: var(--muted);
+  font-size: 12px;
+  min-height: 18px;
+}
+
+.settings-status-message.error {
+  color: var(--danger, #f08b8b);
+}
+
+.settings-ai-coach-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 4px;
+}
+
+@media (max-width: 700px) {
+  .settings-ai-coach-heading {
+    display: grid;
+    gap: 6px;
+  }
+
+  .settings-meta {
+    text-align: left;
+  }
+
+  .settings-ai-coach-fields {
+    grid-template-columns: 1fr;
+  }
+
+  .settings-ai-coach-actions button {
+    flex: 1 1 120px;
+  }
+}
+
 @media (max-width: 900px) {
   .settings-row-limits {
     grid-template-columns: 1fr;
