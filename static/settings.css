@@ -295,9 +295,17 @@
 }
 
 .settings-field input,
-.settings-field select {
+.settings-field select,
+.settings-field textarea {
   width: 100%;
   box-sizing: border-box;
+}
+
+.settings-field textarea {
+  min-height: 104px;
+  resize: vertical;
+  line-height: 1.45;
+  font: inherit;
 }
 
 .settings-help-text {
@@ -334,6 +342,33 @@
   color: var(--danger, #f08b8b);
 }
 
+.settings-custom-instructions-card {
+  margin-top: 2px;
+}
+
+.settings-custom-instructions-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  margin-top: 4px;
+}
+
+.settings-custom-instruction-field-wide {
+  grid-column: 1 / -1;
+}
+
+.settings-character-count,
+.settings-combined-count,
+.settings-optional-label {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.settings-combined-count {
+  font-weight: 700;
+  margin-top: 2px;
+}
+
 .settings-ai-coach-actions {
   display: flex;
   justify-content: flex-end;
@@ -354,6 +389,14 @@
 
   .settings-ai-coach-fields {
     grid-template-columns: 1fr;
+  }
+
+  .settings-custom-instructions-fields {
+    grid-template-columns: 1fr;
+  }
+
+  .settings-custom-instruction-field-wide {
+    grid-column: auto;
   }
 
   .settings-ai-coach-actions button {

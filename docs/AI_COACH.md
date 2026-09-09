@@ -672,6 +672,43 @@ Save and Cancel are local UI actions around the server-backed baseline; saving
 does not require a service restart and settings management makes no provider
 call.
 
+### Custom Instructions
+
+The backend provides protected routes for the complete seven-section profile:
+
+```text
+GET /api/settings/ai-coach/custom-instructions
+PUT /api/settings/ai-coach/custom-instructions
+```
+
+Each field is normalized by converting CRLF/CR to LF and trimming surrounding
+whitespace before validation. Every field is limited to 1,500 normalized
+characters, with an 8,000-character combined limit. Blank fields are valid; a
+PUT must provide all seven fields and unknown fields are rejected.
+
+Nonblank sections compile deterministically in this order: Coaching priorities,
+Safety and progression rules, Training approach, Recovery and adjustment rules,
+Communication style, Planning preferences, and Other instructions. The
+compiled profile is preceded by a server-controlled wrapper stating that it
+cannot override safety policy, clinician guidance, authoritative Training
+Intelligence, privacy controls, or missing-data semantics. An entirely blank
+profile compiles to no additional instructions, preserving existing Coach
+behavior.
+
+The compiled profile is included in provider instructions on every paid turn
+and in preflight cost accounting exactly once. Loading and saving make no
+provider call. Missing, malformed, oversized, or unavailable persistence fails
+closed before provider inference and reconciles the started turn as
+`custom_instructions_unavailable`.
+
+The Settings editor keeps a module-local clean baseline and draft, supports
+Save, Cancel, and Retry, prevents duplicate loads and saves, retains drafts
+after save failures, and never writes Custom Instructions to localStorage. The
+blank seeded profile loads as seven empty textareas. The returned `updated_at`
+is shown as local readable metadata. Persisted `updated_at` must be a real
+database date/datetime object; arbitrary stored strings fail closed. Durable
+Memories remain pending.
+
 ### Pricing behavior
 
 The application maintains a server-side pricing map for approved models.

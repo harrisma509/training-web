@@ -38,6 +38,42 @@
   const aiCoachSettingsCancel = document.getElementById("aiCoachSettingsCancel");
   const aiCoachSettingsSave = document.getElementById("aiCoachSettingsSave");
   const aiCoachFields = [aiCoachMonthlyLimit, aiCoachTurnLimit, aiCoachOutputTokens, aiCoachReasoning].filter(Boolean);
+  const customInstructionFields = window.AICoachCustomInstructionsValidation.CUSTOM_INSTRUCTION_FIELDS;
+  const customInstructionElements = {
+    coaching_priorities: document.getElementById("aiCoachCustomCoachingPriorities"),
+    safety_progression_rules: document.getElementById("aiCoachCustomSafetyRules"),
+    training_approach: document.getElementById("aiCoachCustomTrainingApproach"),
+    recovery_adjustment_rules: document.getElementById("aiCoachCustomRecoveryRules"),
+    communication_style: document.getElementById("aiCoachCustomCommunicationStyle"),
+    planning_preferences: document.getElementById("aiCoachCustomPlanningPreferences"),
+    other_instructions: document.getElementById("aiCoachCustomOtherInstructions"),
+  };
+  const customInstructionCounts = {
+    coaching_priorities: document.getElementById("aiCoachCustomCoachingPrioritiesCount"),
+    safety_progression_rules: document.getElementById("aiCoachCustomSafetyRulesCount"),
+    training_approach: document.getElementById("aiCoachCustomTrainingApproachCount"),
+    recovery_adjustment_rules: document.getElementById("aiCoachCustomRecoveryRulesCount"),
+    communication_style: document.getElementById("aiCoachCustomCommunicationStyleCount"),
+    planning_preferences: document.getElementById("aiCoachCustomPlanningPreferencesCount"),
+    other_instructions: document.getElementById("aiCoachCustomOtherInstructionsCount"),
+  };
+  const customInstructionErrors = {
+    coaching_priorities: document.getElementById("aiCoachCustomCoachingPrioritiesError"),
+    safety_progression_rules: document.getElementById("aiCoachCustomSafetyRulesError"),
+    training_approach: document.getElementById("aiCoachCustomTrainingApproachError"),
+    recovery_adjustment_rules: document.getElementById("aiCoachCustomRecoveryRulesError"),
+    communication_style: document.getElementById("aiCoachCustomCommunicationStyleError"),
+    planning_preferences: document.getElementById("aiCoachCustomPlanningPreferencesError"),
+    other_instructions: document.getElementById("aiCoachCustomOtherInstructionsError"),
+  };
+  const customInstructionsUpdated = document.getElementById("aiCoachCustomInstructionsUpdated");
+  const customInstructionsStatus = document.getElementById("aiCoachCustomInstructionsStatus");
+  const customInstructionsError = document.getElementById("aiCoachCustomInstructionsError");
+  const customInstructionsCombinedCount = document.getElementById("aiCoachCustomInstructionsCombinedCount");
+  const customInstructionsCombinedError = document.getElementById("aiCoachCustomInstructionsCombinedError");
+  const customInstructionsRetry = document.getElementById("aiCoachCustomInstructionsRetry");
+  const customInstructionsCancel = document.getElementById("aiCoachCustomInstructionsCancel");
+  const customInstructionsSave = document.getElementById("aiCoachCustomInstructionsSave");
   const aiCoachFieldErrors = {
     monthly_cost_limit_usd: document.getElementById("aiCoachMonthlyLimitError"),
     max_turn_cost_usd: document.getElementById("aiCoachTurnLimitError"),
@@ -57,6 +93,12 @@
   let aiCoachLoading = false;
   let aiCoachSaving = false;
   let aiCoachValidation = { valid: false, errors: {} };
+  let customInstructionsBaseline = null;
+  let customInstructionsDraft = null;
+  let customInstructionsLoadPromise = null;
+  let customInstructionsLoading = false;
+  let customInstructionsSaving = false;
+  let customInstructionsValidation = { valid: false, errors: {}, normalized: {}, combinedCharacters: 0 };
   const settingsStatusSummary = document.getElementById("settingsStatusSummary");
   const refreshStatusBtn = document.getElementById("refreshStatusBtn");
   const copyDiagnosticsBtn = document.getElementById("copyDiagnosticsBtn");
@@ -94,6 +136,220 @@
 
   function cloneAiCoachSettings(settings) {
     return settings ? { ...settings } : null;
+  }
+
+  const validateCustomInstructionsDraft = window.AICoachCustomInstructionsValidation.validateCustomInstructionsDraft;
+
+  function emptyCustomInstructions() {
+    return customInstructionFields.reduce((values, field) => {
+      values[field] = "";
+      return values;
+    }, {});
+  }
+
+  function normalizeCustomInstructionsProfile(profile) {
+    const normalized = {};
+    customInstructionFields.forEach((field) => {
+      normalized[field] = profile?.[field];
+    });
+    normalized.updated_at = profile?.updated_at;
+    return normalized;
+  }
+
+  function cloneCustomInstructionsDraft(draft) {
+    return draft ? { ...draft } : null;
+  }
+
+  function readCustomInstructionsDraft() {
+    return customInstructionFields.reduce((draft, field) => {
+      draft[field] = customInstructionElements[field]?.value || "";
+      return draft;
+    }, {});
+  }
+
+  function setCustomInstructionsStatus(message, isError = false) {
+    if (!customInstructionsStatus) {
+      return;
+    }
+    customInstructionsStatus.textContent = message || "";
+    customInstructionsStatus.classList.toggle("error", Boolean(isError));
+  }
+
+  function formatCustomInstructionsUpdatedAt(value) {
+    if (!value) {
+      return "Last updated: unavailable";
+    }
+    const parsed = new Date(value);
+    if (Number.isNaN(parsed.getTime())) {
+      return "Last updated: unavailable";
+    }
+    return `Last updated: ${parsed.toLocaleString()}`;
+  }
+
+  function customInstructionsAreDirty(draft) {
+    if (!customInstructionsBaseline || !draft) {
+      return false;
+    }
+    const normalizedDraft = validateCustomInstructionsDraft(draft).normalized;
+    return customInstructionFields.some((field) => normalizedDraft[field] !== customInstructionsBaseline[field]);
+  }
+
+  function renderCustomInstructions() {
+    const draft = customInstructionsDraft || emptyCustomInstructions();
+    const validation = validateCustomInstructionsDraft(draft);
+    customInstructionsValidation = validation;
+
+    customInstructionFields.forEach((field) => {
+      const element = customInstructionElements[field];
+      const value = typeof draft[field] === "string" ? draft[field] : "";
+      const normalizedValue = validation.normalized[field];
+      const fieldError = validation.errors[field] || "";
+      if (element && element.value !== value) {
+        element.value = value;
+      }
+      if (customInstructionCounts[field]) {
+        customInstructionCounts[field].textContent = `${typeof normalizedValue === "string" ? normalizedValue.length : 0} / 1,500`;
+      }
+      if (customInstructionErrors[field]) {
+        customInstructionErrors[field].textContent = fieldError;
+      }
+      if (element) {
+        element.setAttribute("aria-invalid", fieldError ? "true" : "false");
+        element.disabled = customInstructionsLoading || customInstructionsSaving;
+      }
+    });
+
+    if (customInstructionsUpdated) {
+      customInstructionsUpdated.textContent = formatCustomInstructionsUpdatedAt(customInstructionsBaseline?.updated_at);
+    }
+    if (customInstructionsCombinedCount) {
+      customInstructionsCombinedCount.textContent = `Combined: ${validation.combinedCharacters} / 8,000`;
+    }
+    if (customInstructionsCombinedError) {
+      customInstructionsCombinedError.textContent = validation.combinedError || "";
+    }
+
+    const dirty = customInstructionsAreDirty(draft);
+    if (customInstructionsSave) {
+      customInstructionsSave.disabled = customInstructionsLoading
+        || customInstructionsSaving
+        || !customInstructionsBaseline
+        || !dirty
+        || !validation.valid;
+    }
+    if (customInstructionsCancel) {
+      customInstructionsCancel.disabled = customInstructionsLoading
+        || customInstructionsSaving
+        || !customInstructionsBaseline
+        || !dirty;
+    }
+    if (customInstructionsRetry) {
+      customInstructionsRetry.disabled = customInstructionsLoading || customInstructionsSaving;
+    }
+  }
+
+  async function loadCustomInstructions(force = false) {
+    if (customInstructionsLoadPromise) {
+      return customInstructionsLoadPromise;
+    }
+    if (!force && customInstructionsBaseline) {
+      return customInstructionsBaseline;
+    }
+    customInstructionsLoading = true;
+    if (customInstructionsError) {
+      customInstructionsError.textContent = "";
+    }
+    setCustomInstructionsStatus("Loading...");
+    renderCustomInstructions();
+    customInstructionsLoadPromise = (async () => {
+      try {
+        if (!window.api || typeof window.api.fetchAiCoachCustomInstructions !== "function") {
+          throw new Error("AI Coach Custom Instructions are unavailable.");
+        }
+        const loaded = normalizeCustomInstructionsProfile(await window.api.fetchAiCoachCustomInstructions());
+        const validation = validateCustomInstructionsDraft(loaded);
+        if (!validation.valid || !(loaded.updated_at instanceof String || typeof loaded.updated_at === "string")) {
+          throw new Error("AI Coach Custom Instructions response is invalid.");
+        }
+        customInstructionsBaseline = { ...validation.normalized, updated_at: loaded.updated_at };
+        customInstructionsDraft = cloneCustomInstructionsDraft(validation.normalized);
+        setCustomInstructionsStatus("Loaded");
+        renderCustomInstructions();
+        return customInstructionsBaseline;
+      } catch (error) {
+        console.warn("Unable to load AI Coach Custom Instructions.", error);
+        if (customInstructionsError) {
+          customInstructionsError.textContent = "Unable to load AI Coach Custom Instructions.";
+        }
+        setCustomInstructionsStatus("Custom Instructions are unavailable.", true);
+        renderCustomInstructions();
+        throw error;
+      } finally {
+        customInstructionsLoading = false;
+        customInstructionsLoadPromise = null;
+        renderCustomInstructions();
+      }
+    })();
+    return customInstructionsLoadPromise;
+  }
+
+  async function saveCustomInstructions() {
+    if (customInstructionsLoading || customInstructionsSaving || !customInstructionsBaseline) {
+      return;
+    }
+    customInstructionsDraft = readCustomInstructionsDraft();
+    const validation = validateCustomInstructionsDraft(customInstructionsDraft);
+    customInstructionsValidation = validation;
+    renderCustomInstructions();
+    if (!validation.valid) {
+      const firstInvalid = customInstructionFields.find((field) => validation.errors[field]);
+      customInstructionElements[firstInvalid]?.focus();
+      return;
+    }
+
+    customInstructionsDraft = validation.normalized;
+    customInstructionsSaving = true;
+    if (customInstructionsError) {
+      customInstructionsError.textContent = "";
+    }
+    setCustomInstructionsStatus("Saving...");
+    renderCustomInstructions();
+    try {
+      if (!window.api || typeof window.api.saveAiCoachCustomInstructions !== "function") {
+        throw new Error("AI Coach Custom Instructions are unavailable.");
+      }
+      const saved = normalizeCustomInstructionsProfile(
+        await window.api.saveAiCoachCustomInstructions({ ...validation.normalized }),
+      );
+      const savedValidation = validateCustomInstructionsDraft(saved);
+      if (!savedValidation.valid || !(saved.updated_at instanceof String || typeof saved.updated_at === "string")) {
+        throw new Error("AI Coach Custom Instructions response is invalid.");
+      }
+      customInstructionsBaseline = { ...savedValidation.normalized, updated_at: saved.updated_at };
+      customInstructionsDraft = cloneCustomInstructionsDraft(savedValidation.normalized);
+      setCustomInstructionsStatus("Saved");
+    } catch (error) {
+      console.warn("Unable to save AI Coach Custom Instructions.", error);
+      if (customInstructionsError) {
+        customInstructionsError.textContent = "Unable to save Custom Instructions. Your draft was kept.";
+      }
+      setCustomInstructionsStatus("Save failed.", true);
+    } finally {
+      customInstructionsSaving = false;
+      renderCustomInstructions();
+    }
+  }
+
+  function cancelCustomInstructions() {
+    if (!customInstructionsBaseline || customInstructionsLoading || customInstructionsSaving) {
+      return;
+    }
+    customInstructionsDraft = cloneCustomInstructionsDraft(customInstructionsBaseline);
+    if (customInstructionsError) {
+      customInstructionsError.textContent = "";
+    }
+    setCustomInstructionsStatus("Changes canceled");
+    renderCustomInstructions();
   }
 
   function readAiCoachDraft() {
@@ -609,6 +865,7 @@
     loadSystemStatus();
     if (selectedSettingsTab === "ai-coach") {
       loadAiCoachSettings(true).catch(() => { });
+      loadCustomInstructions(true).catch(() => { });
     }
   }
 
@@ -643,6 +900,7 @@
 
     if (selectedTab === "ai-coach") {
       loadAiCoachSettings(true).catch(() => { });
+      loadCustomInstructions(true).catch(() => { });
     }
   }
 
@@ -673,6 +931,21 @@
     });
     aiCoachSettingsCancel?.addEventListener("click", cancelAiCoachSettings);
     aiCoachSettingsSave?.addEventListener("click", saveAiCoachSettings);
+
+    customInstructionFields.forEach((field) => {
+      customInstructionElements[field]?.addEventListener("input", () => {
+        customInstructionsDraft = readCustomInstructionsDraft();
+        if (customInstructionsError) {
+          customInstructionsError.textContent = "";
+        }
+        renderCustomInstructions();
+      });
+    });
+    customInstructionsRetry?.addEventListener("click", () => {
+      loadCustomInstructions(true).catch(() => { });
+    });
+    customInstructionsCancel?.addEventListener("click", cancelCustomInstructions);
+    customInstructionsSave?.addEventListener("click", saveCustomInstructions);
 
     settingsDrawer?.addEventListener("click", (event) => {
       if (event.target === settingsDrawer) {

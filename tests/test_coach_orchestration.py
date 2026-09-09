@@ -76,6 +76,7 @@ from coach_orchestrator import _build_input, respond_to_coach, validate_reasonin
 from coach_policy import COACH_POLICY
 from routes.coach_settings import CoachSettings, CoachSettingsUnavailableError, validate_coach_settings
 from routes.coach_settings import get_ai_coach_settings, update_ai_coach_settings
+from routes.coach_custom_instructions import CustomInstructions, CustomInstructionsUnavailableError
 from context_client import (
     ContextAuthError,
     ContextInvalidResponseError,
@@ -410,6 +411,14 @@ class CoachOrchestrationTests(unittest.TestCase):
         settings_patch = patch("coach_orchestrator.load_coach_settings", return_value=self.settings)
         settings_patch.start()
         self.addCleanup(settings_patch.stop)
+        instructions_patch = patch(
+            "coach_orchestrator.load_custom_instructions",
+            return_value=CustomInstructions(
+                "", "", "", "", "", "", "", "2026-09-08T00:00:00+00:00"
+            ),
+        )
+        instructions_patch.start()
+        self.addCleanup(instructions_patch.stop)
 
     def test_success_uses_low_reasoning_and_persists_exact_usage_and_cost(self):
         with patch("coach_orchestrator._start_coach_turn", return_value=({}, self.user_message, self.started)), \
@@ -468,6 +477,39 @@ class CoachOrchestrationTests(unittest.TestCase):
         self.assertEqual(request.reasoning_effort, "high")
         preflight.assert_called_once_with("gpt-5.6-luna", unittest.mock.ANY, 8000, Decimal("1.00"))
         monthly.assert_called_once_with(Decimal("0.10"), Decimal("10.00"))
+
+    def test_custom_instructions_reach_provider_after_policy_and_cost_accounting(self):
+        instructions = CustomInstructions(
+            "Safety first.", "", "", "", "Keep it direct.", "", "", "now"
+        )
+        with patch("coach_orchestrator.load_custom_instructions", return_value=instructions), \
+             patch("coach_orchestrator._start_coach_turn", return_value=({}, self.user_message, self.started)), \
+             patch("coach_orchestrator._recent_coach_messages", return_value=[]), \
+             patch("coach_orchestrator._complete_coach_turn", return_value=({"coach_message_id": 11}, self.completed)), \
+             patch("coach_orchestrator._coach_session_snapshot", return_value={}), \
+             patch("coach_orchestrator.preflight_cost", return_value=Decimal("0.10")) as preflight, \
+             patch("coach_orchestrator.enforce_monthly_budget", return_value={"recorded_cost_usd": Decimal("0"), "unknown_cost_count": 0}), \
+             patch("coach_orchestrator._fail_coach_turn"):
+            respond_to_coach(3, "Question", context_loader=lambda: CONTEXT, provider_factory=lambda: self.provider)
+
+        request = self.provider.requests[0]
+        self.assertTrue(request.instructions.startswith(COACH_POLICY))
+        self.assertLess(request.instructions.index(COACH_POLICY), request.instructions.index("Coaching priorities:"))
+        self.assertIn("Safety first.", request.instructions)
+        self.assertIn("Keep it direct.", request.instructions)
+        self.assertEqual(preflight.call_args.args[1], len(request.input_text) + len(request.instructions))
+
+    def test_custom_instructions_failure_reconciles_turn_before_provider(self):
+        with patch("coach_orchestrator._start_coach_turn", return_value=({}, self.user_message, self.started)), \
+             patch("coach_orchestrator._recent_coach_messages", return_value=[]), \
+             patch("coach_orchestrator.load_custom_instructions", side_effect=CustomInstructionsUnavailableError()), \
+             patch("coach_orchestrator._fail_coach_turn") as fail:
+            with self.assertRaises(Exception) as raised:
+                respond_to_coach(3, "Question", context_loader=lambda: CONTEXT, provider_factory=lambda: self.provider)
+        self.assertEqual(raised.exception.status_code, 503)
+        self.assertEqual(raised.exception.category, "custom_instructions_unavailable")
+        self.assertEqual(fail.call_args.kwargs["error_category"], "custom_instructions_unavailable")
+        self.assertEqual(self.provider.requests, [])
 
     def test_zero_monthly_limit_blocks_provider(self):
         settings = CoachSettings(Decimal("0.00"), Decimal("1.00"), 1200, "low", "now")

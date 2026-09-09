@@ -27,6 +27,11 @@ from coach_cost import (
 )
 from coach_guards import ProviderCapacityError, provider_capacity
 from coach_policy import COACH_POLICY
+from routes.coach_custom_instructions import (
+    CustomInstructionsUnavailableError,
+    compile_custom_instructions,
+    load_custom_instructions,
+)
 from routes.coach_settings import CoachSettingsUnavailableError, load_coach_settings
 from context_client import ContextError, MAX_CONTEXT_CHARS, fetch_current_context
 from routes.coach import (
@@ -150,6 +155,7 @@ def respond_to_coach(
     context_loader=fetch_current_context,
     provider_factory=configured_ai_provider,
     settings_loader=None,
+    custom_instructions_loader=None,
 ):
     request_id = f"coach-{uuid.uuid4().hex}"
     _, user_message, started_turn = _start_coach_turn(session_id, message, request_id)
@@ -160,18 +166,25 @@ def respond_to_coach(
         history = _recent_coach_messages(session_id, user_message["coach_message_id"], MAX_HISTORY_MESSAGES, MAX_HISTORY_CHARS)
         input_text, context_characters, history_characters = _build_input(context, history, message)
         settings = (settings_loader or load_coach_settings)()
+        custom_instructions = (custom_instructions_loader or load_custom_instructions)()
+        compiled_custom_instructions = compile_custom_instructions(custom_instructions)
+        provider_instructions = (
+            COACH_POLICY
+            if not compiled_custom_instructions
+            else COACH_POLICY + "\n\n" + compiled_custom_instructions
+        )
         provider = provider_factory()
         model = provider.model
         proposed_cost = preflight_cost(
             model,
-            len(input_text) + len(COACH_POLICY),
+            len(input_text) + len(provider_instructions),
             settings.max_output_tokens,
             settings.max_turn_cost_usd,
         )
         enforce_monthly_budget(proposed_cost, settings.monthly_cost_limit_usd)
         request = AIRequest(
             model=model,
-            instructions=COACH_POLICY,
+            instructions=provider_instructions,
             input_text=input_text,
             max_output_tokens=settings.max_output_tokens,
             timeout_seconds=PROVIDER_TIMEOUT_SECONDS,
@@ -251,6 +264,15 @@ def respond_to_coach(
         _failure(turn_id, "failed", "budget_unavailable", 503, "Coach budget status is unavailable.", started)
     except CoachSettingsUnavailableError:
         _failure(turn_id, "failed", "settings_unavailable", 503, "Coach settings are unavailable.", started)
+    except CustomInstructionsUnavailableError:
+        _failure(
+            turn_id,
+            "failed",
+            "custom_instructions_unavailable",
+            503,
+            "AI Coach Custom Instructions are unavailable.",
+            started,
+        )
     except CoachOrchestrationError as exc:
         _failure(turn_id, "failed", exc.category, exc.status_code, exc.detail, started)
     except AIProviderError:

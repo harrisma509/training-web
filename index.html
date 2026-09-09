@@ -340,6 +340,125 @@
               <button id="aiCoachSettingsSave" type="button" class="button-primary">Save</button>
             </div>
           </section>
+
+          <section class="settings-section settings-ai-coach-card settings-custom-instructions-card"
+            aria-labelledby="aiCoachCustomInstructionsTitle">
+            <div class="settings-ai-coach-heading">
+              <div>
+                <div id="aiCoachCustomInstructionsTitle" class="settings-label">Custom Instructions</div>
+                <p class="settings-help-text">Durable coaching preferences are separate from usage limits and response
+                  controls.</p>
+              </div>
+              <div id="aiCoachCustomInstructionsUpdated" class="settings-meta" aria-live="polite">Last updated:
+                unavailable</div>
+            </div>
+
+            <div id="aiCoachCustomInstructionsStatus" class="settings-status-message" role="status" aria-live="polite">
+            </div>
+            <div id="aiCoachCustomInstructionsError" class="settings-form-error" role="alert" aria-live="assertive">
+            </div>
+
+            <div class="settings-custom-instructions-fields">
+              <div class="settings-field settings-custom-instruction-field">
+                <label for="aiCoachCustomCoachingPriorities">Coaching priorities</label>
+                <textarea id="aiCoachCustomCoachingPriorities" data-custom-instruction-field="coaching_priorities"
+                  rows="4" maxlength="1500"
+                  aria-describedby="aiCoachCustomCoachingPrioritiesHelp aiCoachCustomCoachingPrioritiesCount aiCoachCustomCoachingPrioritiesError"></textarea>
+                <div id="aiCoachCustomCoachingPrioritiesHelp" class="settings-help-text">What should win when coaching
+                  goals conflict, such as safety, consistency, riding availability, enjoyment, strength, and sustainable
+                  performance.</div>
+                <div id="aiCoachCustomCoachingPrioritiesCount" class="settings-character-count" aria-live="polite">0 /
+                  1,500</div>
+                <div id="aiCoachCustomCoachingPrioritiesError" class="settings-field-error" role="alert"></div>
+              </div>
+
+              <div class="settings-field settings-custom-instruction-field">
+                <label for="aiCoachCustomSafetyRules">Safety and progression rules</label>
+                <textarea id="aiCoachCustomSafetyRules" data-custom-instruction-field="safety_progression_rules"
+                  rows="4" maxlength="1500"
+                  aria-describedby="aiCoachCustomSafetyRulesHelp aiCoachCustomSafetyRulesCount aiCoachCustomSafetyRulesError"></textarea>
+                <div id="aiCoachCustomSafetyRulesHelp" class="settings-help-text">Stable safety thresholds and
+                  overrides, including load ramps, poor sleep, travel recovery, injury, and clinician guidance.</div>
+                <div id="aiCoachCustomSafetyRulesCount" class="settings-character-count" aria-live="polite">0 / 1,500
+                </div>
+                <div id="aiCoachCustomSafetyRulesError" class="settings-field-error" role="alert"></div>
+              </div>
+
+              <div class="settings-field settings-custom-instruction-field">
+                <label for="aiCoachCustomTrainingApproach">Training approach</label>
+                <textarea id="aiCoachCustomTrainingApproach" data-custom-instruction-field="training_approach" rows="4"
+                  maxlength="1500"
+                  aria-describedby="aiCoachCustomTrainingApproachHelp aiCoachCustomTrainingApproachCount aiCoachCustomTrainingApproachError"></textarea>
+                <div id="aiCoachCustomTrainingApproachHelp" class="settings-help-text">Durable preferences for weekly
+                  volume, strength, intensity, MTB/e-MTB demands, and the training style that works best.</div>
+                <div id="aiCoachCustomTrainingApproachCount" class="settings-character-count" aria-live="polite">0 /
+                  1,500</div>
+                <div id="aiCoachCustomTrainingApproachError" class="settings-field-error" role="alert"></div>
+              </div>
+
+              <div class="settings-field settings-custom-instruction-field">
+                <label for="aiCoachCustomRecoveryRules">Recovery and adjustment rules</label>
+                <textarea id="aiCoachCustomRecoveryRules" data-custom-instruction-field="recovery_adjustment_rules"
+                  rows="4" maxlength="1500"
+                  aria-describedby="aiCoachCustomRecoveryRulesHelp aiCoachCustomRecoveryRulesCount aiCoachCustomRecoveryRulesError"></textarea>
+                <div id="aiCoachCustomRecoveryRulesHelp" class="settings-help-text">How recommendations should change
+                  with sleep, soreness, illness, travel, missing subjective context, weight changes, or reduced
+                  training.</div>
+                <div id="aiCoachCustomRecoveryRulesCount" class="settings-character-count" aria-live="polite">0 / 1,500
+                </div>
+                <div id="aiCoachCustomRecoveryRulesError" class="settings-field-error" role="alert"></div>
+              </div>
+
+              <div class="settings-field settings-custom-instruction-field">
+                <label for="aiCoachCustomCommunicationStyle">Communication style</label>
+                <textarea id="aiCoachCustomCommunicationStyle" data-custom-instruction-field="communication_style"
+                  rows="4" maxlength="1500"
+                  aria-describedby="aiCoachCustomCommunicationStyleHelp aiCoachCustomCommunicationStyleCount aiCoachCustomCommunicationStyleError"></textarea>
+                <div id="aiCoachCustomCommunicationStyleHelp" class="settings-help-text">Preferred tone, structure,
+                  detail, use of bullets, risk callouts, dates, and concise-format requests.</div>
+                <div id="aiCoachCustomCommunicationStyleCount" class="settings-character-count" aria-live="polite">0 /
+                  1,500</div>
+                <div id="aiCoachCustomCommunicationStyleError" class="settings-field-error" role="alert"></div>
+              </div>
+
+              <div class="settings-field settings-custom-instruction-field">
+                <label for="aiCoachCustomPlanningPreferences">Planning preferences</label>
+                <textarea id="aiCoachCustomPlanningPreferences" data-custom-instruction-field="planning_preferences"
+                  rows="4" maxlength="1500"
+                  aria-describedby="aiCoachCustomPlanningPreferencesHelp aiCoachCustomPlanningPreferencesCount aiCoachCustomPlanningPreferencesError"></textarea>
+                <div id="aiCoachCustomPlanningPreferencesHelp" class="settings-help-text">Practical planning preferences
+                  such as time estimates, strength preservation, life stress, safe alternatives, fueling, and enjoyable
+                  progression.</div>
+                <div id="aiCoachCustomPlanningPreferencesCount" class="settings-character-count" aria-live="polite">0 /
+                  1,500</div>
+                <div id="aiCoachCustomPlanningPreferencesError" class="settings-field-error" role="alert"></div>
+              </div>
+
+              <div class="settings-field settings-custom-instruction-field settings-custom-instruction-field-wide">
+                <label for="aiCoachCustomOtherInstructions">Other instructions <span
+                    class="settings-optional-label">Optional</span></label>
+                <textarea id="aiCoachCustomOtherInstructions" data-custom-instruction-field="other_instructions"
+                  rows="4" maxlength="1500"
+                  aria-describedby="aiCoachCustomOtherInstructionsHelp aiCoachCustomOtherInstructionsCount aiCoachCustomOtherInstructionsError"></textarea>
+                <div id="aiCoachCustomOtherInstructionsHelp" class="settings-help-text">Durable coaching instructions
+                  that do not fit the six main sections. Not a memory dump, weekly plan, temporary injury note, or
+                  unlimited second prompt.</div>
+                <div id="aiCoachCustomOtherInstructionsCount" class="settings-character-count" aria-live="polite">0 /
+                  1,500</div>
+                <div id="aiCoachCustomOtherInstructionsError" class="settings-field-error" role="alert"></div>
+              </div>
+            </div>
+
+            <div id="aiCoachCustomInstructionsCombinedCount" class="settings-combined-count" aria-live="polite">
+              Combined: 0 / 8,000</div>
+            <div id="aiCoachCustomInstructionsCombinedError" class="settings-form-error" role="alert"
+              aria-live="assertive"></div>
+            <div class="settings-ai-coach-actions">
+              <button id="aiCoachCustomInstructionsRetry" type="button" class="button-secondary">Retry</button>
+              <button id="aiCoachCustomInstructionsCancel" type="button" class="button-secondary">Cancel</button>
+              <button id="aiCoachCustomInstructionsSave" type="button" class="button-primary">Save</button>
+            </div>
+          </section>
         </div>
       </div>
     </div>
@@ -759,6 +878,7 @@
   <script src="/static/sync.js"></script>
   <script src="/static/yearly.js"></script>
   <script src="/static/ai-coach-settings-validation.js"></script>
+  <script src="/static/ai-coach-custom-instructions-validation.js"></script>
   <script src="/static/settings.js"></script>
   <script src="/static/daily.js"></script>
   <script src="/static/plan.js"></script>
