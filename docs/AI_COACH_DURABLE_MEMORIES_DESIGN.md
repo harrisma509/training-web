@@ -32,8 +32,8 @@ Memory types are exactly: `medical`, `safety`, `training_goal`, `schedule`,
 
 Applicability scopes are exactly: `all_training`, `planning`, `recovery`,
 `strength`, `weight`, `mtb`, `emtb`, `bike_park`, `gravel`, and `skiing`.
-`all_training` is always eligible when the memory otherwise qualifies. The
-database enforces nonempty, non-NULL, approved scope arrays; the backend
+`all_training` describes broad applicability; it is not blanket normal-memory
+eligibility. The database enforces nonempty, non-NULL, approved scope arrays; the backend
 rejects duplicate scopes. Priority is exactly `critical`, `high`, or `normal`,
 defaulting to `normal`.
 
@@ -57,11 +57,11 @@ sanitized and make no provider call.
 
 ## Deterministic routing contract
 
-The router uses the current question, the same bounded recent
-conversation selected for provider inference (currently 24 messages / 24,000
-characters), authoritative Training Intelligence signals and recent entities,
-and memory metadata. It must not retrieve unlimited chat history or use a
-different history window from the provider request.
+The router uses the current question, the same bounded recent conversation
+selected for provider inference, authoritative Training Intelligence signals,
+supporting recent entities, and memory metadata. It must not retrieve
+unlimited chat history or use a different history window from the provider
+request.
 
 Representative transparent scope matches are:
 
@@ -76,18 +76,18 @@ Representative transparent scope matches are:
 - `skiing`: ski, skiing, powder, bumps, moguls
 
 Generic words such as “park,” “hard,” or “ride” are not sufficient alone for
-narrow-scope activation. The initial deterministic weighting is: current
-question match 3 points; last two bounded messages 2; older bounded messages
-1; authoritative active flag 3; recent authoritative entity/activity/narrative
-2. Always activate `all_training`; activate a scope on a current-question
-match or explicit authoritative signal; otherwise activate it when accumulated
-conversation/entity score reaches 2.
+narrow-scope activation. Strong evidence is the current question, the last two
+bounded messages, threshold-qualified older history, and explicit current-week
+flags. Recent bike and activity entities are supporting evidence only: they can
+improve ranking or corroborate a scope already activated by strong evidence,
+but they do not independently make normal memories eligible. Always activate
+`all_training`; ordinary memories need another strong scope, except for broad
+planning or progress questions where general training memories can qualify.
 
-Authoritative examples include `is_injury_week` -> recovery,
-`is_bike_park_week` -> bike_park and mtb, recent Rallon -> bike_park and mtb,
-recent Wild -> emtb and mtb, recent Denna -> gravel, and a
-recommendation/planning question -> planning. A recent bike does not by itself
-determine present intent.
+Strong authoritative examples include `is_injury_week` -> recovery and
+`is_bike_park_week` -> bike_park and mtb. Recent Rallon supports bike_park and
+mtb, recent Wild supports emtb and mtb, and recent Denna supports gravel. A
+recent bike does not by itself determine present intent.
 
 The implementation examines up to 14 entries from the detailed `recent_days`
 context for recent entities and activity names. Missing context keys are

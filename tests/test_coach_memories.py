@@ -69,6 +69,7 @@ if "openai" not in sys.modules:
     sys.modules["openai"] = fake_openai
 
 from coach_memory_router import (
+    active_scopes,
     CriticalMemoryOverflowError,
     DENVER,
     compile_memories,
@@ -143,8 +144,8 @@ class MemoryRouterTests(unittest.TestCase):
         self.assertIn("planning", evidence.current)
         self.assertIn("recovery", evidence.recent)
         self.assertIn("recovery", evidence.authoritative)
-        self.assertIn("bike_park", evidence.authoritative)
-        self.assertIn("mtb", evidence.authoritative)
+        self.assertIn("bike_park", evidence.supporting_entity_scopes)
+        self.assertIn("mtb", evidence.supporting_entity_scopes)
         generic = route_evidence("That ride was hard at the park.", [], {})
         self.assertNotIn("bike_park", generic.current)
 
@@ -174,7 +175,7 @@ class MemoryRouterTests(unittest.TestCase):
             evidence = route_evidence(
                 "Question", [], {"recent_days": [{"main_ride_bike_name": bike_name}]},
             )
-            self.assertTrue(expected_scopes.issubset(evidence.authoritative))
+            self.assertTrue(expected_scopes.issubset(evidence.supporting_entity_scopes))
 
     def test_recent_entities_are_bounded_to_first_fourteen_rows(self):
         recent_days = [{"main_ride_bike_name": "No special bike"} for _ in range(14)]
@@ -200,7 +201,7 @@ class MemoryRouterTests(unittest.TestCase):
                 ],
             },
         )
-        self.assertIn("gravel", evidence.authoritative)
+        self.assertIn("gravel", evidence.supporting_entity_scopes)
 
     def test_critical_and_safety_memories_are_selected_without_unrelated_fill(self):
         memories = [
@@ -210,6 +211,50 @@ class MemoryRouterTests(unittest.TestCase):
         ]
         selected = select_memories(memories, "How is recovery?", [], {}, NOW, date(2026, 9, 9))
         self.assertEqual([item["memory_id"] for item in selected], [1, 2])
+
+    def test_recent_entities_do_not_select_unrelated_memories_for_surgery(self):
+        memories = [
+            memory(1, priority="critical", applies_to=["all_training"]),
+            memory(2, priority="high", memory_type="medical", applies_to=["all_training", "recovery"]),
+            memory(3, memory_type="medical", title="Knee limitations", applies_to=["recovery"]),
+            memory(4, memory_type="equipment", title="Denna role", applies_to=["gravel"]),
+            memory(5, memory_type="equipment", title="Wild configuration", applies_to=["emtb"]),
+            memory(6, memory_type="equipment", title="Rallon role", applies_to=["bike_park"]),
+            memory(7, memory_type="training_goal", title="Weight target", applies_to=["weight"]),
+        ]
+        context = {
+            "athlete_narrative": {"current_week": {"is_injury_week": True}},
+            "recent_days": [
+                {"main_ride_bike_name": "Rallon"},
+                {"main_ride_bike_name": "Wild"},
+                {"main_ride_bike_name": "Denna"},
+                {"other_activity_names": ["strength", "bike park"]},
+            ],
+        }
+        selected = select_memories(memories, "When is my surgery?", [], context, NOW, date(2026, 9, 9))
+        self.assertEqual([item["memory_id"] for item in selected], [1, 2, 3])
+
+    def test_gravel_question_uses_question_scope_not_recent_bike_scopes(self):
+        memories = [
+            memory(1, priority="critical", applies_to=["all_training"]),
+            memory(2, memory_type="equipment", title="Denna role", applies_to=["gravel"]),
+            memory(3, memory_type="equipment", title="Wild configuration", applies_to=["emtb"]),
+            memory(4, memory_type="equipment", title="Rallon role", applies_to=["bike_park"]),
+        ]
+        context = {"recent_days": [
+            {"main_ride_bike_name": "Rallon"},
+            {"main_ride_bike_name": "Wild"},
+            {"main_ride_bike_name": "Denna"},
+        ]}
+        selected = select_memories(memories, "Which bike for a gravel ride?", [], context, NOW, date(2026, 9, 9))
+        self.assertEqual([item["memory_id"] for item in selected], [1, 2])
+
+    def test_recent_entity_scopes_are_not_reported_as_active(self):
+        evidence = route_evidence(
+            "When is my surgery?", [], {"recent_days": [{"main_ride_bike_name": "Denna"}]},
+        )
+        self.assertEqual(active_scopes(evidence), {"all_training", "recovery"})
+        self.assertEqual(evidence.supporting_entity_scopes, {"gravel"})
 
     def test_compilation_excludes_internal_metadata_and_has_wrapper(self):
         compiled = compile_memories([memory(4, title="A title")])

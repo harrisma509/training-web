@@ -37,7 +37,7 @@ SELECTION_REASON_ORDER = (
 )
 
 SCOPE_PHRASES = {
-    "planning": ("tomorrow", "this week", "next week", "plan", "schedule", "what should i do", "workout", "train"),
+    "planning": ("tomorrow", "this week", "next week", "plan", "schedule", "what should i do", "how am i doing", "progress", "workout", "train"),
     "recovery": ("recover", "recovery", "fatigue", "tired", "sleep", "hrv", "resting heart rate", "sore", "soreness", "illness", "injury", "pain", "stitches", "wound", "surgery"),
     "strength": ("strength", "lifting", "weights", "arms", "legs", "core", "squat", "hinge", "press", "row", "prehab"),
     "bike_park": ("bike park", "trestle", "keystone", "whistler", "lift served", "downhill", "jump", "drop", "pro line", "rallon"),
@@ -81,6 +81,7 @@ class RouteEvidence:
     active: frozenset
     recent_scores: dict
     older_scores: dict
+    supporting_entity_scopes: frozenset = frozenset()
 
 
 def _normalize_text(value, field_name, maximum):
@@ -283,6 +284,7 @@ def route_evidence(question, history, context):
                 recent_scores[scope] = recent_scores.get(scope, 0) + 2
     signals, recent_days = _context_signal_values(context)
     authoritative = set()
+    supporting_entity_scopes = set()
     active = set()
     for name, value in signals.items():
         if value is True:
@@ -304,16 +306,17 @@ def route_evidence(question, history, context):
                     activity_values.append(value)
             text = " ".join(activity_values)
             normalized = _normalized_match_text(text)
-            authoritative.update(_matching_scopes(text))
+            supporting_entity_scopes.update(_matching_scopes(text))
             if re.search(r"\brallon\b", normalized):
-                authoritative.update({"bike_park", "mtb"})
+                supporting_entity_scopes.update({"bike_park", "mtb"})
             if re.search(r"\bwild\b", normalized):
-                authoritative.update({"emtb", "mtb"})
+                supporting_entity_scopes.update({"emtb", "mtb"})
             if re.search(r"\bdenna\b", normalized):
-                authoritative.add("gravel")
+                supporting_entity_scopes.add("gravel")
     return RouteEvidence(
         frozenset(current), frozenset(recent), frozenset(older),
         frozenset(authoritative), frozenset(active), recent_scores, older_scores,
+        frozenset(supporting_entity_scopes),
     )
 
 
@@ -327,12 +330,25 @@ def active_scopes(evidence):
     }
 
 
+def _normal_memory_has_strong_scope(memory, evidence):
+    scopes = set(memory["applies_to"])
+    strong_scopes = active_scopes(evidence) - {"all_training"}
+    if scopes & strong_scopes:
+        return True
+    return (
+        "all_training" in scopes
+        and "planning" in strong_scopes
+        and "planning" in evidence.current
+    )
+
+
 def _ranking_key(memory, evidence):
     scopes = set(memory["applies_to"])
     return (
         0 if memory["priority"] == "critical" else 1,
         0 if scopes & evidence.current else 1,
         0 if scopes & evidence.authoritative else 1,
+        0 if scopes & evidence.supporting_entity_scopes else 1,
         0 if scopes & evidence.recent else 1,
         0 if memory["priority"] == "high" else 1,
         0 if scopes & evidence.older else 1,
@@ -347,7 +363,7 @@ def _select_memories_with_evidence(memories, question, history, context, generat
     eligible = [
         memory for memory in memories
         if is_active_eligible(memory, generated_at, local_date)
-        and set(memory["applies_to"]) & active_scopes(evidence)
+        and _normal_memory_has_strong_scope(memory, evidence)
     ]
     safety = [
         memory for memory in memories

@@ -171,6 +171,12 @@ class ReceiptContractTests(unittest.TestCase):
             "all_training_match",
         ])
 
+    def test_supporting_recent_entities_are_not_receipt_active_scopes(self):
+        context = {"recent_days": [{"main_ride_bike_name": "Denna"}]}
+        evidence = route_evidence("When is my surgery?", [], context)
+        receipt = build_receipt([], evidence, context, [], False)
+        self.assertEqual(receipt["active_scopes"], ["all_training", "recovery"])
+
     def test_missing_coverage_stays_unknown(self):
         receipt = build_receipt([], route_evidence("Question", [], {}), {}, [], False)
         coverage = receipt["context_coverage"]
