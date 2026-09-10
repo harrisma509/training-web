@@ -506,6 +506,68 @@
         return root;
     }
 
+    function appendContextRow(list, name, value) {
+        list.appendChild(makeElement("dt", "", name));
+        list.appendChild(makeElement("dd", "", value));
+    }
+
+    function renderContextReceipt(receipt) {
+        const root = makeElement("div", "coach-context-panel");
+        const data = receipt?.receipt_json || {};
+        root.appendChild(makeElement("h4", "", "Context used for this response"));
+        const details = makeElement("dl", "");
+        appendContextRow(details, "Scopes", Array.isArray(data.active_scopes) && data.active_scopes.length
+            ? data.active_scopes.join(", ") : "None reported");
+        appendContextRow(details, "Recent messages", Number.isInteger(data.recent_message_count)
+            ? String(data.recent_message_count) : "Not reported");
+        appendContextRow(details, "Custom Instructions", data.custom_instructions_included ? "Included" : "Not included");
+        const coverage = data.context_coverage || {};
+        appendContextRow(details, "Data through", coverage.data_through_date || "Not reported");
+        appendContextRow(details, "Coverage", `${coverage.detailed_activity_days || 0} activity days, ${coverage.weekly_rows || 0} weekly rows, ${coverage.recovery_days || 0} recovery days`);
+        appendContextRow(details, "Additional data", Array.isArray(data.additional_data_requested) && data.additional_data_requested.length
+            ? data.additional_data_requested.join(", ") : "None");
+        root.appendChild(details);
+        const memories = Array.isArray(data.selected_memories) ? data.selected_memories : [];
+        if (memories.length) {
+            root.appendChild(makeElement("div", "", "Selected Durable Memories"));
+            const list = makeElement("ul", "coach-context-memory-list");
+            memories.forEach(memory => {
+                const item = makeElement("li", "");
+                item.appendChild(makeElement("strong", "", text(memory.title || "Untitled memory")));
+                const reasons = Array.isArray(memory.selection_reasons) && memory.selection_reasons.length
+                    ? ` - ${memory.selection_reasons.join(", ")}` : "";
+                item.appendChild(document.createTextNode(` (${text(memory.memory_type || "memory")}, ${text(memory.priority || "normal")})${reasons}`));
+                list.appendChild(item);
+            });
+            root.appendChild(list);
+        }
+        return root;
+    }
+
+    async function toggleContextReceipt(button, turn, item) {
+        const existing = item.querySelector(".coach-context-panel");
+        if (existing) {
+            existing.remove();
+            button.textContent = "Context";
+            return;
+        }
+        button.disabled = true;
+        button.textContent = "Loading...";
+        try {
+            const receipt = await window.api.fetchCoachContextReceipt(turn.coach_turn_id);
+            item.appendChild(renderContextReceipt(receipt));
+            button.textContent = "Hide context";
+        } catch (error) {
+            const panel = makeElement("div", "coach-context-panel", error.status === 404
+                ? "Context receipt is not available for this response."
+                : "Context receipt is currently unavailable.");
+            item.appendChild(panel);
+            button.textContent = "Context unavailable";
+        } finally {
+            button.disabled = false;
+        }
+    }
+
     function renderConversation() {
         if (state.conversationLoading) {
             clearNode(refs.conversation);
@@ -534,6 +596,10 @@
                 actions.appendChild(copy);
                 const turn = findTurnForMessage(message);
                 if (turn && turn.status === "completed") {
+                    const context = makeElement("button", "coach-context-button", "Context");
+                    context.type = "button";
+                    context.addEventListener("click", () => toggleContextReceipt(context, turn, item));
+                    actions.appendChild(context);
                     actions.appendChild(makeElement("span", "", `${humanModel(turn.model)} • ${formatLatency(turn.elapsed_ms)} • ${formatTokens(turn.total_tokens)} tokens • ${formatCost(turn.estimated_cost_usd)}`));
                 }
                 item.appendChild(actions);

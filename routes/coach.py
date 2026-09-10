@@ -417,7 +417,7 @@ def get_coach_session(session_id: str):
                         ORDER BY created_at, coach_message_id
                         LIMIT %s
                     )
-                    SELECT t.assistant_message_id, t.provider, t.model, t.status,
+                    SELECT t.coach_turn_id, t.assistant_message_id, t.provider, t.model, t.status,
                            t.elapsed_ms, t.total_tokens, t.estimated_cost_usd
                     FROM public.coach_turn t
                     JOIN public.coach_message assistant

@@ -330,7 +330,8 @@ class MemoryRouteTests(unittest.TestCase):
              patch("coach_orchestrator._coach_session_snapshot", return_value={}), \
              patch("coach_orchestrator.enforce_monthly_budget"), \
              patch("coach_orchestrator._fail_coach_turn"), \
-             patch("coach_orchestrator.preflight_cost", return_value=0) as preflight:
+             patch("coach_orchestrator.preflight_cost", return_value=0) as preflight, \
+             patch("coach_orchestrator.persist_receipt"):
             respond_to_coach(3, "Question", context_loader=lambda: {}, provider_factory=lambda: provider)
         instructions = provider.requests[0].instructions
         self.assertLess(instructions.index("Coaching priorities:"), instructions.index("These Durable Memories"))

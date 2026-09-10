@@ -15,7 +15,9 @@
     });
 
     if (!response.ok) {
-      throw new Error(`${response.status} ${response.statusText || "Request failed"}`);
+      const error = new Error(`${response.status} ${response.statusText || "Request failed"}`);
+      error.status = response.status;
+      throw error;
     }
 
     return response.json();
@@ -307,6 +309,38 @@
       }
 
       return response.json();
+    },
+
+    async fetchCoachMemories(status = "all") {
+      const params = status && status !== "all" ? `?status=${encodeURIComponent(status)}` : "";
+      return fetchJson(`/api/settings/ai-coach/memories${params}`);
+    },
+
+    async createCoachMemory(payload = {}) {
+      return fetchJson("/api/settings/ai-coach/memories", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Accept: "application/json" },
+        body: JSON.stringify(payload),
+      });
+    },
+
+    async updateCoachMemory(memoryId, payload = {}) {
+      return fetchJson(`/api/settings/ai-coach/memories/${encodeURIComponent(memoryId)}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json", Accept: "application/json" },
+        body: JSON.stringify(payload),
+      });
+    },
+
+    async setCoachMemoryActive(memoryId, active) {
+      const action = active ? "reactivate" : "deactivate";
+      return fetchJson(`/api/settings/ai-coach/memories/${encodeURIComponent(memoryId)}/${action}`, {
+        method: "POST",
+      });
+    },
+
+    async fetchCoachContextReceipt(turnId) {
+      return fetchJson(`/api/coach/turns/${encodeURIComponent(turnId)}/context-receipt`);
     },
 
     async requestSync() {

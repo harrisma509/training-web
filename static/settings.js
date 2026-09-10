@@ -866,6 +866,7 @@
     if (selectedSettingsTab === "ai-coach") {
       loadAiCoachSettings(true).catch(() => { });
       loadCustomInstructions(true).catch(() => { });
+      window.CoachMemoriesController?.activate();
     }
   }
 
@@ -901,6 +902,7 @@
     if (selectedTab === "ai-coach") {
       loadAiCoachSettings(true).catch(() => { });
       loadCustomInstructions(true).catch(() => { });
+      window.CoachMemoriesController?.activate();
     }
   }
 

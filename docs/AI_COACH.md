@@ -186,6 +186,7 @@ POST /api/coach/sessions/{session_id}/respond
     |-- Build provider-neutral AIRequest
     |-- Enforce pricing and monthly budget rules
     |-- Acquire provider concurrency capacity
+    |-- Persist immutable context receipt
     |-- Call configured provider
     |-- Validate provider response
     |-- Calculate estimated cost
@@ -208,7 +209,19 @@ from the current question, the exact bounded history, authoritative signals,
 and a bounded recent-day entity window. The compiled block is placed after
 Custom Instructions and before temporal and authoritative context. If optional
 memory persistence is unavailable, the turn continues without a memory block;
-critical selection overflow fails safely before provider inference.
+critical selection overflow fails safely before provider inference. The receipt
+still retains real topic scopes derived from the question, bounded history, and
+authoritative context even when no Durable Memories can be loaded.
+
+Each new turn also persists one validated V1 Context Receipt immediately before
+provider execution, after provider-capacity admission. The receipt INSERT and
+commit complete before `provider.complete()` begins. It records selected memory
+metadata and controlled selection reasons, active scopes, compact context
+coverage, bounded history count, and whether Custom Instructions were included.
+Receipt failures are recorded internally as invalid, conflict, or unavailable;
+client details remain generic. Historical receipts are retrieved through
+`GET /api/coach/turns/{coach_turn_id}/context-receipt` without rerunning memory
+routing or current-context retrieval.
 
 ---
 

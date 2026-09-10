@@ -25,6 +25,16 @@ MAX_SELECTED_MEMORIES = 12
 MAX_COMPILED_CHARACTERS = 6000
 RECENT_ENTITY_DAYS = 14
 DENVER = ZoneInfo("America/Denver")
+SELECTION_REASON_ORDER = (
+    "critical_memory",
+    "high_all_training_medical",
+    "high_all_training_safety",
+    "current_question_match",
+    "authoritative_context_match",
+    "recent_conversation_match",
+    "older_bounded_history_match",
+    "all_training_match",
+)
 
 SCOPE_PHRASES = {
     "planning": ("tomorrow", "this week", "next week", "plan", "schedule", "what should i do", "workout", "train"),
@@ -332,7 +342,7 @@ def _ranking_key(memory, evidence):
     )
 
 
-def select_memories(memories, question, history, context, generated_at, local_date):
+def _select_memories_with_evidence(memories, question, history, context, generated_at, local_date):
     evidence = route_evidence(question, history, context)
     eligible = [
         memory for memory in memories
@@ -362,7 +372,49 @@ def select_memories(memories, question, history, context, generated_at, local_da
             selected.append(memory)
     if any(memory["memory_id"] not in {item["memory_id"] for item in selected} for memory in critical):
         raise CriticalMemoryOverflowError("Eligible critical Durable Memories exceed the compiled limit.")
+    return selected, evidence
+
+
+def select_memories(memories, question, history, context, generated_at, local_date):
+    selected, _ = _select_memories_with_evidence(
+        memories, question, history, context, generated_at, local_date
+    )
     return selected
+
+
+def select_memories_with_evidence(memories, question, history, context, generated_at, local_date):
+    """Return the existing selection plus immutable routing evidence."""
+    selected, evidence = _select_memories_with_evidence(
+        memories, question, history, context, generated_at, local_date
+    )
+    return selected, evidence
+
+
+def canonical_active_scopes(evidence):
+    active = active_scopes(evidence)
+    return [scope for scope in SCOPES if scope in active]
+
+
+def selection_reasons(memory, evidence):
+    scopes = set(memory["applies_to"])
+    reasons = []
+    if memory["priority"] == "critical":
+        reasons.append("critical_memory")
+    if memory["priority"] == "high" and memory["memory_type"] == "medical" and "all_training" in scopes:
+        reasons.append("high_all_training_medical")
+    if memory["priority"] == "high" and memory["memory_type"] == "safety" and "all_training" in scopes:
+        reasons.append("high_all_training_safety")
+    if scopes & evidence.current:
+        reasons.append("current_question_match")
+    if scopes & evidence.authoritative:
+        reasons.append("authoritative_context_match")
+    if scopes & evidence.recent:
+        reasons.append("recent_conversation_match")
+    if scopes & evidence.older:
+        reasons.append("older_bounded_history_match")
+    if "all_training" in scopes:
+        reasons.append("all_training_match")
+    return [reason for reason in SELECTION_REASON_ORDER if reason in reasons]
 
 
 def compile_memories(memories):

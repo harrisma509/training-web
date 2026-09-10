@@ -419,3 +419,110 @@
     grid-column: auto;
   }
 }
+
+.settings-memory-filter-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.settings-memory-list {
+  display: grid;
+  gap: 10px;
+}
+
+.settings-memory-item {
+  padding: 12px;
+  border: 1px solid var(--input-border);
+  border-radius: 8px;
+  background: var(--panel);
+}
+
+.settings-memory-item-heading,
+.settings-memory-form-heading,
+.settings-memory-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.settings-memory-item p {
+  margin: 8px 0;
+  color: var(--text);
+  font-size: 13px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+}
+
+.settings-memory-meta {
+  margin-top: 5px;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.settings-memory-badge {
+  padding: 3px 7px;
+  border-radius: 999px;
+  color: var(--muted);
+  background: var(--input-bg);
+  font-size: 10px;
+  text-transform: uppercase;
+}
+
+.settings-memory-status-active { color: var(--success); }
+.settings-memory-status-inactive { color: var(--muted); }
+.settings-memory-status-expired { color: var(--warning); }
+.settings-memory-status-future { color: var(--accent); }
+
+.settings-memory-form {
+  display: grid;
+  gap: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--input-border);
+}
+
+.settings-memory-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.settings-memory-title-field,
+.settings-memory-text-field,
+.settings-memory-scopes {
+  grid-column: 1 / -1;
+}
+
+.settings-memory-scopes {
+  min-width: 0;
+  margin: 0;
+  padding: 10px;
+  border: 1px solid var(--input-border);
+  border-radius: 8px;
+}
+
+.settings-memory-scopes legend {
+  padding: 0 4px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.settings-memory-scope-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.settings-memory-active {
+  align-self: end;
+}
+
+@media (max-width: 700px) {
+  .settings-memory-fields,
+  .settings-memory-scope-grid {
+    grid-template-columns: 1fr;
+  }
+}

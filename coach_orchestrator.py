@@ -33,7 +33,21 @@ from routes.coach_custom_instructions import (
     load_custom_instructions,
 )
 from routes.coach_settings import CoachSettingsUnavailableError, load_coach_settings
-from coach_memory_router import DENVER, CriticalMemoryOverflowError, compile_memories, select_memories
+from coach_context_receipt import (
+    ContextReceiptConflict,
+    ContextReceiptInvalid,
+    ContextReceiptError,
+    ContextReceiptUnavailable,
+    build_receipt,
+    persist_receipt,
+)
+from coach_memory_router import (
+    DENVER,
+    CriticalMemoryOverflowError,
+    compile_memories,
+    route_evidence,
+    select_memories_with_evidence,
+)
 from routes.coach_memories import DurableMemoriesUnavailableError, load_memories
 from context_client import ContextError, MAX_CONTEXT_CHARS, fetch_current_context
 from routes.coach import (
@@ -158,6 +172,7 @@ def respond_to_coach(
     provider_factory=configured_ai_provider,
     settings_loader=None,
     custom_instructions_loader=None,
+    receipt_persistor=None,
 ):
     request_id = f"coach-{uuid.uuid4().hex}"
     _, user_message, started_turn = _start_coach_turn(session_id, message, request_id)
@@ -170,10 +185,13 @@ def respond_to_coach(
         settings = (settings_loader or load_coach_settings)()
         custom_instructions = (custom_instructions_loader or load_custom_instructions)()
         compiled_custom_instructions = compile_custom_instructions(custom_instructions)
+        selected_memories = []
+        routing_evidence = route_evidence(message, history, context)
+        compiled_memories = ""
         try:
             stored_memories = load_memories()
             generated_at = datetime.now(DENVER)
-            selected_memories = select_memories(
+            selected_memories, routing_evidence = select_memories_with_evidence(
                 stored_memories,
                 message,
                 history,
@@ -184,7 +202,6 @@ def respond_to_coach(
             compiled_memories = compile_memories(selected_memories)
         except DurableMemoriesUnavailableError:
             logger.warning("Durable Memories unavailable; continuing without optional memory context")
-            compiled_memories = ""
         except CriticalMemoryOverflowError as exc:
             raise CoachOrchestrationError(
                 503,
@@ -215,7 +232,15 @@ def respond_to_coach(
             timeout_seconds=PROVIDER_TIMEOUT_SECONDS,
             reasoning_effort=validate_reasoning_effort(settings.reasoning_effort),
         )
+        receipt = build_receipt(
+            selected_memories,
+            routing_evidence,
+            context,
+            history,
+            bool(compiled_custom_instructions),
+        )
         with provider_capacity():
+            (receipt_persistor or persist_receipt)(turn_id, receipt)
             response = provider.complete(request)
         assistant_text = _validate_response(response)
         cost = estimated_cost(
@@ -256,6 +281,14 @@ def respond_to_coach(
         _failure(turn_id, "failed", "provider_configuration", 503, "Coach provider is unavailable.", started)
     except ProviderCapacityError:
         _failure(turn_id, "failed", "provider_concurrency_limit", 429, "Coach provider capacity is unavailable.", started)
+    except ContextReceiptInvalid:
+        _failure(turn_id, "failed", "context_receipt_invalid", 500, "Unable to prepare Coach context receipt.", started)
+    except ContextReceiptConflict:
+        _failure(turn_id, "failed", "context_receipt_conflict", 500, "Unable to persist Coach context receipt.", started)
+    except ContextReceiptUnavailable:
+        _failure(turn_id, "failed", "context_receipt_unavailable", 503, "Coach context receipt is unavailable.", started)
+    except ContextReceiptError:
+        _failure(turn_id, "failed", "context_receipt_unavailable", 503, "Coach context receipt is unavailable.", started)
     except MonthlyBudgetDisabledError:
         _failure(
             turn_id,

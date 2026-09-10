@@ -459,6 +459,53 @@
               <button id="aiCoachCustomInstructionsSave" type="button" class="button-primary">Save</button>
             </div>
           </section>
+
+          <section class="settings-section settings-ai-coach-card" aria-labelledby="aiCoachMemoriesTitle">
+            <div class="settings-ai-coach-heading">
+              <div>
+                <div id="aiCoachMemoriesTitle" class="settings-label">Durable Memories</div>
+                <p class="settings-help-text">Curated facts the Coach may use across sessions. Memories are never hard-deleted.</p>
+              </div>
+              <label class="settings-memory-filter-label" for="aiCoachMemoryStatusFilter">Show
+                <select id="aiCoachMemoryStatusFilter">
+                  <option value="all">All</option>
+                  <option value="active">Active</option>
+                  <option value="inactive">Inactive</option>
+                  <option value="future">Future</option>
+                  <option value="expired">Expired</option>
+                </select>
+              </label>
+            </div>
+            <div id="aiCoachMemoriesStatus" class="settings-status-message" role="status" aria-live="polite"></div>
+            <div id="aiCoachMemoriesError" class="settings-form-error" role="alert" aria-live="assertive"></div>
+            <div id="aiCoachMemoriesList" class="settings-memory-list"></div>
+            <form id="aiCoachMemoryForm" class="settings-memory-form">
+              <div class="settings-memory-form-heading">
+                <div id="aiCoachMemoryFormTitle" class="settings-label">Add memory</div>
+                <button id="aiCoachMemoryCancel" type="button" class="button-secondary hidden">Cancel edit</button>
+              </div>
+              <input id="aiCoachMemoryId" type="hidden">
+              <div class="settings-memory-fields">
+                <div class="settings-field"><label for="aiCoachMemoryType">Type</label>
+                  <select id="aiCoachMemoryType"></select></div>
+                <div class="settings-field"><label for="aiCoachMemoryPriority">Priority</label>
+                  <select id="aiCoachMemoryPriority"></select></div>
+                <div class="settings-field settings-memory-title-field"><label for="aiCoachMemoryTitle">Title</label>
+                  <input id="aiCoachMemoryTitle" type="text" maxlength="120"></div>
+                <div class="settings-field settings-memory-text-field"><label for="aiCoachMemoryText">Memory text</label>
+                  <textarea id="aiCoachMemoryText" rows="3" maxlength="1000"></textarea>
+                  <div id="aiCoachMemoryTextCount" class="settings-character-count">0 / 1,000</div></div>
+                <fieldset class="settings-field settings-memory-scopes"><legend>Applies to</legend>
+                  <div id="aiCoachMemoryScopes" class="settings-memory-scope-grid"></div></fieldset>
+                <div class="settings-field"><label for="aiCoachMemoryEffectiveDate">Effective date</label>
+                  <input id="aiCoachMemoryEffectiveDate" type="date"></div>
+                <div class="settings-field"><label for="aiCoachMemoryExpiresAt">Expires at</label>
+                  <input id="aiCoachMemoryExpiresAt" type="datetime-local"></div>
+                <label class="settings-choice settings-memory-active"><input id="aiCoachMemoryActive" type="checkbox" checked> Active</label>
+              </div>
+              <div class="settings-ai-coach-actions"><button id="aiCoachMemorySave" type="submit" class="button-primary">Add memory</button></div>
+            </form>
+          </section>
         </div>
       </div>
     </div>
@@ -879,6 +926,7 @@
   <script src="/static/yearly.js"></script>
   <script src="/static/ai-coach-settings-validation.js"></script>
   <script src="/static/ai-coach-custom-instructions-validation.js"></script>
+  <script src="/static/coach-memories.js"></script>
   <script src="/static/settings.js"></script>
   <script src="/static/daily.js"></script>
   <script src="/static/plan.js"></script>

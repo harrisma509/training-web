@@ -431,6 +431,9 @@ class CoachOrchestrationTests(unittest.TestCase):
         )
         instructions_patch.start()
         self.addCleanup(instructions_patch.stop)
+        receipt_patch = patch("coach_orchestrator.persist_receipt")
+        receipt_patch.start()
+        self.addCleanup(receipt_patch.stop)
 
     def test_success_uses_low_reasoning_and_persists_exact_usage_and_cost(self):
         with patch("coach_orchestrator._start_coach_turn", return_value=({}, self.user_message, self.started)), \
