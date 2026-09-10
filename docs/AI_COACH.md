@@ -182,6 +182,7 @@ POST /api/coach/sessions/{session_id}/respond
     |
     |-- Fetch fresh authoritative context from training-api
     |-- Load bounded recent conversation
+    |-- Load and select eligible Durable Memories
     |-- Build provider-neutral AIRequest
     |-- Enforce pricing and monthly budget rules
     |-- Acquire provider concurrency capacity
@@ -199,6 +200,15 @@ Return persisted messages, completed turn, and usage summary
 ```
 
 Network calls are deliberately made outside an open database transaction.
+
+Durable Memory management is separate from this paid-turn lifecycle. Its
+parameterized management routes use short transactions and never call a
+provider. During a paid turn, Durable Memories are selected deterministically
+from the current question, the exact bounded history, authoritative signals,
+and a bounded recent-day entity window. The compiled block is placed after
+Custom Instructions and before temporal and authoritative context. If optional
+memory persistence is unavailable, the turn continues without a memory block;
+critical selection overflow fails safely before provider inference.
 
 ---
 

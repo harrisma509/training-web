@@ -6,9 +6,21 @@ import os
 import socket
 import sys
 import types
+from datetime import timedelta, timezone
 from urllib.error import HTTPError, URLError
 from unittest.mock import patch
 from types import SimpleNamespace
+import zoneinfo
+
+try:
+    zoneinfo.ZoneInfo("America/Denver")
+except Exception:
+    _real_zone_info = zoneinfo.ZoneInfo
+    zoneinfo.ZoneInfo = lambda key: (
+        timezone(timedelta(hours=-6), key)
+        if key == "America/Denver"
+        else _real_zone_info(key)
+    )
 
 if "openai" not in sys.modules:
     fake_openai = types.ModuleType("openai")

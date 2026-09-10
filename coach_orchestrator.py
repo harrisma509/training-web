@@ -4,7 +4,7 @@ import json
 import logging
 import time
 import uuid
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 
 from ai_factory import configured_ai_provider
 from ai_provider import (
@@ -33,6 +33,8 @@ from routes.coach_custom_instructions import (
     load_custom_instructions,
 )
 from routes.coach_settings import CoachSettingsUnavailableError, load_coach_settings
+from coach_memory_router import DENVER, CriticalMemoryOverflowError, compile_memories, select_memories
+from routes.coach_memories import DurableMemoriesUnavailableError, load_memories
 from context_client import ContextError, MAX_CONTEXT_CHARS, fetch_current_context
 from routes.coach import (
     MAX_MESSAGE_LENGTH,
@@ -168,11 +170,34 @@ def respond_to_coach(
         settings = (settings_loader or load_coach_settings)()
         custom_instructions = (custom_instructions_loader or load_custom_instructions)()
         compiled_custom_instructions = compile_custom_instructions(custom_instructions)
+        try:
+            stored_memories = load_memories()
+            generated_at = datetime.now(DENVER)
+            selected_memories = select_memories(
+                stored_memories,
+                message,
+                history,
+                context,
+                generated_at,
+                generated_at.date(),
+            )
+            compiled_memories = compile_memories(selected_memories)
+        except DurableMemoriesUnavailableError:
+            logger.warning("Durable Memories unavailable; continuing without optional memory context")
+            compiled_memories = ""
+        except CriticalMemoryOverflowError as exc:
+            raise CoachOrchestrationError(
+                503,
+                "AI Coach Durable Memory safety configuration is unavailable.",
+                "durable_memory_safety_unavailable",
+            ) from exc
         provider_instructions = (
             COACH_POLICY
             if not compiled_custom_instructions
             else COACH_POLICY + "\n\n" + compiled_custom_instructions
         )
+        if compiled_memories:
+            provider_instructions += "\n\n" + compiled_memories
         provider = provider_factory()
         model = provider.model
         proposed_cost = preflight_cost(
