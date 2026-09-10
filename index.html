@@ -464,7 +464,7 @@
             <div class="settings-ai-coach-heading">
               <div>
                 <div id="aiCoachMemoriesTitle" class="settings-label">Durable Memories</div>
-                <p class="settings-help-text">Curated facts the Coach may use across sessions. Memories are never hard-deleted. The Coach selects only the memories relevant to your current question, recent conversation, and Training Intelligence context, while critical safety memories are always considered.</p>
+                <p class="settings-help-text">Curated facts that help the Coach know you across sessions, so answers reflect your goals, history, equipment, preferences, and safety needs without requiring you to repeat them. The Coach starts with your current question and uses recent things you said only when needed for a follow-up; critical safety memories are always considered. Memories are never hard-deleted.</p>
               </div>
               <label class="settings-memory-filter-label" for="aiCoachMemoryStatusFilter">Show
                 <select id="aiCoachMemoryStatusFilter">
@@ -487,23 +487,34 @@
               <input id="aiCoachMemoryId" type="hidden">
               <div class="settings-memory-fields">
                 <div class="settings-field"><label for="aiCoachMemoryType">Type</label>
-                  <select id="aiCoachMemoryType"></select></div>
+                  <select id="aiCoachMemoryType"></select>
+                </div>
                 <div class="settings-field"><label for="aiCoachMemoryPriority">Priority</label>
-                  <select id="aiCoachMemoryPriority"></select></div>
+                  <select id="aiCoachMemoryPriority"></select>
+                </div>
                 <div class="settings-field settings-memory-title-field"><label for="aiCoachMemoryTitle">Title</label>
-                  <input id="aiCoachMemoryTitle" type="text" maxlength="120"></div>
-                <div class="settings-field settings-memory-text-field"><label for="aiCoachMemoryText">Memory text</label>
+                  <input id="aiCoachMemoryTitle" type="text" maxlength="120">
+                </div>
+                <div class="settings-field settings-memory-text-field"><label for="aiCoachMemoryText">Memory
+                    text</label>
                   <textarea id="aiCoachMemoryText" rows="3" maxlength="1000"></textarea>
-                  <div id="aiCoachMemoryTextCount" class="settings-character-count">0 / 1,000</div></div>
-                <fieldset class="settings-field settings-memory-scopes"><legend>Applies to</legend>
-                  <div id="aiCoachMemoryScopes" class="settings-memory-scope-grid"></div></fieldset>
+                  <div id="aiCoachMemoryTextCount" class="settings-character-count">0 / 1,000</div>
+                </div>
+                <fieldset class="settings-field settings-memory-scopes">
+                  <legend>Applies to</legend>
+                  <div id="aiCoachMemoryScopes" class="settings-memory-scope-grid"></div>
+                </fieldset>
                 <div class="settings-field"><label for="aiCoachMemoryEffectiveDate">Effective date</label>
-                  <input id="aiCoachMemoryEffectiveDate" type="date"></div>
+                  <input id="aiCoachMemoryEffectiveDate" type="date">
+                </div>
                 <div class="settings-field"><label for="aiCoachMemoryExpiresAt">Expires at</label>
-                  <input id="aiCoachMemoryExpiresAt" type="datetime-local"></div>
-                <label class="settings-choice settings-memory-active"><input id="aiCoachMemoryActive" type="checkbox" checked> Active</label>
+                  <input id="aiCoachMemoryExpiresAt" type="datetime-local">
+                </div>
+                <label class="settings-choice settings-memory-active"><input id="aiCoachMemoryActive" type="checkbox"
+                    checked> Active</label>
               </div>
-              <div class="settings-ai-coach-actions"><button id="aiCoachMemorySave" type="submit" class="button-primary">Add memory</button></div>
+              <div class="settings-ai-coach-actions"><button id="aiCoachMemorySave" type="submit"
+                  class="button-primary">Add memory</button></div>
             </form>
           </section>
         </div>

@@ -205,8 +205,11 @@ Network calls are deliberately made outside an open database transaction.
 Durable Memory management is separate from this paid-turn lifecycle. Its
 parameterized management routes use short transactions and never call a
 provider. During a paid turn, Durable Memories are selected deterministically
-from the current question, the exact bounded history, authoritative signals,
-and a bounded recent-day entity window. The compiled block is placed after
+from the current question, user-authored entries in the exact bounded history,
+authoritative signals, and a bounded recent-day entity window. The current ask
+is primary; recent user messages support ambiguous follow-ups, while unrelated
+older topics are not accumulated. Assistant messages remain in the provider
+conversation but do not create memory-routing evidence. The compiled block is placed after
 Custom Instructions and before temporal and authoritative context. If optional
 memory persistence is unavailable, the turn continues without a memory block;
 critical selection overflow fails safely before provider inference. The receipt
@@ -222,6 +225,75 @@ Receipt failures are recorded internally as invalid, conflict, or unavailable;
 client details remain generic. Historical receipts are retrieved through
 `GET /api/coach/turns/{coach_turn_id}/context-receipt` without rerunning memory
 routing or current-context retrieval.
+
+---
+
+## Context Packet and Influence
+
+Each paid Coach turn assembles a new context packet. Python controls what data
+enters the packet, explicit authority rules describe how conflicts must be
+resolved, and the configured AI provider synthesizes the final answer.
+Deterministic routing evidence, relevance rules, and ranking weights select
+Durable Memories, but the final request does not assign percentage weights to
+every context section.
+
+The packet contains seven components:
+
+1. **Product Coach policy**
+
+    Defines non-editable safety, authority, missing-data, privacy, and response
+    rules.
+
+2. **Custom Instructions**
+
+    Defines Mike's stable coaching priorities, progression guardrails, planning
+    preferences, and communication style.
+
+3. **Selected Durable Memories**
+
+    Supplies relevant stable personal facts that Mike should not have to repeat
+    in every question. Deterministic routing uses the current ask first, then
+    user-authored history for ambiguous follow-ups. Memory limits are ceilings,
+    not a target number of selected memories.
+
+4. **Temporal reference**
+
+    Grounds today, yesterday, tomorrow, the local timezone, and the context
+    generation time.
+
+5. **Fresh Training Intelligence**
+
+    Provides authoritative current measurements, calculated metrics, audits,
+    activities, recovery, weight, and risk context.
+
+6. **Bounded recent conversation**
+
+    Gives the provider both prior user and assistant messages for conversational
+    continuity. Only user-authored history influences Durable Memory routing;
+    assistant text remains available to the provider but does not create memory
+    candidates.
+
+7. **Current question**
+
+    Defines the immediate task and receives the strongest ordinary-memory
+    routing influence.
+
+### Conflict order
+
+When information overlaps or conflicts:
+
+- Current clinician guidance and direct user corrections override stored background.
+- Training Intelligence owns current measurements and calculated training facts.
+- Product policy controls non-negotiable behavior and safety.
+- Custom Instructions control stable coaching approach and presentation.
+- Durable Memories personalize the answer but yield to newer authoritative facts.
+- Conversation supplies continuity.
+- General model knowledge fills explanatory gaps but does not replace personal authoritative data.
+
+This hierarchy explains why memories do not need to accumulate across a
+conversation. An explicit current ask replaces unrelated ordinary historical
+topics, while a vague follow-up can reuse the latest user-established topic.
+The complete bounded conversation is still sent to the provider for continuity.
 
 ---
 
@@ -284,11 +356,11 @@ Stores the lifecycle and accounting for one user-question/assistant-answer pair:
 
 ## What Is Sent to the AI Provider
 
-Each real Coach turn sends a newly assembled request containing four major parts.
+Each real Coach turn sends the newly assembled seven-component context packet
+described above. The provider receives the packet as one provider-neutral
+request; it does not receive percentage weights for the sections.
 
-Before the full authoritative context, `training-web` adds a deterministic temporal-reference block derived from the context's `as_of.current_date`, `as_of.timezone`, and `as_of.response_generated_at` fields. Relative dates are derived from the Training API context, not from the web server clock.
-
-### 1. Stable Coach policy
+### 1. Product Coach policy
 
 The server-side policy defines:
 
@@ -300,7 +372,27 @@ The server-side policy defines:
 - Response structure
 - Markdown formatting expectations
 
-### 2. Fresh authoritative training context
+### 2. Custom Instructions
+
+Nonblank Custom Instructions are compiled deterministically and placed after
+the Product Coach policy. They cannot override product safety policy,
+clinician guidance, authoritative Training Intelligence, privacy controls, or
+missing-data semantics.
+
+### 3. Selected Durable Memories
+
+Selected memories are compiled after Custom Instructions. Their numerical
+selection rules rank and bound memory candidates; they do not assign a
+percentage influence to the rest of the context packet.
+
+### 4. Temporal reference
+
+Before the full authoritative context, `training-web` adds a deterministic
+temporal-reference block derived from the context's `as_of.current_date`,
+`as_of.timezone`, and `as_of.response_generated_at` fields. Relative dates are
+derived from the Training API context, not from the web server clock.
+
+### 5. Fresh Training Intelligence
 
 The application fetches the current context from:
 
@@ -337,7 +429,7 @@ The model-facing context may include:
 
 The complete context is fetched again for each real Coach turn so that newly entered information can affect the next answer immediately.
 
-### 3. Bounded recent conversation
+### 6. Bounded recent conversation
 
 The application includes both sides of recent conversation history:
 
@@ -372,7 +464,7 @@ User: When can I start riding again?
 
 Older messages remain stored and visible locally even after they fall outside the active model-history window.
 
-### 4. Current question
+### 7. Current question
 
 The current message is added after the authoritative context and recent conversation.
 
@@ -385,6 +477,9 @@ The current message is added after the authoritative context and recent conversa
 ```text
 Configured model
 + Coach policy
++ Custom Instructions
++ Selected Durable Memories
++ Temporal reference
 + Fresh Training Intelligence context
 + Recent user questions
 + Recent Coach answers
@@ -730,7 +825,8 @@ after save failures, and never writes Custom Instructions to localStorage. The
 blank seeded profile loads as seven empty textareas. The returned `updated_at`
 is shown as local readable metadata. Persisted `updated_at` must be a real
 database date/datetime object; arbitrary stored strings fail closed. Durable
-Memories remain pending.
+Memories are managed separately in Settings, selected deterministically for
+each request, and compiled after Custom Instructions.
 
 ### Pricing behavior
 
@@ -864,11 +960,14 @@ Add:
 
 V2 should be driven by observed use rather than feature volume.
 
-### V2.1 Conversation compaction and durable memory
+### V2.1 Conversation compaction and session summarization
 
 Problem:
 
-Older messages eventually fall outside the 12-message / 12,000-character active-history window.
+Older messages eventually fall outside the 24-message / 24,000-character
+active-history window. Selected Durable Memories already provide bounded,
+deterministic background facts for each request; session summarization and
+compaction remain future work.
 
 Goal:
 
@@ -1170,6 +1269,7 @@ AI Coach V1 is considered complete because it can:
 - Receive a Coach question in the web UI
 - Persist the user question
 - Fetch current Training Intelligence context
+- Select relevant Durable Memories without requiring Mike to restate stable details
 - Include bounded recent user and assistant messages
 - Call the configured model through a provider-neutral adapter
 - Persist the answer
@@ -1180,6 +1280,8 @@ AI Coach V1 is considered complete because it can:
 - Restore sessions after refresh
 - Display readable Markdown and Risk treatment
 - Generate and edit session titles
+- Persist a Context Receipt for each paid turn
+- View the Context Receipt without rerunning routing or context retrieval
 - Enforce initial cost and concurrency limits
 
 ---

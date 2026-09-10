@@ -57,11 +57,13 @@ sanitized and make no provider call.
 
 ## Deterministic routing contract
 
-The router uses the current question, the same bounded recent conversation
-selected for provider inference, authoritative Training Intelligence signals,
-supporting recent entities, and memory metadata. It must not retrieve
-unlimited chat history or use a different history window from the provider
-request.
+The router uses the current question, user-authored entries from the same
+bounded recent conversation selected for provider inference, authoritative
+Training Intelligence signals, supporting recent entities, and memory
+metadata. Assistant, system, tool, and unknown-role entries remain in the
+provider conversation but do not contribute routing evidence. The router must
+not retrieve unlimited chat history or use a different history window from the
+provider request.
 
 Representative transparent scope matches are:
 
@@ -76,13 +78,16 @@ Representative transparent scope matches are:
 - `skiing`: ski, skiing, powder, bumps, moguls
 
 Generic words such as “park,” “hard,” or “ride” are not sufficient alone for
-narrow-scope activation. Strong evidence is the current question, the last two
-bounded messages, threshold-qualified older history, and explicit current-week
-flags. Recent bike and activity entities are supporting evidence only: they can
-improve ranking or corroborate a scope already activated by strong evidence,
-but they do not independently make normal memories eligible. Always activate
-`all_training`; ordinary memories need another strong scope, except for broad
-planning or progress questions where general training memories can qualify.
+narrow-scope activation. Strong evidence is evaluated in order: the current
+question first, recent user-authored bounded messages for ambiguous follow-ups,
+then threshold-qualified older user history only when recent user context cannot
+resolve the ambiguity, plus explicit current-week flags. An explicit current
+topic suppresses unrelated ordinary historical topics. An ambiguous or
+referential ask may use the latest user-established topic. Recent bike and
+activity entities are supporting evidence only: they cannot independently make
+normal memories eligible. Always activate `all_training`; ordinary memories
+need another strong scope, except for broad planning or progress questions
+where general training memories can qualify.
 
 Strong authoritative examples include `is_injury_week` -> recovery and
 `is_bike_park_week` -> bike_park and mtb. Recent Rallon supports bike_park and
@@ -94,7 +99,7 @@ context for recent entities and activity names. Missing context keys are
 unknown. It does not query history separately or scan unlimited context JSON.
 
 Ordinary memory eligibility also requires deterministic direct relevance from
-the current question or bounded conversation. Matching uses normalized title
+the current question or eligible user-authored bounded conversation. Matching uses normalized title
 tokens, phrase boundaries, and a small reviewed alias list for concepts such
 as knee replacement/TKA, Raynaud's/cold fingers, Rallon/park bike,
 Denna/gravel bike, Wild/e-MTB battery, and elevation baseline. Generic words

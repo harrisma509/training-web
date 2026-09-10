@@ -40,7 +40,7 @@ SCOPE_PHRASES = {
     "planning": ("tomorrow", "this week", "next week", "plan", "schedule", "what should i do", "how am i doing", "progress", "workout", "train"),
     "recovery": ("recover", "recovery", "fatigue", "tired", "sleep", "hrv", "resting heart rate", "sore", "soreness", "illness", "injury", "pain", "stitches", "wound", "surgery"),
     "strength": ("strength", "lifting", "weights", "arms", "legs", "core", "squat", "hinge", "press", "row", "prehab"),
-    "bike_park": ("bike park", "trestle", "keystone", "whistler", "lift served", "downhill", "jump", "drop", "pro line", "rallon"),
+    "bike_park": ("bike park", "park bike", "trestle", "keystone", "whistler", "lift served", "downhill", "jump", "drop", "pro line", "rallon"),
     "emtb": ("e-mtb", "emtb", "wild", "battery", "range extender", "motor", "bosch"),
     "gravel": ("gravel", "denna", "road ride", "pavement"),
     "mtb": ("mountain bike", "mtb", "technical trail", "singletrack", "descent", "trail climbing"),
@@ -250,18 +250,12 @@ DIRECT_ALIAS_GROUPS = {
     "knee_replacement": ("knee replacement", "total knee replacement", "tka", "knee surgery", "replacement surgery"),
     "raynauds": ("raynaud", "raynaud's", "cold hands", "cold fingers", "cold feet", "cold toes"),
     "rallon": ("rallon", "park bike"),
-    "denna": ("denna", "gravel bike"),
+    "denna": ("denna", "gravel", "gravel bike"),
     "wild": ("wild", "e-mtb battery", "emtb battery", "range extender", "bosch motor"),
     "bomb": ("bomb", "thursday group ride"),
     "weight_maintenance": ("weight target", "target weight", "weight range"),
     "elevation_baseline": ("elevation target", "elevation baseline"),
     "bike_park_safety": ("bike park", "trestle", "pro line", "park safety", "full face"),
-}
-DIRECT_ALIAS_SCOPES = {
-    "rallon": "bike_park",
-    "denna": "gravel",
-    "wild": "emtb",
-    "bike_park_safety": "bike_park",
 }
 BROAD_PLANNING_PHRASES = (
     "how am i doing",
@@ -269,6 +263,14 @@ BROAD_PLANNING_PHRASES = (
     "what should i do next week",
     "build my plan",
     "plan my week",
+)
+AMBIGUOUS_QUESTION_PHRASES = (
+    "what about",
+    "how long should",
+    "what should make me stop",
+    "what should make me stop early",
+    "what about that",
+    "shortest possible answer",
 )
 BROAD_PLANNING_MEMORY_TYPES = frozenset({
     "training_goal", "schedule", "medical", "safety", "lesson_learned", "event",
@@ -288,7 +290,7 @@ def _distinctive_tokens(text):
     }
 
 
-def _direct_title_match(memory, text, active_scope_names=()):
+def _direct_title_match(memory, text):
     if not text:
         return False
     title = memory["title"]
@@ -296,26 +298,36 @@ def _direct_title_match(memory, text, active_scope_names=()):
     text_tokens = _distinctive_tokens(text)
     if title_tokens & text_tokens:
         return True
-    for group_name, phrases in DIRECT_ALIAS_GROUPS.items():
+    for phrases in DIRECT_ALIAS_GROUPS.values():
         if any(_phrase_present(title, phrase) for phrase in phrases):
             if any(_phrase_present(text, phrase) for phrase in phrases):
-                return True
-            if DIRECT_ALIAS_SCOPES.get(group_name) in active_scope_names:
                 return True
     return False
 
 
 def _memory_direct_matches(memory, evidence):
-    strong_scopes = active_scopes(evidence) - {"all_training"}
     return {
-        "current": _direct_title_match(memory, evidence.question_text, strong_scopes),
-        "recent": any(_direct_title_match(memory, text, strong_scopes) for text in evidence.recent_texts),
-        "older": any(_direct_title_match(memory, text, strong_scopes) for text in evidence.older_texts),
+        "current": _direct_title_match(memory, evidence.question_text),
+        "recent": any(_direct_title_match(memory, text) for text in evidence.recent_texts),
+        "older": any(_direct_title_match(memory, text) for text in evidence.older_texts),
     }
 
 
 def _is_broad_planning_question(text):
     return any(_phrase_present(text, phrase) for phrase in BROAD_PLANNING_PHRASES)
+
+
+def _is_ambiguous_question(text):
+    return any(_phrase_present(text, phrase) for phrase in AMBIGUOUS_QUESTION_PHRASES)
+
+
+def _is_broad_planning_memory_match(memory, evidence):
+    return (
+        "planning" in memory["applies_to"]
+        and "planning" in evidence.current
+        and _is_broad_planning_question(evidence.question_text)
+        and memory["memory_type"] in BROAD_PLANNING_MEMORY_TYPES
+    )
 
 
 def _context_signal_values(context):
@@ -344,8 +356,12 @@ def route_evidence(question, history, context):
     question_text = question if isinstance(question, str) else ""
     current = _matching_scopes(question_text)
     bounded_history = history if isinstance(history, list) else []
-    recent_messages = bounded_history[-2:]
-    older_messages = bounded_history[:-2]
+    user_messages = [
+        item for item in bounded_history
+        if isinstance(item, dict) and item.get("role") == "user"
+    ]
+    recent_messages = user_messages[-2:]
+    older_messages = user_messages[:-2]
     recent = set()
     recent_texts = []
     for item in recent_messages:
@@ -404,6 +420,18 @@ def route_evidence(question, history, context):
         text for text, matches in older_matches
         if any(older_scores.get(scope, 0) >= 2 for scope in matches)
     )
+    ambiguous = _is_ambiguous_question(question_text)
+    if not ambiguous:
+        recent = set()
+        recent_scores = {}
+        older = set()
+        older_scores = {}
+        recent_texts = []
+        older_texts = ()
+    elif recent_texts and recent:
+        older = set()
+        older_scores = {}
+        older_texts = ()
     return RouteEvidence(
         frozenset(current), frozenset(recent), frozenset(older),
         frozenset(authoritative), frozenset(active), recent_scores, older_scores,
@@ -425,17 +453,18 @@ def active_scopes(evidence):
 def _normal_memory_has_strong_scope(memory, evidence):
     scopes = set(memory["applies_to"])
     strong_scopes = active_scopes(evidence) - {"all_training"}
-    if not scopes & strong_scopes:
-        return False
     direct = _memory_direct_matches(memory, evidence)
-    if direct["current"] or direct["recent"] or direct["older"]:
+    if not scopes & strong_scopes:
+        return direct["current"] and "all_training" in scopes
+    if direct["current"]:
         return True
-    return (
-        "planning" in scopes
-        and "planning" in evidence.current
-        and _is_broad_planning_question(evidence.question_text)
-        and memory["memory_type"] in BROAD_PLANNING_MEMORY_TYPES
-    )
+    if _is_broad_planning_memory_match(memory, evidence):
+        return True
+    if evidence.question_text and not _is_ambiguous_question(evidence.question_text):
+        return False
+    if direct["recent"] or direct["older"]:
+        return True
+    return False
 
 
 def _ranking_key(memory, evidence):
@@ -512,12 +541,7 @@ def canonical_active_scopes(evidence):
 def selection_reasons(memory, evidence):
     scopes = set(memory["applies_to"])
     direct = _memory_direct_matches(memory, evidence)
-    broad_planning_match = (
-        "planning" in scopes
-        and "planning" in evidence.current
-        and _is_broad_planning_question(evidence.question_text)
-        and memory["memory_type"] in BROAD_PLANNING_MEMORY_TYPES
-    )
+    broad_planning_match = _is_broad_planning_memory_match(memory, evidence)
     reasons = []
     if memory["priority"] == "critical":
         reasons.append("critical_memory")

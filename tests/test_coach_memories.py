@@ -75,6 +75,7 @@ from coach_memory_router import (
     compile_memories,
     derived_status,
     route_evidence,
+    selection_reasons,
     select_memories,
     validate_memory_payload,
 )
@@ -177,7 +178,7 @@ class MemoryRouterTests(unittest.TestCase):
     def test_router_uses_current_recent_and_authoritative_signals(self):
         evidence = route_evidence(
             "What should I do tomorrow?",
-            [{"message_text": "My sleep was poor."}, {"message_text": "I need recovery."}],
+            [{"role": "user", "message_text": "My sleep was poor."}, {"role": "user", "message_text": "I need recovery."}],
             {
                 "athlete_narrative": {"current_week": {"is_injury_week": True}},
                 "recent_days": [{"main_ride_bike_name": "2022 Orbea Rallon"}],
@@ -337,7 +338,33 @@ class MemoryRouterTests(unittest.TestCase):
         for question in ("bike", "ride", "target", "role", "configuration", "training", "left", "current"):
             with self.subTest(question=question):
                 selected = select_memories(memories, question, [], {}, NOW, date(2026, 9, 9))
-                self.assertEqual(selected, [])
+            selected_ids = {item["memory_id"] for item in selected}
+            self.assertFalse(selected_ids & set(range(5, 16)))
+
+    def test_broad_planning_allowance_is_non_lexical_and_type_limited(self):
+        schedule_memory = memory(
+            101,
+            memory_type="schedule",
+            title="Tuesday mobility routine",
+            applies_to=["planning"],
+            priority="normal",
+        )
+        equipment_memory = memory(
+            102,
+            memory_type="equipment",
+            title="Alpine emergency beacon",
+            applies_to=["planning", "mtb"],
+            priority="normal",
+        )
+        question = "How am I doing, and what should I do this week?"
+        selected = select_memories(
+            [schedule_memory, equipment_memory], question, [], {}, NOW, date(2026, 9, 9)
+        )
+        selected_ids = {item["memory_id"] for item in selected}
+        self.assertIn(101, selected_ids)
+        self.assertNotIn(102, selected_ids)
+        evidence = route_evidence(question, [], {})
+        self.assertIn("current_question_match", selection_reasons(schedule_memory, evidence))
 
     def test_vague_follow_up_uses_recent_direct_relevance(self):
         memories = reviewed_memory_fixture()
@@ -353,6 +380,53 @@ class MemoryRouterTests(unittest.TestCase):
         self.assertIn(10, selected_ids)
         self.assertNotIn(9, selected_ids)
         self.assertNotIn(11, selected_ids)
+
+    def test_assistant_text_cannot_add_comparison_memories(self):
+        memories = reviewed_memory_fixture()
+        history = [
+            {"role": "user", "message_text": "I am considering an easy gravel ride on the Denna once cleared."},
+            {"role": "assistant", "message_text": "The Denna is safer than the Wild or Rallon."},
+        ]
+        selected = select_memories(memories, "What about tomorrow?", history, injury_week_context(), NOW, date(2026, 9, 9))
+        selected_ids = {item["memory_id"] for item in selected}
+        self.assertIn(10, selected_ids)
+        self.assertNotIn(9, selected_ids)
+        self.assertNotIn(11, selected_ids)
+
+    def test_explicit_topic_switch_replaces_user_history(self):
+        memories = reviewed_memory_fixture()
+        history = [
+            {"role": "user", "message_text": "How much battery does my Wild have?"},
+            {"role": "assistant", "message_text": "The Wild has enough battery for that route."},
+        ]
+        selected = select_memories(memories, "What is my weight target?", history, injury_week_context(), NOW, date(2026, 9, 9))
+        selected_ids = {item["memory_id"] for item in selected}
+        self.assertIn(6, selected_ids)
+        self.assertNotIn(11, selected_ids)
+
+    def test_unknown_and_non_user_roles_do_not_route(self):
+        memories = reviewed_memory_fixture()
+        history = [
+            {"role": "assistant", "message_text": "Denna, Wild, and Rallon comparison."},
+            {"role": "system", "message_text": "Weight target context."},
+            {"role": "tool", "message_text": "Raynaud's context."},
+            {"role": "unknown", "message_text": "BOMB ride context."},
+            {"message_text": "Rallon context without a role."},
+        ]
+        selected = select_memories(memories, "What about tomorrow?", history, {}, NOW, date(2026, 9, 9))
+        selected_ids = {item["memory_id"] for item in selected}
+        self.assertFalse(selected_ids & set(range(5, 16)))
+
+    def test_rallon_ambiguous_follow_up_preserves_only_user_topic(self):
+        memories = reviewed_memory_fixture()
+        history = [
+            {"role": "user", "message_text": "I am planning a lift-served downhill day on the Rallon after clearance."},
+            {"role": "assistant", "message_text": "Start conservatively and watch for cold exposure, weight, and other bikes."},
+        ]
+        selected = select_memories(memories, "How long should the first session be?", history, injury_week_context(), NOW, date(2026, 9, 9))
+        selected_ids = {item["memory_id"] for item in selected}
+        self.assertTrue({8, 9}.issubset(selected_ids))
+        self.assertFalse(selected_ids & {6, 10, 11, 12, 13, 14, 15})
 
     def test_compilation_excludes_internal_metadata_and_has_wrapper(self):
         compiled = compile_memories([memory(4, title="A title")])

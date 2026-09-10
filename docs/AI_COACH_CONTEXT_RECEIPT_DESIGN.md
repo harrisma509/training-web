@@ -101,7 +101,7 @@ boolean. No character counts are stored.
 
 ## Controlled selection reasons
 
-Future application code may use only these provider-neutral reason values:
+The application uses only these provider-neutral reason values:
 
 - `critical_memory`
 - `high_all_training_medical`
@@ -119,7 +119,10 @@ matching, or through an explicitly allowed broad-planning match that made it
 eligible. It is not awarded merely because a memory shares a broad scope.
 `authoritative_context_match` is reserved for a selected memory whose strong
 authoritative scope contributed to eligibility; recent supporting entities do
-not qualify as authoritative context.
+not qualify as authoritative context. `recent_conversation_match` and
+`older_bounded_history_match` refer only to user-authored routing history.
+Assistant conversation remains available to the provider but is not represented
+as memory-routing evidence in the receipt.
 
 ## Receipt limits and excluded data
 

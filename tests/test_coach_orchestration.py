@@ -280,6 +280,16 @@ class CoachPolicyTests(unittest.TestCase):
         self.assertIn('"message_text":"Prior answer"', follow_up_input)
         self.assertIn("Current question:\nNew information", follow_up_input)
 
+    def test_provider_input_preserves_complete_role_bearing_history(self):
+        history = [
+            {"role": "user", "message_text": "I asked about the Denna."},
+            {"role": "assistant", "message_text": "The prior answer mentioned the Wild and Rallon."},
+        ]
+        input_text, _, _ = _build_input(CONTEXT, history, "What about tomorrow?")
+        self.assertIn('"role":"user"', input_text)
+        self.assertIn('"role":"assistant"', input_text)
+        self.assertIn("The prior answer mentioned the Wild and Rallon.", input_text)
+
 
 class CoachSettingsTests(unittest.TestCase):
     def test_seed_defaults_and_server_boundaries_validate(self):
