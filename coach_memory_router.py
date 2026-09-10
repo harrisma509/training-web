@@ -82,6 +82,9 @@ class RouteEvidence:
     recent_scores: dict
     older_scores: dict
     supporting_entity_scopes: frozenset = frozenset()
+    question_text: str = ""
+    recent_texts: tuple = ()
+    older_texts: tuple = ()
 
 
 def _normalize_text(value, field_name, maximum):
@@ -238,6 +241,83 @@ def _matching_scopes(text):
     }
 
 
+TITLE_STOPWORDS = frozenset({
+    "a", "and", "for", "has", "history", "in", "is", "left", "memory", "of",
+    "preferred", "role", "the", "this", "training", "weekly", "with", "year",
+    "2026", "bike", "configuration", "current", "maintenance", "ride", "target",
+})
+DIRECT_ALIAS_GROUPS = {
+    "knee_replacement": ("knee replacement", "total knee replacement", "tka", "knee surgery", "replacement surgery"),
+    "raynauds": ("raynaud", "raynaud's", "cold hands", "cold fingers", "cold feet", "cold toes"),
+    "rallon": ("rallon", "park bike"),
+    "denna": ("denna", "gravel bike"),
+    "wild": ("wild", "e-mtb battery", "emtb battery", "range extender", "bosch motor"),
+    "bomb": ("bomb", "thursday group ride"),
+    "weight_maintenance": ("weight target", "target weight", "weight range"),
+    "elevation_baseline": ("elevation target", "elevation baseline"),
+    "bike_park_safety": ("bike park", "trestle", "pro line", "park safety", "full face"),
+}
+DIRECT_ALIAS_SCOPES = {
+    "rallon": "bike_park",
+    "denna": "gravel",
+    "wild": "emtb",
+    "bike_park_safety": "bike_park",
+}
+BROAD_PLANNING_PHRASES = (
+    "how am i doing",
+    "what should i do this week",
+    "what should i do next week",
+    "build my plan",
+    "plan my week",
+)
+BROAD_PLANNING_MEMORY_TYPES = frozenset({
+    "training_goal", "schedule", "medical", "safety", "lesson_learned", "event",
+})
+
+
+def _phrase_present(text, phrase):
+    normalized = _normalized_match_text(text)
+    normalized_phrase = _normalized_match_text(phrase)
+    return bool(normalized_phrase) and bool(re.search(rf"\b{re.escape(normalized_phrase)}\b", normalized))
+
+
+def _distinctive_tokens(text):
+    return {
+        token for token in _normalized_match_text(text).split()
+        if token not in TITLE_STOPWORDS and len(token) >= 4
+    }
+
+
+def _direct_title_match(memory, text, active_scope_names=()):
+    if not text:
+        return False
+    title = memory["title"]
+    title_tokens = _distinctive_tokens(title)
+    text_tokens = _distinctive_tokens(text)
+    if title_tokens & text_tokens:
+        return True
+    for group_name, phrases in DIRECT_ALIAS_GROUPS.items():
+        if any(_phrase_present(title, phrase) for phrase in phrases):
+            if any(_phrase_present(text, phrase) for phrase in phrases):
+                return True
+            if DIRECT_ALIAS_SCOPES.get(group_name) in active_scope_names:
+                return True
+    return False
+
+
+def _memory_direct_matches(memory, evidence):
+    strong_scopes = active_scopes(evidence) - {"all_training"}
+    return {
+        "current": _direct_title_match(memory, evidence.question_text, strong_scopes),
+        "recent": any(_direct_title_match(memory, text, strong_scopes) for text in evidence.recent_texts),
+        "older": any(_direct_title_match(memory, text, strong_scopes) for text in evidence.older_texts),
+    }
+
+
+def _is_broad_planning_question(text):
+    return any(_phrase_present(text, phrase) for phrase in BROAD_PLANNING_PHRASES)
+
+
 def _context_signal_values(context):
     if not isinstance(context, dict):
         return {}, []
@@ -261,20 +341,27 @@ def _context_signal_values(context):
 
 
 def route_evidence(question, history, context):
-    current = _matching_scopes(question if isinstance(question, str) else "")
+    question_text = question if isinstance(question, str) else ""
+    current = _matching_scopes(question_text)
     bounded_history = history if isinstance(history, list) else []
     recent_messages = bounded_history[-2:]
     older_messages = bounded_history[:-2]
     recent = set()
+    recent_texts = []
     for item in recent_messages:
         if isinstance(item, dict):
-            recent.update(_matching_scopes(str(item.get("message_text", ""))))
+            text = str(item.get("message_text", ""))
+            recent_texts.append(text)
+            recent.update(_matching_scopes(text))
     older = set()
     recent_scores = {}
     older_scores = {}
+    older_matches = []
     for item in older_messages:
         if isinstance(item, dict):
-            matches = _matching_scopes(str(item.get("message_text", "")))
+            text = str(item.get("message_text", ""))
+            matches = _matching_scopes(text)
+            older_matches.append((text, matches))
             older.update(matches)
             for scope in matches:
                 older_scores[scope] = older_scores.get(scope, 0) + 1
@@ -313,10 +400,15 @@ def route_evidence(question, history, context):
                 supporting_entity_scopes.update({"emtb", "mtb"})
             if re.search(r"\bdenna\b", normalized):
                 supporting_entity_scopes.add("gravel")
+    older_texts = tuple(
+        text for text, matches in older_matches
+        if any(older_scores.get(scope, 0) >= 2 for scope in matches)
+    )
     return RouteEvidence(
         frozenset(current), frozenset(recent), frozenset(older),
         frozenset(authoritative), frozenset(active), recent_scores, older_scores,
         frozenset(supporting_entity_scopes),
+        question_text, tuple(recent_texts), older_texts,
     )
 
 
@@ -333,19 +425,25 @@ def active_scopes(evidence):
 def _normal_memory_has_strong_scope(memory, evidence):
     scopes = set(memory["applies_to"])
     strong_scopes = active_scopes(evidence) - {"all_training"}
-    if scopes & strong_scopes:
+    if not scopes & strong_scopes:
+        return False
+    direct = _memory_direct_matches(memory, evidence)
+    if direct["current"] or direct["recent"] or direct["older"]:
         return True
     return (
-        "all_training" in scopes
-        and "planning" in strong_scopes
+        "planning" in scopes
         and "planning" in evidence.current
+        and _is_broad_planning_question(evidence.question_text)
+        and memory["memory_type"] in BROAD_PLANNING_MEMORY_TYPES
     )
 
 
 def _ranking_key(memory, evidence):
     scopes = set(memory["applies_to"])
+    direct = _memory_direct_matches(memory, evidence)
     return (
         0 if memory["priority"] == "critical" else 1,
+        0 if direct["current"] else 1,
         0 if scopes & evidence.current else 1,
         0 if scopes & evidence.authoritative else 1,
         0 if scopes & evidence.supporting_entity_scopes else 1,
@@ -413,6 +511,13 @@ def canonical_active_scopes(evidence):
 
 def selection_reasons(memory, evidence):
     scopes = set(memory["applies_to"])
+    direct = _memory_direct_matches(memory, evidence)
+    broad_planning_match = (
+        "planning" in scopes
+        and "planning" in evidence.current
+        and _is_broad_planning_question(evidence.question_text)
+        and memory["memory_type"] in BROAD_PLANNING_MEMORY_TYPES
+    )
     reasons = []
     if memory["priority"] == "critical":
         reasons.append("critical_memory")
@@ -420,13 +525,15 @@ def selection_reasons(memory, evidence):
         reasons.append("high_all_training_medical")
     if memory["priority"] == "high" and memory["memory_type"] == "safety" and "all_training" in scopes:
         reasons.append("high_all_training_safety")
-    if scopes & evidence.current:
+    if direct["current"] or broad_planning_match:
         reasons.append("current_question_match")
-    if scopes & evidence.authoritative:
+    if scopes & evidence.authoritative and (
+        direct["current"] or direct["recent"] or direct["older"]
+    ):
         reasons.append("authoritative_context_match")
-    if scopes & evidence.recent:
+    if direct["recent"]:
         reasons.append("recent_conversation_match")
-    if scopes & evidence.older:
+    if direct["older"]:
         reasons.append("older_bounded_history_match")
     if "all_training" in scopes:
         reasons.append("all_training_match")

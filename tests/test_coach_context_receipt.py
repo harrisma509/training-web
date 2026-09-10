@@ -68,6 +68,7 @@ from coach_context_receipt import (
     load_receipt,
     persist_receipt,
     receipt_response,
+    selection_reasons,
     validate_receipt,
 )
 from coach_memory_router import CriticalMemoryOverflowError, route_evidence
@@ -176,6 +177,31 @@ class ReceiptContractTests(unittest.TestCase):
         evidence = route_evidence("When is my surgery?", [], context)
         receipt = build_receipt([], evidence, context, [], False)
         self.assertEqual(receipt["active_scopes"], ["all_training", "recovery"])
+
+    def test_direct_title_relevance_receives_current_question_reason(self):
+        evidence = route_evidence(
+            "What should I do about cold fingers on winter rides?",
+            [],
+            {"athlete_narrative": {"current_week": {"is_injury_week": True}}},
+        )
+        memory = selected_memory(
+            title="Raynaud's and cold exposure",
+        )
+        reasons = selection_reasons(memory, evidence)
+        self.assertIn("current_question_match", reasons)
+        self.assertIn("authoritative_context_match", reasons)
+
+    def test_unrelated_recovery_memory_gets_no_relevance_reason(self):
+        evidence = route_evidence(
+            "When is my knee replacement surgery?",
+            [],
+            {"athlete_narrative": {"current_week": {"is_injury_week": True}}},
+        )
+        memory = selected_memory(title="Raynaud's and cold exposure")
+        reasons = selection_reasons(memory, evidence)
+        self.assertIn("high_all_training_safety", reasons)
+        self.assertNotIn("current_question_match", reasons)
+        self.assertNotIn("authoritative_context_match", reasons)
 
     def test_missing_coverage_stays_unknown(self):
         receipt = build_receipt([], route_evidence("Question", [], {}), {}, [], False)

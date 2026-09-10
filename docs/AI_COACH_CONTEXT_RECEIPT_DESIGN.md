@@ -113,7 +113,13 @@ Future application code may use only these provider-neutral reason values:
 - `all_training_match`
 
 Each selected memory must have at least one reason. Numeric relevance scores
-are not stored.
+are not stored. `current_question_match` means that the memory was materially
+relevant to the current question through deterministic title or reviewed-alias
+matching, or through an explicitly allowed broad-planning match that made it
+eligible. It is not awarded merely because a memory shares a broad scope.
+`authoritative_context_match` is reserved for a selected memory whose strong
+authoritative scope contributed to eligibility; recent supporting entities do
+not qualify as authoritative context.
 
 ## Receipt limits and excluded data
 

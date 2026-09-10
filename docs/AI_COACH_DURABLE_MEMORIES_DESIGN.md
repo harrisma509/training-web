@@ -93,12 +93,28 @@ The implementation examines up to 14 entries from the detailed `recent_days`
 context for recent entities and activity names. Missing context keys are
 unknown. It does not query history separately or scan unlimited context JSON.
 
+Ordinary memory eligibility also requires deterministic direct relevance from
+the current question or bounded conversation. Matching uses normalized title
+tokens, phrase boundaries, and a small reviewed alias list for concepts such
+as knee replacement/TKA, Raynaud's/cold fingers, Rallon/park bike,
+Denna/gravel bike, Wild/e-MTB battery, and elevation baseline. Generic words
+such as `bike`, `ride`, `target`, `role`, `configuration`, `training`, and
+`left` do not independently match a title. Memory text is not scanned for
+relevance.
+
+Recovery remains current-state context, not blanket eligibility. Equipment and
+preference memories require direct relevance for mode scopes. A clear broad
+planning question may admit relevant training goals, schedules, medical,
+safety, lesson-learned, and event memories through `planning`; it does not
+admit unrelated equipment or preference memories merely because they share a
+scope.
+
 ## Safety, selection, and limits
 
 Always include eligible `critical` memories and eligible high-priority
 `medical` or `safety` memories scoped to `all_training`. If routing fails,
-fall back to this bounded safety set plus applicable `all_training` memories;
-do not send every active memory.
+fail closed to this bounded safety set; do not send every active memory or use
+`all_training` as a blanket ordinary-memory match.
 
 Rank deterministically by: critical priority; direct current-question scope
 match; authoritative-context scope match; last-two-message scope match; high
@@ -109,7 +125,7 @@ Each paid request may receive at most 12 memories and 6,000 compiled memory
 characters. Stored text remains limited to 1,000 characters. Never truncate a
 memory midway. Preserve eligible critical memories first, then high-priority
 and strongest scope matches; do not fill unused capacity with unrelated recent
-memories.
+memories. These are ceilings, not selection targets.
 
 ## Compilation and precedence
 

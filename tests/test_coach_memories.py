@@ -111,6 +111,48 @@ def memory(memory_id=1, **overrides):
     }
 
 
+def reviewed_memory_fixture():
+    definitions = (
+        (1, "medical", "Returning injured has worsened injuries", ["all_training", "recovery"], "critical"),
+        (2, "medical", "Left total knee replacement", ["recovery"], "normal"),
+        (3, "medical", "Left knee limitations", ["recovery"], "normal"),
+        (4, "medical", "Major crash and upper-body history", ["all_training", "recovery"], "high"),
+        (5, "training_goal", "2026 training volume and strength targets", ["planning", "strength"], "normal"),
+        (6, "training_goal", "Weight maintenance target", ["weight"], "normal"),
+        (7, "event", "Thursday BOMB ride", ["planning", "mtb"], "normal"),
+        (8, "safety", "Bike-park protection and fatigue rule", ["all_training", "bike_park", "mtb"], "high"),
+        (9, "equipment", "Rallon bike role", ["bike_park"], "normal"),
+        (10, "equipment", "Denna bike role", ["gravel"], "normal"),
+        (11, "equipment", "Wild e-MTB configuration", ["emtb"], "normal"),
+        (12, "medical", "Raynaud's and cold exposure", ["recovery", "skiing"], "normal"),
+        (13, "preference", "Preferred riding style and season", ["mtb", "gravel", "emtb"], "normal"),
+        (14, "schedule", "Winter and summer ride timing", ["planning"], "normal"),
+        (15, "training_goal", "Weekly elevation baseline", ["all_training"], "normal"),
+    )
+    return [
+        memory(
+            memory_id,
+            memory_type=memory_type,
+            title=title,
+            applies_to=scopes,
+            priority=priority,
+        )
+        for memory_id, memory_type, title, scopes, priority in definitions
+    ]
+
+
+def injury_week_context():
+    return {
+        "athlete_narrative": {"current_week": {"is_injury_week": True}},
+        "recent_days": [
+            {"main_ride_bike_name": "Rallon", "main_ride_sport_type": "bike_park"},
+            {"main_ride_bike_name": "Wild", "main_ride_sport_type": "emtb"},
+            {"main_ride_bike_name": "Denna", "main_ride_sport_type": "gravel"},
+            {"other_activity_names": ["strength", "bike park"]},
+        ],
+    }
+
+
 class MemoryRouterTests(unittest.TestCase):
     def test_normalization_and_strict_fields(self):
         normalized = validate_memory_payload(payload(title="  Title\r\n", memory_text=" A\r\n\rB "))
@@ -231,8 +273,10 @@ class MemoryRouterTests(unittest.TestCase):
                 {"other_activity_names": ["strength", "bike park"]},
             ],
         }
-        selected = select_memories(memories, "When is my surgery?", [], context, NOW, date(2026, 9, 9))
-        self.assertEqual([item["memory_id"] for item in selected], [1, 2, 3])
+        selected = select_memories(memories, "When is my knee replacement surgery?", [], context, NOW, date(2026, 9, 9))
+        selected_ids = {item["memory_id"] for item in selected}
+        self.assertTrue({1, 2, 3}.issubset(selected_ids))
+        self.assertFalse(selected_ids & {4, 5, 6, 7})
 
     def test_gravel_question_uses_question_scope_not_recent_bike_scopes(self):
         memories = [
@@ -246,7 +290,7 @@ class MemoryRouterTests(unittest.TestCase):
             {"main_ride_bike_name": "Wild"},
             {"main_ride_bike_name": "Denna"},
         ]}
-        selected = select_memories(memories, "Which bike for a gravel ride?", [], context, NOW, date(2026, 9, 9))
+        selected = select_memories(memories, "Which bike should I use for a gravel ride?", [], context, NOW, date(2026, 9, 9))
         self.assertEqual([item["memory_id"] for item in selected], [1, 2])
 
     def test_recent_entity_scopes_are_not_reported_as_active(self):
@@ -255,6 +299,60 @@ class MemoryRouterTests(unittest.TestCase):
         )
         self.assertEqual(active_scopes(evidence), {"all_training", "recovery"})
         self.assertEqual(evidence.supporting_entity_scopes, {"gravel"})
+
+    def test_reviewed_questions_select_direct_memories_without_broad_scope_fill(self):
+        memories = reviewed_memory_fixture()
+        context = injury_week_context()
+        cases = (
+            ("When is my knee replacement surgery?", {2, 3}, {6, 7, 9, 10, 11, 12, 13, 14, 15}, 5),
+            ("What cold-weather precautions matter because of my Raynaud's?", {12}, {6, 7, 9, 10, 11, 13, 14, 15}, 5),
+            ("What is my weight target?", {6}, {7, 9, 10, 11, 12, 13, 14, 15}, 5),
+            ("Which bike should I use for a gravel ride?", {10}, {6, 7, 8, 9, 11, 12, 14, 15}, 6),
+            ("How much battery should I bring for a long ride on the Wild?", {11}, {6, 7, 9, 10, 12, 14, 15}, 6),
+            ("When I'm medically cleared, how should I approach my first Trestle day on the Rallon?", {8, 9}, {6, 7, 10, 11, 12, 14, 15}, 8),
+            ("How am I doing, and what should I do this week?", {5, 7, 14}, {9, 10, 11, 12, 13, 15}, 8),
+        )
+        for question, required, forbidden, upper_bound in cases:
+            with self.subTest(question=question):
+                selected = select_memories(memories, question, [], context, NOW, date(2026, 9, 9))
+                selected_ids = {item["memory_id"] for item in selected}
+                self.assertTrue({1, 4, 8}.issubset(selected_ids))
+                self.assertTrue(required.issubset(selected_ids))
+                self.assertFalse(selected_ids & forbidden)
+                self.assertLessEqual(len(selected), upper_bound)
+
+    def test_reviewed_aliases_and_generic_tokens(self):
+        memories = reviewed_memory_fixture()
+        context = injury_week_context()
+        alias_cases = (
+            ("What should I do about cold fingers on winter rides?", 12),
+            ("Which park bike should I take?", 9),
+            ("How should I set up the e-MTB battery?", 11),
+            ("What is my elevation baseline?", 15),
+        )
+        for question, expected_id in alias_cases:
+            with self.subTest(question=question):
+                selected = select_memories(memories, question, [], context, NOW, date(2026, 9, 9))
+                self.assertIn(expected_id, {item["memory_id"] for item in selected})
+        for question in ("bike", "ride", "target", "role", "configuration", "training", "left", "current"):
+            with self.subTest(question=question):
+                selected = select_memories(memories, question, [], {}, NOW, date(2026, 9, 9))
+                self.assertEqual(selected, [])
+
+    def test_vague_follow_up_uses_recent_direct_relevance(self):
+        memories = reviewed_memory_fixture()
+        selected = select_memories(
+            memories,
+            "What about tomorrow?",
+            [{"message_text": "I am considering an easy gravel ride on the Denna once cleared."}],
+            injury_week_context(),
+            NOW,
+            date(2026, 9, 9),
+        )
+        selected_ids = {item["memory_id"] for item in selected}
+        self.assertIn(10, selected_ids)
+        self.assertNotIn(9, selected_ids)
+        self.assertNotIn(11, selected_ids)
 
     def test_compilation_excludes_internal_metadata_and_has_wrapper(self):
         compiled = compile_memories([memory(4, title="A title")])
