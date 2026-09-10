@@ -27,6 +27,7 @@ if "fastapi" not in sys.modules:
         post = get
         put = get
         patch = get
+        delete = get
 
     fake_fastapi.APIRouter = FakeRouter
     fake_fastapi.Request = object
@@ -80,6 +81,7 @@ from coach_memory_router import (
     validate_memory_payload,
 )
 from coach_orchestrator import respond_to_coach
+from routes.coach import delete_coach_session
 from routes.coach_custom_instructions import CustomInstructions
 from routes.coach_settings import CoachSettings
 from routes.coach_memories import create_memory, deactivate_memory, list_memories
@@ -444,6 +446,107 @@ class MemoryRouterTests(unittest.TestCase):
 
 
 class MemoryRouteTests(unittest.TestCase):
+    def test_delete_session_rejects_invalid_ids_without_database_access(self):
+        with patch("routes.coach.db_conn") as db_conn:
+            for value in ("", "0", "-1", "abc", True):
+                result = delete_coach_session(value)
+                self.assertEqual(result.status_code, 400)
+            db_conn.assert_not_called()
+
+    def test_delete_session_orders_children_before_messages_and_commits_once(self):
+        session = memory(1)
+        calls = []
+
+        class Cursor:
+            def __init__(self): self.fetches = 0
+            def __enter__(self): return self
+            def __exit__(self, *args): return False
+            def execute(self, query, params=None): calls.append((query, params))
+            def fetchone(self):
+                self.fetches += 1
+                return session if self.fetches == 1 else None
+
+        class Connection:
+            def __init__(self): self.commits = 0
+            def __enter__(self): return self
+            def __exit__(self, *args): return False
+            def cursor(self): return Cursor()
+            def commit(self): self.commits += 1
+
+        connection = Connection()
+        with patch("routes.coach.db_conn", return_value=connection):
+            result = delete_coach_session("1")
+        self.assertEqual(result, {"deleted": True, "coach_session_id": 1})
+        self.assertEqual(connection.commits, 1)
+        statements = [query for query, _ in calls]
+        order = [
+            next(index for index, query in enumerate(statements) if "ai_coach_turn_context_receipts" in query),
+            next(index for index, query in enumerate(statements) if "coach_tool_call" in query),
+            next(index for index, query in enumerate(statements) if "DELETE FROM public.coach_turn" in query),
+            next(index for index, query in enumerate(statements) if "DELETE FROM public.coach_message" in query),
+            next(index for index, query in enumerate(statements) if "DELETE FROM public.coach_session" in query),
+        ]
+        self.assertEqual(order, sorted(order))
+        self.assertTrue(all(params is not None for query, params in calls if "DELETE FROM" in query))
+
+    def test_delete_session_returns_404_when_session_is_missing(self):
+        class Cursor:
+            def __enter__(self): return self
+            def __exit__(self, *args): return False
+            def execute(self, query, params=None): pass
+            def fetchone(self): return None
+
+        class Connection:
+            def __enter__(self): return self
+            def __exit__(self, *args): return False
+            def cursor(self): return Cursor()
+            def commit(self): self.committed = True
+
+        connection = Connection()
+        with patch("routes.coach.db_conn", return_value=connection):
+            result = delete_coach_session("1")
+        self.assertEqual(result.status_code, 404)
+        self.assertFalse(hasattr(connection, "committed"))
+
+    def test_delete_session_blocks_started_turn_without_commit(self):
+        session = memory(1)
+        calls = []
+
+        class Cursor:
+            def __enter__(self): return self
+            def __exit__(self, *args): return False
+            def execute(self, query, params=None): calls.append((query, params))
+            def fetchone(self):
+                if "FROM public.coach_session" in calls[-1][0]: return session
+                return {"?column?": 1}
+
+        class Connection:
+            def __enter__(self): return self
+            def __exit__(self, *args): return False
+            def cursor(self): return Cursor()
+            def commit(self): self.committed = True
+
+        connection = Connection()
+        with patch("routes.coach.db_conn", return_value=connection):
+            result = delete_coach_session("1")
+        self.assertEqual(result.status_code, 409)
+        self.assertFalse(hasattr(connection, "committed"))
+        self.assertFalse(any("DELETE FROM" in query for query, _ in calls))
+
+    def test_delete_session_returns_sanitized_503_without_commit_on_database_failure(self):
+        class Connection:
+            def __enter__(self): return self
+            def __exit__(self, *args): return False
+            def cursor(self): raise RuntimeError("secret SQL constraint detail")
+            def commit(self): self.committed = True
+
+        connection = Connection()
+        with patch("routes.coach.db_conn", return_value=connection):
+            result = delete_coach_session("1")
+        self.assertEqual(result.status_code, 503)
+        self.assertEqual(result.content, {"detail": "Unable to delete Coach session."})
+        self.assertFalse(hasattr(connection, "committed"))
+
     def test_list_returns_derived_statuses(self):
         rows = [
             memory(1),

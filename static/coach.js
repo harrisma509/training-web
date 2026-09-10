@@ -1,5 +1,16 @@
 /* Coach workspace controller. Keeps persisted conversations server-backed and model output DOM-safe. */
 (function () {
+    function chooseSessionMenuPlacement(triggerRect, menuRect, visibleRailRect, viewportHeight) {
+        const visibleTop = Math.max(visibleRailRect.top, 0);
+        const visibleBottom = Math.min(visibleRailRect.bottom, viewportHeight);
+        const menuHeight = menuRect.height;
+        const downwardSpace = visibleBottom - triggerRect.bottom;
+        const upwardSpace = triggerRect.top - visibleTop;
+        if (downwardSpace >= menuHeight) return "down";
+        if (upwardSpace >= menuHeight) return "up";
+        return downwardSpace >= upwardSpace ? "down" : "up";
+    }
+
     function hasNewPersistedUserMessage(messages, message, existingMessageIds) {
         return messages.some(item => {
             const messageId = item && item.coach_message_id;
@@ -14,7 +25,7 @@
     }
 
     if (typeof document === "undefined" && typeof module !== "undefined") {
-        module.exports = { hasNewPersistedUserMessage };
+        module.exports = { chooseSessionMenuPlacement, hasNewPersistedUserMessage };
         return;
     }
 
@@ -46,6 +57,15 @@
         editingSessionId: "",
         renamePending: false,
         renameError: "",
+        renameDraft: "",
+        renameOriginalTitle: "",
+        renameRevision: 0,
+        sessionMenuId: "",
+        deleteSessionId: "",
+        deletePending: false,
+        deleteError: "",
+        deletePreviousFocus: null,
+        sessionStatusMessage: "",
     };
 
     const refs = {
@@ -69,6 +89,10 @@
         input: document.getElementById("coachMessageInput"),
         send: document.getElementById("coachSend"),
         characterCount: document.getElementById("coachCharacterCount"),
+        deleteDialog: document.getElementById("coachDeleteDialog"),
+        deleteCancel: document.getElementById("coachDeleteCancel"),
+        deleteConfirm: document.getElementById("coachDeleteConfirm"),
+        deleteDialogError: document.getElementById("coachDeleteDialogError"),
     };
 
     function text(value, fallback = "") {
@@ -206,11 +230,11 @@
         }
         if (!state.sessions.length && state.sessionsError) return;
         if (!state.sessions.length && !state.sessionsLoading) {
-            refs.sessionStatus.textContent = "No conversations yet.";
+            refs.sessionStatus.textContent = state.sessionStatusMessage || "No conversations yet.";
             refs.sessions.appendChild(makeElement("p", "coach-empty-sessions", "Start a new chat to begin."));
             return;
         }
-        if (!state.sessionsError && !state.sessionsLoading) refs.sessionStatus.textContent = "";
+        if (!state.sessionsError && !state.sessionsLoading) refs.sessionStatus.textContent = state.sessionStatusMessage;
         const groups = ["Today", "Previous 7 days", "Older"];
         groups.forEach(group => {
             const sessions = state.sessions.filter(session => groupName(session.last_activity_at) === group);
@@ -225,7 +249,7 @@
                     const form = makeElement("form", "coach-session-edit-form");
                     const input = makeElement("input", "coach-session-edit-input");
                     input.type = "text";
-                    input.value = title;
+                    input.value = state.renameDraft || title;
                     input.maxLength = 200;
                     input.dataset.coachRenameInput = id;
                     input.setAttribute("aria-label", `Rename ${title}`);
@@ -248,12 +272,11 @@
                             cancelRename(true);
                         }
                     });
+                    input.addEventListener("blur", () => saveRename(id, input.value));
                     row.appendChild(form);
                     refs.sessions.appendChild(row);
-                    window.setTimeout(() => {
-                        input.focus();
-                        input.select();
-                    }, 0);
+                    input.focus();
+                    input.select();
                     return;
                 }
                 const select = makeElement("button", "coach-session-select");
@@ -265,17 +288,43 @@
                     makeElement("span", "coach-session-time", formatTime(session.last_activity_at)),
                 );
                 select.addEventListener("click", () => selectSession(id));
-                const edit = makeElement("button", "coach-session-edit", "✎");
-                edit.type = "button";
-                edit.setAttribute("aria-label", `Rename ${title}`);
-                edit.dataset.coachEditSession = id;
-                edit.title = `Rename ${title}`;
-                edit.disabled = state.responsePending;
-                edit.addEventListener("click", event => {
+                const actions = makeElement("div", "coach-session-actions");
+                const actionButton = makeElement("button", "coach-session-actions-button", "⋯");
+                actionButton.type = "button";
+                actionButton.setAttribute("aria-label", `Chat actions for ${title}`);
+                actionButton.setAttribute("aria-haspopup", "menu");
+                actionButton.setAttribute("aria-expanded", String(state.sessionMenuId === id));
+                actionButton.setAttribute("aria-controls", `coach-session-menu-${id}`);
+                actionButton.dataset.coachSessionActions = id;
+                actionButton.addEventListener("click", event => {
                     event.stopPropagation();
-                    startRename(id);
+                    toggleSessionMenu(id);
                 });
-                row.append(select, edit);
+                actions.appendChild(actionButton);
+                if (state.sessionMenuId === id) {
+                    const menu = makeElement("div", "coach-session-menu");
+                    menu.id = `coach-session-menu-${id}`;
+                    menu.setAttribute("role", "menu");
+                    const rename = makeElement("button", "", "Rename");
+                    rename.type = "button";
+                    rename.setAttribute("role", "menuitem");
+                    rename.addEventListener("click", event => {
+                        event.stopPropagation();
+                        startRename(id);
+                    });
+                    const deleteButton = makeElement("button", "is-destructive", "Delete chat");
+                    deleteButton.type = "button";
+                    deleteButton.setAttribute("role", "menuitem");
+                    deleteButton.disabled = isSessionGenerating(id);
+                    deleteButton.addEventListener("click", event => {
+                        event.stopPropagation();
+                        openDeleteDialog(id);
+                    });
+                    menu.append(rename, deleteButton);
+                    menu.addEventListener("keydown", handleSessionMenuKeydown);
+                    actions.appendChild(menu);
+                }
+                row.append(select, actions);
                 refs.sessions.appendChild(row);
             });
         });
@@ -283,29 +332,44 @@
 
     function startRename(id) {
         if (state.responsePending || state.renamePending || !validSessionId(id)) return;
+        const session = state.sessions.find(item => sessionId(item) === id);
+        if (!session) return;
+        state.sessionMenuId = "";
         state.editingSessionId = id;
         state.renameError = "";
+        state.renameDraft = text(session.title, "New coaching session");
+        state.renameOriginalTitle = state.renameDraft.trim();
+        state.renameRevision += 1;
         renderSessions();
     }
 
     function cancelRename(restoreFocus) {
         const editingId = state.editingSessionId;
+        state.renameRevision += 1;
         state.editingSessionId = "";
         state.renameError = "";
+        state.renameDraft = "";
+        state.renameOriginalTitle = "";
         renderSessions();
         if (restoreFocus && editingId) {
-            const edit = refs.sessions.querySelector(`[data-coach-edit-session="${editingId}"]`);
-            if (edit) edit.focus();
+            focusSessionActions(editingId);
         }
     }
 
     async function saveRename(id, value) {
+        if (state.editingSessionId !== id || state.renamePending) return;
         const title = text(value).trim();
+        state.renameDraft = text(value);
         if (!title) {
             state.renameError = "Title cannot be blank.";
             renderSessions();
             return;
         }
+        if (title === state.renameOriginalTitle) {
+            cancelRename(false);
+            return;
+        }
+        const revision = state.renameRevision;
         state.renamePending = true;
         state.renameError = "";
         renderSessions();
@@ -320,24 +384,155 @@
             }
             state.editingSessionId = "";
             state.renameError = "";
+            state.renameDraft = "";
+            state.renameOriginalTitle = "";
             updateHeader();
         } catch (error) {
             state.renameError = safeServerDetail(error && error.detail) || "Could not rename this conversation.";
         } finally {
             state.renamePending = false;
             renderSessions();
-            window.setTimeout(() => {
-                if (state.editingSessionId === id && state.renameError) {
-                    const input = refs.sessions.querySelector(`[data-coach-rename-input="${id}"]`);
-                    if (input) {
-                        input.focus();
-                        input.select();
-                    }
-                } else if (state.editingSessionId !== id) {
-                    const edit = refs.sessions.querySelector(`[data-coach-edit-session="${id}"]`);
-                    if (edit) edit.focus();
+            if (state.renameRevision === revision && state.editingSessionId === id && state.renameError) {
+                const input = refs.sessions.querySelector(`[data-coach-rename-input="${id}"]`);
+                if (input) {
+                    input.focus();
+                    input.select();
                 }
-            }, 0);
+            } else if (state.editingSessionId !== id) {
+                focusSessionActions(id);
+            }
+        }
+    }
+
+    function focusSessionActions(id) {
+        const button = refs.sessions.querySelector(`[data-coach-session-actions="${id}"]`);
+        if (button) button.focus();
+    }
+
+    function isSessionGenerating(id) {
+        if (state.responsePending && state.selectedSessionId === id) return true;
+        if (state.selectedSessionId !== id || !state.session || !Array.isArray(state.session.turns)) return false;
+        return state.session.turns.some(turn => turn && turn.status === "started");
+    }
+
+    function toggleSessionMenu(id) {
+        if (state.renamePending || state.deletePending) return;
+        state.sessionMenuId = state.sessionMenuId === id ? "" : id;
+        renderSessions();
+        if (state.sessionMenuId === id) {
+            placeSessionMenu(id);
+            const item = refs.sessions.querySelector(`#coach-session-menu-${id} [role="menuitem"]`);
+            if (item) item.focus();
+        }
+    }
+
+    function placeSessionMenu(id) {
+        const trigger = refs.sessions.querySelector(`[data-coach-session-actions="${id}"]`);
+        const menu = refs.sessions.querySelector(`#coach-session-menu-${id}`);
+        if (!trigger || !menu) return;
+        const triggerRect = trigger.getBoundingClientRect();
+        const menuRect = menu.getBoundingClientRect();
+        const railRect = refs.sessionRail.getBoundingClientRect();
+        const sessionsRect = refs.sessions.getBoundingClientRect();
+        const visibleRailRect = {
+            top: Math.max(railRect.top, sessionsRect.top),
+            bottom: Math.min(railRect.bottom, sessionsRect.bottom),
+        };
+        menu.classList.toggle(
+            "is-upward",
+            chooseSessionMenuPlacement(triggerRect, menuRect, visibleRailRect, window.innerHeight) === "up",
+        );
+    }
+
+    function handleSessionMenuKeydown(event) {
+        const items = [...event.currentTarget.querySelectorAll('[role="menuitem"]')];
+        if (!items.length) return;
+        const current = items.indexOf(document.activeElement);
+        if (event.key === "Escape") {
+            event.preventDefault();
+            const id = state.sessionMenuId;
+            state.sessionMenuId = "";
+            renderSessions();
+            focusSessionActions(id);
+        } else if (event.key === "ArrowDown" || event.key === "ArrowUp" || event.key === "Home" || event.key === "End") {
+            event.preventDefault();
+            const next = event.key === "Home" ? 0
+                : event.key === "End" ? items.length - 1
+                    : (current + (event.key === "ArrowDown" ? 1 : -1) + items.length) % items.length;
+            items[next].focus();
+        }
+    }
+
+    function renderDeleteDialog() {
+        if (!refs.deleteDialog) return;
+        refs.deleteDialog.classList.toggle("hidden", !state.deleteSessionId);
+        refs.deleteDialogError.textContent = state.deleteError;
+        refs.deleteDialog.setAttribute("aria-busy", String(state.deletePending));
+        refs.deleteCancel.disabled = state.deletePending;
+        refs.deleteConfirm.disabled = state.deletePending;
+    }
+
+    async function openDeleteDialog(id) {
+        if (!validSessionId(id) || state.deletePending || isSessionGenerating(id)) return;
+        if (state.editingSessionId === id) {
+            await saveRename(id, state.renameDraft);
+            if (state.editingSessionId === id || state.renamePending) return;
+        }
+        state.sessionMenuId = "";
+        state.deleteSessionId = id;
+        state.deleteError = "";
+        state.deletePreviousFocus = refs.sessions.querySelector(`[data-coach-session-actions="${id}"]`) || document.activeElement;
+        renderSessions();
+        renderDeleteDialog();
+        refs.deleteCancel.focus();
+    }
+
+    function closeDeleteDialog(restoreFocus = true) {
+        const previousFocus = state.deletePreviousFocus;
+        state.deleteSessionId = "";
+        state.deleteError = "";
+        state.deletePending = false;
+        state.deletePreviousFocus = null;
+        renderDeleteDialog();
+        if (restoreFocus && previousFocus && typeof previousFocus.focus === "function") previousFocus.focus();
+    }
+
+    async function confirmDelete() {
+        const id = state.deleteSessionId;
+        if (!id || state.deletePending || isSessionGenerating(id)) return;
+        state.deletePending = true;
+        state.deleteError = "";
+        renderDeleteDialog();
+        try {
+            await window.api.deleteCoachSession(id);
+            const deletedIndex = state.sessions.findIndex(session => sessionId(session) === id);
+            const remaining = state.sessions.filter(session => sessionId(session) !== id);
+            const next = deletedIndex >= 0 ? (remaining[deletedIndex] || remaining[deletedIndex - 1]) : remaining[0];
+            closeDeleteDialog(false);
+            state.sessionMenuId = "";
+            state.editingSessionId = "";
+            state.renameDraft = "";
+            state.renameOriginalTitle = "";
+            state.sessions = remaining;
+            state.selectedSessionId = "";
+            state.session = null;
+            state.usage = null;
+            state.loadToken += 1;
+            state.sessionStatusMessage = "Chat permanently deleted.";
+            window.AppState.coachSessionId = next ? sessionId(next) : "";
+            window.persistPreferences();
+            closeDrawer();
+            if (next) await selectSession(sessionId(next), true);
+            else {
+                renderSessions();
+                renderConversation();
+                renderUsage();
+                updateHeader();
+            }
+        } catch (error) {
+            state.deleteError = safeServerDetail(error && error.detail) || "Could not delete this chat. Try again.";
+            state.deletePending = false;
+            renderDeleteDialog();
         }
     }
 
@@ -885,8 +1080,42 @@
     refs.drawerOpen.addEventListener("click", openDrawer);
     refs.drawerClose.addEventListener("click", closeDrawer);
     refs.drawerBackdrop.addEventListener("click", closeDrawer);
+    refs.deleteCancel.addEventListener("click", () => closeDeleteDialog(true));
+    refs.deleteConfirm.addEventListener("click", confirmDelete);
+    refs.deleteDialog.addEventListener("click", event => {
+        if (event.target.dataset.coachDeleteCancel === "true" && !state.deletePending) closeDeleteDialog(true);
+    });
+    refs.deleteDialog.addEventListener("keydown", event => {
+        if (event.key !== "Tab" || state.deletePending) return;
+        const focusable = [refs.deleteCancel, refs.deleteConfirm].filter(button => !button.disabled);
+        if (!focusable.length) return;
+        const current = focusable.indexOf(document.activeElement);
+        const next = event.shiftKey
+            ? (current <= 0 ? focusable.length - 1 : current - 1)
+            : (current === focusable.length - 1 ? 0 : current + 1);
+        event.preventDefault();
+        focusable[next].focus();
+    });
     document.addEventListener("keydown", event => {
-        if (event.key === "Escape" && state.drawerOpen) closeDrawer();
+        if (event.key !== "Escape") return;
+        if (state.deleteSessionId) {
+            if (!state.deletePending) closeDeleteDialog(true);
+            return;
+        }
+        if (state.sessionMenuId) {
+            const id = state.sessionMenuId;
+            state.sessionMenuId = "";
+            renderSessions();
+            focusSessionActions(id);
+            return;
+        }
+        if (state.drawerOpen) closeDrawer();
+    });
+    document.addEventListener("click", event => {
+        if (state.sessionMenuId && !event.target.closest(".coach-session-actions")) {
+            state.sessionMenuId = "";
+            renderSessions();
+        }
     });
 
     window.addEventListener("beforeunload", stopLoadingStages);

@@ -903,7 +903,11 @@ These values are observations, not guaranteed service levels.
 - Session-level usage panel
 - Per-response model, latency, token, and cost metadata
 - Automatic first-question titles
-- Inline editable titles
+- Inline editable titles saved on Enter or blur; Escape cancels
+- Ellipsis session menu with Rename and Delete chat
+- Permanent single-chat deletion with explicit confirmation and no trash, restore, or Undo
+- Adjacent-session selection or the existing empty state after deletion
+- Context Receipt and saved response context removed with the deleted session
 
 ### Session titles
 
@@ -916,6 +920,20 @@ New coaching session
 The first persisted user question creates a deterministic bounded title without another AI call.
 
 Users may rename sessions manually. A manual title is not overwritten by later automatic behavior.
+
+Inline title edits save when the editor receives Enter or loses focus. Escape
+restores the previous title. Blank titles are rejected without overwriting the
+saved value.
+
+The ellipsis menu for a session contains Rename and Delete chat. Delete chat
+requires explicit confirmation and permanently removes that session's messages,
+turns, tool-call metadata, and Context Receipts. There is no trash, restore,
+retention delay, or Undo. A session with a started turn cannot be deleted.
+The server removes Context Receipts, tool calls, turns, messages, and then the
+session in that order within one transaction because turn-to-message foreign
+keys restrict message deletion.
+Deletion calls neither the AI provider nor Training API and does not affect
+Durable Memories, Custom Instructions, settings, or Training Intelligence data.
 
 ### Safe response rendering
 
@@ -1228,6 +1246,7 @@ POST  /api/coach/sessions
 GET   /api/coach/sessions
 GET   /api/coach/sessions/{session_id}
 PATCH /api/coach/sessions/{session_id}
+DELETE /api/coach/sessions/{session_id}
 ```
 
 ### Coaching

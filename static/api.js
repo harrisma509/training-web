@@ -53,6 +53,21 @@
       return response.json();
     },
 
+    async deleteCoachSession(sessionId) {
+      const response = await fetch(`/api/coach/sessions/${encodeURIComponent(sessionId)}`, {
+        method: "DELETE",
+        headers: { Accept: "application/json" },
+      });
+      if (!response.ok) {
+        const detail = await response.json().catch(() => ({}));
+        const error = new Error(detail.detail || `${response.status} ${response.statusText || "Coach session delete failed"}`);
+        error.status = response.status;
+        error.detail = typeof detail.detail === "string" ? detail.detail : "";
+        throw error;
+      }
+      return response.json();
+    },
+
     async fetchCoachUsage(sessionId) {
       return fetchJson(`/api/coach/sessions/${encodeURIComponent(sessionId)}/usage`);
     },

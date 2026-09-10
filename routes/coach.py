@@ -482,6 +482,63 @@ async def update_coach_session(session_id: str, request: Request):
         return JSONResponse({"detail": "Unable to update Coach session."}, status_code=500)
 
 
+@router.delete("/api/coach/sessions/{session_id}")
+def delete_coach_session(session_id: str):
+    parsed_id = _parse_positive_id(session_id)
+    if parsed_id is None:
+        return JSONResponse({"detail": "session_id must be a positive integer."}, status_code=400)
+    try:
+        with db_conn() as conn:
+            with conn.cursor() as cur:
+                session = _load_session(cur, parsed_id, lock=True)
+                if session is None:
+                    return JSONResponse({"detail": "Coach session not found."}, status_code=404)
+                cur.execute(
+                    """
+                    SELECT 1
+                    FROM public.coach_turn
+                    WHERE coach_session_id = %s AND status = 'started'
+                    LIMIT 1
+                    """,
+                    (parsed_id,),
+                )
+                if cur.fetchone() is not None:
+                    return JSONResponse(
+                        {"detail": "This chat is currently generating a response and cannot be deleted yet."},
+                        status_code=409,
+                    )
+                cur.execute(
+                    """
+                    DELETE FROM public.ai_coach_turn_context_receipts
+                    WHERE coach_turn_id IN (
+                        SELECT coach_turn_id
+                        FROM public.coach_turn
+                        WHERE coach_session_id = %s
+                    )
+                    """,
+                    (parsed_id,),
+                )
+                cur.execute(
+                    """
+                    DELETE FROM public.coach_tool_call
+                    WHERE coach_turn_id IN (
+                        SELECT coach_turn_id
+                        FROM public.coach_turn
+                        WHERE coach_session_id = %s
+                    )
+                    """,
+                    (parsed_id,),
+                )
+                cur.execute("DELETE FROM public.coach_turn WHERE coach_session_id = %s", (parsed_id,))
+                cur.execute("DELETE FROM public.coach_message WHERE coach_session_id = %s", (parsed_id,))
+                cur.execute("DELETE FROM public.coach_session WHERE coach_session_id = %s", (parsed_id,))
+            conn.commit()
+        return {"deleted": True, "coach_session_id": parsed_id}
+    except Exception:
+        logger.error("Failed to delete Coach session session_id=%s", parsed_id)
+        return JSONResponse({"detail": "Unable to delete Coach session."}, status_code=503)
+
+
 @router.post("/api/coach/sessions/{session_id}/messages")
 async def create_coach_user_message(session_id: str, request: Request):
     parsed_id = _parse_positive_id(session_id)

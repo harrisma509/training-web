@@ -156,6 +156,90 @@
     opacity: 0;
 }
 
+.coach-session-actions {
+    position: relative;
+    align-self: center;
+}
+
+.coach-session-actions-button {
+    align-items: center;
+    display: inline-flex;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    border: 1px solid transparent;
+    border-radius: 7px;
+    background: transparent;
+    color: var(--muted);
+    cursor: pointer;
+    opacity: 0;
+    font-size: 18px;
+    line-height: 1;
+}
+
+.coach-session-row:hover .coach-session-actions-button,
+.coach-session-row:focus-within .coach-session-actions-button,
+.coach-session-row.is-active .coach-session-actions-button,
+.coach-session-actions-button[aria-expanded="true"] {
+    opacity: 1;
+}
+
+.coach-session-actions-button:hover,
+.coach-session-actions-button:focus-visible {
+    border-color: var(--input-border);
+    background: var(--button-secondary-bg);
+    color: var(--text);
+}
+
+.coach-session-menu {
+    position: absolute;
+    z-index: 5;
+    top: calc(100% + 4px);
+    right: 0;
+    display: grid;
+    min-width: 132px;
+    padding: 4px;
+    border: 1px solid var(--input-border);
+    border-radius: 8px;
+    background: var(--panel);
+    box-shadow: 0 12px 28px rgba(0, 0, 0, 0.26);
+}
+
+.coach-session-menu.is-upward {
+    top: auto;
+    bottom: calc(100% + 4px);
+}
+
+.coach-session-menu button {
+    padding: 8px 10px;
+    border: 0;
+    border-radius: 5px;
+    background: transparent;
+    color: var(--text);
+    text-align: left;
+    cursor: pointer;
+    font: inherit;
+    font-size: 12px;
+}
+
+.coach-session-menu button:hover,
+.coach-session-menu button:focus-visible {
+    background: var(--button-secondary-bg);
+    outline: none;
+}
+
+.coach-session-menu .is-destructive,
+.coach-delete-dialog-actions .button-danger {
+    color: var(--red);
+}
+
+.coach-session-menu button:disabled,
+.coach-delete-dialog-actions button:disabled {
+    cursor: not-allowed;
+    opacity: 0.5;
+}
+
 .coach-session-row:hover .coach-session-edit,
 .coach-session-row:focus-within .coach-session-edit {
     opacity: 1;
@@ -190,6 +274,77 @@
     margin-top: 4px;
     color: var(--red);
     font-size: 11px;
+}
+
+.coach-delete-dialog {
+    position: fixed;
+    z-index: 30;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    padding: 20px;
+}
+
+.coach-delete-dialog-backdrop {
+    position: absolute;
+    inset: 0;
+    background: rgba(3, 7, 18, 0.72);
+}
+
+.coach-delete-dialog-panel {
+    position: relative;
+    width: min(100%, 430px);
+    padding: 22px;
+    border: 1px solid var(--input-border);
+    border-radius: 12px;
+    background: var(--panel);
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.35);
+}
+
+.coach-delete-dialog-panel h2 {
+    margin: 0;
+    font-size: 19px;
+}
+
+.coach-delete-dialog-panel p {
+    margin: 10px 0 0;
+    color: var(--muted);
+    line-height: 1.5;
+}
+
+.coach-delete-dialog-error {
+    min-height: 18px;
+    margin-top: 12px;
+    color: var(--red);
+    font-size: 12px;
+}
+
+.coach-delete-dialog-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    margin-top: 18px;
+}
+
+.coach-delete-dialog-actions button {
+    min-height: 36px;
+    padding: 0 12px;
+    border-radius: 8px;
+    cursor: pointer;
+    font: inherit;
+    font-size: 12px;
+    font-weight: 750;
+}
+
+.coach-delete-dialog-actions .button-secondary {
+    border: 1px solid var(--input-border);
+    background: var(--button-secondary-bg);
+    color: var(--text);
+}
+
+.coach-delete-dialog-actions .button-danger {
+    border: 1px solid rgba(248, 113, 113, 0.5);
+    background: rgba(248, 113, 113, 0.12);
 }
 
 .coach-session-title {
@@ -684,6 +839,24 @@
     .coach-prompts {
         grid-template-columns: 1fr;
     }
+
+    .coach-session-actions-button {
+        opacity: 1;
+    }
+
+    .coach-delete-dialog {
+        align-items: end;
+        padding: 12px;
+    }
+
+    .coach-delete-dialog-panel {
+        width: 100%;
+    }
+
+    .coach-delete-dialog-actions {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+    }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -696,51 +869,51 @@
     }
 }
 
-    .coach-context-button {
-        color: var(--muted);
-    }
+.coach-context-button {
+    color: var(--muted);
+}
 
-    .coach-context-panel {
-        max-width: 720px;
-        margin: 8px 0 0;
-        padding: 12px;
-        border: 1px solid var(--line);
-        border-radius: 8px;
-        background: var(--panel);
-        color: var(--muted);
-        font-size: 12px;
-        line-height: 1.45;
-    }
+.coach-context-panel {
+    max-width: 720px;
+    margin: 8px 0 0;
+    padding: 12px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: var(--panel);
+    color: var(--muted);
+    font-size: 12px;
+    line-height: 1.45;
+}
 
-    .coach-context-panel h4 {
-        margin: 0 0 8px;
-        color: var(--text);
-        font-size: 12px;
-    }
+.coach-context-panel h4 {
+    margin: 0 0 8px;
+    color: var(--text);
+    font-size: 12px;
+}
 
-    .coach-context-panel dl {
-        display: grid;
-        grid-template-columns: max-content 1fr;
-        gap: 5px 12px;
-        margin: 0;
-    }
+.coach-context-panel dl {
+    display: grid;
+    grid-template-columns: max-content 1fr;
+    gap: 5px 12px;
+    margin: 0;
+}
 
-    .coach-context-panel dt {
-        color: var(--muted);
-    }
+.coach-context-panel dt {
+    color: var(--muted);
+}
 
-    .coach-context-panel dd {
-        margin: 0;
-        color: var(--text);
-    }
+.coach-context-panel dd {
+    margin: 0;
+    color: var(--text);
+}
 
-    .coach-context-memory-list {
-        display: grid;
-        gap: 4px;
-        margin: 8px 0 0;
-        padding-left: 18px;
-    }
+.coach-context-memory-list {
+    display: grid;
+    gap: 4px;
+    margin: 8px 0 0;
+    padding-left: 18px;
+}
 
-    .coach-context-memory-list strong {
-        color: var(--text);
-    }
+.coach-context-memory-list strong {
+    color: var(--text);
+}
