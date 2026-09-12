@@ -248,14 +248,14 @@ TITLE_STOPWORDS = frozenset({
 })
 DIRECT_ALIAS_GROUPS = {
     "knee_replacement": ("knee replacement", "total knee replacement", "tka", "knee surgery", "replacement surgery"),
-    "raynauds": ("raynaud", "raynaud's", "cold hands", "cold fingers", "cold feet", "cold toes"),
+    "raynauds": ("raynaud", "raynaud's", "winter", "ski", "cold hands", "cold fingers", "cold feet", "cold toes"),
     "rallon": ("rallon", "park bike"),
-    "denna": ("denna", "gravel", "gravel bike"),
+    "denna": ("denna", "gravel", "gravel bike", "road bike", "road", "ebike", "battery", "range extender", "motor"),
     "wild": ("wild", "e-mtb battery", "emtb battery", "range extender", "bosch motor"),
-    "bomb": ("bomb", "thursday group ride"),
+    "bomb": ("bomb", "thursday group ride", "mountain bike"),
     "weight_maintenance": ("weight target", "target weight", "weight range"),
     "elevation_baseline": ("elevation target", "elevation baseline"),
-    "bike_park_safety": ("bike park", "trestle", "pro line", "park safety", "full face"),
+    "bike_park_safety": ("bike park", "trestle", "pro line","a-line", "park safety", "full face"),
 }
 BROAD_PLANNING_PHRASES = (
     "how am i doing",
