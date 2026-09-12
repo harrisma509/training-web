@@ -860,11 +860,23 @@
               <p class="coach-eyebrow">Training intelligence</p>
               <h2>Coach</h2>
             </div>
+            <button id="coachHistoryCollapse" class="coach-history-rail-toggle" type="button"
+              aria-controls="coachSessionRail" aria-expanded="true" aria-label="Hide chat history"
+              title="Hide chat history">
+              <svg class="coach-history-toggle-icon" viewBox="0 0 20 20" aria-hidden="true" focusable="false">
+                <path d="m12.5 4.5-5.5 5.5 5.5 5.5"></path>
+              </svg>
+            </button>
             <button id="coachDrawerClose" class="coach-icon-button coach-mobile-only" type="button"
               aria-label="Close Coach sessions">×</button>
           </div>
-          <button id="coachNewChat" type="button" class="coach-new-chat"><span aria-hidden="true">+</span> New
-            chat</button>
+          <button id="coachNewChat" type="button" class="coach-new-chat">
+            <svg class="coach-new-chat-icon" viewBox="0 0 20 20" aria-hidden="true" focusable="false">
+              <circle cx="10" cy="10" r="8.25"></circle>
+              <path d="M10 6v8M6 10h8"></path>
+            </svg>
+            <span>New chat</span>
+          </button>
           <div id="coachSessionStatus" class="coach-inline-status" aria-live="polite"></div>
           <div id="coachSessions" class="coach-sessions" role="list"></div>
         </aside>
@@ -873,17 +885,42 @@
           <header class="coach-main-header">
             <button id="coachDrawerOpen" class="coach-icon-button coach-mobile-only" type="button"
               aria-label="Open Coach sessions" aria-expanded="false">☰</button>
-            <div class="coach-session-heading">
-              <span class="coach-status-mark" aria-hidden="true"></span>
-              <div>
-                <h2 id="coachSessionTitle">Training Coach</h2>
-                <p id="coachSessionMeta">Grounded in your current Training Intelligence</p>
+            <button id="coachHistoryRestore" class="coach-history-restore" type="button" aria-controls="coachSessionRail"
+              aria-expanded="false" aria-label="Show chat history" title="Show chat history">
+              <svg class="coach-history-toggle-icon" viewBox="0 0 20 20" aria-hidden="true" focusable="false">
+                <path d="m12.5 4.5-5.5 5.5 5.5 5.5"></path>
+              </svg>
+            </button>
+            <div class="coach-header-actions">
+              <svg class="coach-ai-sparkle" viewBox="0 0 20 20" aria-hidden="true" focusable="false">
+                <path d="m10 2 1.25 5.75L17 9l-5.75 1.25L10 16l-1.25-5.75L3 9l5.75-1.25L10 2Z"></path>
+                <path d="m16 13 .5 2.5L19 16l-2.5.5L16 19l-.5-2.5L13 16l2.5-.5L16 13Z"></path>
+              </svg>
+              <div class="coach-overflow-wrap">
+                <button id="coachOverflowToggle" type="button" class="coach-overflow-toggle" aria-label="Coach menu"
+                  aria-haspopup="menu" aria-expanded="false" aria-controls="coachUsagePanel" title="Coach menu">
+                  <svg class="coach-overflow-icon" viewBox="0 0 20 20" aria-hidden="true" focusable="false">
+                    <circle cx="4" cy="10" r="1.35"></circle>
+                    <circle cx="10" cy="10" r="1.35"></circle>
+                    <circle cx="16" cy="10" r="1.35"></circle>
+                  </svg>
+                </button>
+                <div id="coachOverflowMenu" class="coach-overflow-menu hidden" role="menu" aria-label="Coach menu">
+                  <button id="coachUsageToggle" type="button" class="coach-overflow-menu-item" role="menuitem">
+                    Session info
+                  </button>
+                </div>
               </div>
             </div>
-            <button id="coachUsageToggle" type="button" class="coach-usage-toggle" aria-expanded="false">Session
-              info</button>
           </header>
-          <div id="coachUsagePanel" class="coach-usage-panel hidden" aria-live="polite"></div>
+          <div id="coachUsagePanel" class="coach-usage-panel hidden" aria-labelledby="coachUsageHeading" aria-live="polite">
+            <div class="coach-usage-header">
+              <h2 id="coachUsageHeading">Session info</h2>
+              <button id="coachUsageClose" class="coach-usage-close" type="button" aria-label="Close session info"
+                title="Close session info">×</button>
+            </div>
+            <div id="coachUsageItems" class="coach-usage-items"></div>
+          </div>
           <div id="coachConversation" class="coach-conversation" aria-live="polite" aria-label="Coach conversation">
           </div>
           <div id="coachError" class="coach-error hidden" role="alert"></div>

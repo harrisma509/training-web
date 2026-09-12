@@ -13,12 +13,22 @@
     border-radius: 16px;
 }
 
+.coach-workspace.is-history-collapsed {
+    grid-template-columns: 0 minmax(0, 1fr);
+}
+
 .coach-session-rail {
     display: flex;
     flex-direction: column;
     min-width: 0;
     border-right: 1px solid var(--line);
     background: color-mix(in srgb, var(--panel) 88%, transparent);
+}
+
+.coach-workspace.is-history-collapsed .coach-session-rail {
+    overflow: hidden;
+    visibility: hidden;
+    border-right: 0;
 }
 
 .coach-rail-header,
@@ -30,6 +40,9 @@
 }
 
 .coach-rail-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
     padding: 22px 18px 16px;
 }
 
@@ -50,11 +63,17 @@
 }
 
 .coach-new-chat {
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 9px;
+    width: calc(100% - 28px);
     min-height: 44px;
     margin: 0 14px 14px;
-    border: 1px solid rgba(96, 165, 250, 0.38);
-    border-radius: 10px;
-    background: rgba(96, 165, 250, 0.14);
+    padding: 0 10px;
+    border: 1px solid var(--input-border);
+    border-radius: 8px;
+    background: transparent;
     color: var(--text);
     font-weight: 750;
     cursor: pointer;
@@ -62,14 +81,26 @@
 
 .coach-new-chat:hover,
 .coach-new-chat:focus-visible {
-    background: rgba(96, 165, 250, 0.24);
+    border-color: var(--blue);
+    background: var(--button-secondary-bg);
 }
 
-.coach-new-chat span {
-    margin-right: 6px;
+.coach-new-chat-icon {
+    width: 20px;
+    height: 20px;
+    flex: 0 0 auto;
     color: var(--blue);
-    font-size: 18px;
-    vertical-align: -1px;
+}
+
+.coach-new-chat-icon circle,
+.coach-new-chat-icon path {
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.5;
+}
+
+.coach-new-chat-icon path {
+    stroke-linecap: round;
 }
 
 .coach-inline-status {
@@ -373,35 +404,13 @@
 
 .coach-main-header {
     grid-row: 1;
-    min-height: 76px;
-    padding: 16px 24px;
+    position: relative;
+    height: 20px;
+    min-height: 20px;
+    padding: 0 24px;
     border-bottom: 1px solid var(--line);
 }
 
-.coach-session-heading {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    min-width: 0;
-    margin-right: auto;
-}
-
-.coach-session-heading p {
-    margin: 4px 0 0;
-    color: var(--muted);
-    font-size: 12px;
-}
-
-.coach-status-mark {
-    width: 9px;
-    height: 9px;
-    flex: 0 0 auto;
-    border-radius: 50%;
-    background: var(--green);
-    box-shadow: 0 0 0 5px rgba(52, 211, 153, 0.12);
-}
-
-.coach-usage-toggle,
 .coach-icon-button {
     min-height: 40px;
     border: 1px solid var(--input-border);
@@ -411,10 +420,149 @@
     cursor: pointer;
 }
 
-.coach-usage-toggle {
-    padding: 0 12px;
+.coach-history-rail-toggle,
+.coach-history-restore {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    min-height: 0;
+    padding: 0;
+    border: 0;
+    border-radius: 7px;
+    background: transparent;
+    color: var(--muted);
+    cursor: pointer;
+}
+
+.coach-history-rail-toggle:hover,
+.coach-history-rail-toggle:focus-visible,
+.coach-history-restore:hover,
+.coach-history-restore:focus-visible {
+    background: var(--button-secondary-bg);
+    color: var(--text);
+}
+
+.coach-history-rail-toggle .coach-history-toggle-icon,
+.coach-history-restore .coach-history-toggle-icon {
+    width: 16px;
+    height: 16px;
+}
+
+.coach-history-restore {
+    position: absolute;
+    top: 50%;
+    left: 8px;
+    z-index: 2;
+    display: none;
+    transform: translateY(-50%);
+}
+
+.coach-history-toggle-icon {
+    width: 18px;
+    height: 18px;
+    fill: none;
+    stroke: currentColor;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    stroke-width: 1.8;
+}
+
+.coach-history-restore .coach-history-toggle-icon {
+    transform: rotate(180deg);
+}
+
+.coach-workspace.is-history-collapsed .coach-history-restore {
+    display: inline-flex;
+}
+
+.coach-header-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    height: 20px;
+    margin-left: auto;
+}
+
+.coach-ai-sparkle {
+    width: 18px;
+    height: 18px;
+    color: var(--green);
+    fill: none;
+    stroke: currentColor;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    stroke-width: 1.25;
+}
+
+.coach-overflow-wrap {
+    position: relative;
+    height: 20px;
+}
+
+.coach-overflow-toggle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 20px;
+    min-height: 0;
+    padding: 7px;
+    border: 0;
+    border-radius: 50%;
+    background: transparent;
+    color: var(--muted);
+    cursor: pointer;
+    font: inherit;
+}
+
+.coach-overflow-toggle:hover,
+.coach-overflow-toggle:focus-visible,
+.coach-overflow-toggle[aria-expanded="true"] {
+    border-color: transparent;
+    background: var(--button-secondary-bg);
+    color: var(--text);
+}
+
+.coach-overflow-icon {
+    width: 18px;
+    height: 18px;
+    fill: currentColor;
+}
+
+.coach-overflow-menu {
+    position: absolute;
+    top: calc(100% + 6px);
+    right: 0;
+    z-index: 6;
+    min-width: 132px;
+    padding: 4px;
+    border: 1px solid var(--input-border);
+    border-radius: 8px;
+    background: var(--panel);
+    box-shadow: 0 12px 28px rgba(0, 0, 0, 0.26);
+}
+
+.coach-overflow-menu-item {
+    display: block;
+    width: 100%;
+    min-height: 36px;
+    padding: 0 10px;
+    border: 0;
+    border-radius: 5px;
+    background: transparent;
+    color: var(--text);
+    font: inherit;
     font-size: 12px;
-    font-weight: 700;
+    text-align: left;
+    cursor: pointer;
+}
+
+.coach-overflow-menu-item:hover,
+.coach-overflow-menu-item:focus-visible {
+    background: var(--button-secondary-bg);
+    outline: none;
 }
 
 .coach-usage-panel {
@@ -425,6 +573,51 @@
     padding: 12px 24px;
     border-bottom: 1px solid var(--line);
     background: var(--panel-surface);
+}
+
+.coach-usage-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    grid-column: 1 / -1;
+}
+
+.coach-usage-header h2 {
+    margin: 0;
+    color: var(--muted);
+    font-size: 10px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.coach-usage-close {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    border: 0;
+    border-radius: 50%;
+    background: transparent;
+    color: var(--muted);
+    cursor: pointer;
+    font: inherit;
+    font-size: 20px;
+    line-height: 1;
+}
+
+.coach-usage-close:hover,
+.coach-usage-close:focus-visible {
+    background: var(--button-secondary-bg);
+    color: var(--text);
+}
+
+.coach-usage-items {
+    display: grid;
+    grid-column: 1 / -1;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 12px;
 }
 
 .coach-usage-item {
@@ -777,6 +970,19 @@
         transform: translateX(-105%);
         transition: transform 180ms ease;
         box-shadow: 14px 0 32px rgba(0, 0, 0, 0.28);
+        overflow: visible;
+        visibility: visible;
+        border-right: 1px solid var(--line);
+    }
+
+    .coach-workspace.is-history-collapsed {
+        display: block;
+    }
+
+    .coach-workspace.is-history-collapsed .coach-session-rail {
+        overflow: visible;
+        visibility: visible;
+        border-right: 1px solid var(--line);
     }
 
     .coach-session-rail.is-open {
@@ -803,25 +1009,40 @@
     }
 
     .coach-main-header {
-        padding: 12px 14px;
+        height: 42px;
+        min-height: 42px;
+        padding: 4px 14px;
+    }
+
+    .coach-header-actions {
+        height: 40px;
+    }
+
+    .coach-overflow-wrap {
+        height: 40px;
+    }
+
+    .coach-overflow-toggle {
+        height: 40px;
+        min-height: 0;
     }
 
     .coach-main-header .coach-mobile-only {
         margin-right: 2px;
     }
 
-    .coach-session-heading p {
+    .coach-history-rail-toggle,
+    .coach-history-restore {
         display: none;
-    }
-
-    .coach-usage-toggle {
-        font-size: 11px;
-        padding: 0 8px;
     }
 
     .coach-usage-panel {
         grid-template-columns: repeat(2, minmax(0, 1fr));
         padding: 12px 14px;
+    }
+
+    .coach-usage-items {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
     }
 
     .coach-conversation {

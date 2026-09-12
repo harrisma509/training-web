@@ -31,6 +31,7 @@
 
     const MAX_MESSAGE_LENGTH = 12000;
     const SELECTED_SESSION_KEY = "coachSessionId";
+    const HISTORY_RAIL_KEY = "trainingWeb.coach.historyRailCollapsed";
     const STAGES = [
         "Loading your training context",
         "Reviewing training and recovery",
@@ -66,6 +67,8 @@
         deleteError: "",
         deletePreviousFocus: null,
         sessionStatusMessage: "",
+        historyRailCollapsed: false,
+        overflowMenuOpen: false,
     };
 
     const refs = {
@@ -75,13 +78,18 @@
         sessionStatus: document.getElementById("coachSessionStatus"),
         newChat: document.getElementById("coachNewChat"),
         sessionRail: document.getElementById("coachSessionRail"),
+        workspace: document.querySelector(".coach-workspace"),
         drawerOpen: document.getElementById("coachDrawerOpen"),
         drawerClose: document.getElementById("coachDrawerClose"),
+        historyCollapse: document.getElementById("coachHistoryCollapse"),
+        historyRestore: document.getElementById("coachHistoryRestore"),
         drawerBackdrop: document.getElementById("coachDrawerBackdrop"),
-        title: document.getElementById("coachSessionTitle"),
-        meta: document.getElementById("coachSessionMeta"),
+        overflowToggle: document.getElementById("coachOverflowToggle"),
+        overflowMenu: document.getElementById("coachOverflowMenu"),
         usageToggle: document.getElementById("coachUsageToggle"),
         usagePanel: document.getElementById("coachUsagePanel"),
+        usageItems: document.getElementById("coachUsageItems"),
+        usageClose: document.getElementById("coachUsageClose"),
         conversation: document.getElementById("coachConversation"),
         error: document.getElementById("coachError"),
         loading: document.getElementById("coachLoadingStatus"),
@@ -97,6 +105,51 @@
 
     function text(value, fallback = "") {
         return value === null || value === undefined ? fallback : String(value);
+    }
+
+    function readHistoryRailPreference() {
+        try {
+            return window.localStorage.getItem(HISTORY_RAIL_KEY) === "true";
+        } catch (error) {
+            return false;
+        }
+    }
+
+    function setHistoryRailCollapsed(collapsed, persist = true) {
+        state.historyRailCollapsed = Boolean(collapsed);
+        refs.workspace.classList.toggle("is-history-collapsed", state.historyRailCollapsed);
+        refs.historyCollapse.setAttribute("aria-expanded", String(!state.historyRailCollapsed));
+        refs.historyRestore.setAttribute("aria-expanded", String(!state.historyRailCollapsed));
+        if (!persist) return;
+        try {
+            window.localStorage.setItem(HISTORY_RAIL_KEY, String(state.historyRailCollapsed));
+        } catch (error) {
+            // Coach remains usable when browser storage is unavailable.
+        }
+    }
+
+    function closeOverflowMenu(restoreFocus = false) {
+        if (!state.overflowMenuOpen) return;
+        state.overflowMenuOpen = false;
+        refs.overflowMenu.classList.add("hidden");
+        refs.overflowToggle.setAttribute("aria-expanded", "false");
+        if (restoreFocus) refs.overflowToggle.focus();
+    }
+
+    function toggleOverflowMenu() {
+        if (state.overflowMenuOpen) {
+            closeOverflowMenu();
+            return;
+        }
+        state.overflowMenuOpen = true;
+        refs.overflowMenu.classList.remove("hidden");
+        refs.overflowToggle.setAttribute("aria-expanded", "true");
+    }
+
+    function setUsagePanelOpen(open, restoreFocus = false) {
+        refs.usageToggle.setAttribute("aria-expanded", String(open));
+        refs.usagePanel.classList.toggle("hidden", !open);
+        if (!open && restoreFocus) refs.overflowToggle.focus();
     }
 
     function validSessionId(value) {
@@ -200,7 +253,7 @@
     }
 
     function renderUsage() {
-        clearNode(refs.usagePanel);
+        clearNode(refs.usageItems);
         const usage = sessionSummaryUsage(state.usage);
         const items = [
             ["Model", humanModel(usage.default_model || usage.model)],
@@ -212,7 +265,7 @@
         items.forEach(([label, value]) => {
             const item = makeElement("div", "coach-usage-item");
             item.append(makeElement("span", "coach-usage-label", label), makeElement("span", "coach-usage-value", value));
-            refs.usagePanel.appendChild(item);
+            refs.usageItems.appendChild(item);
         });
     }
 
@@ -386,7 +439,6 @@
             state.renameError = "";
             state.renameDraft = "";
             state.renameOriginalTitle = "";
-            updateHeader();
         } catch (error) {
             state.renameError = safeServerDetail(error && error.detail) || "Could not rename this conversation.";
         } finally {
@@ -527,7 +579,6 @@
                 renderSessions();
                 renderConversation();
                 renderUsage();
-                updateHeader();
             }
         } catch (error) {
             state.deleteError = safeServerDetail(error && error.detail) || "Could not delete this chat. Try again.";
@@ -870,12 +921,6 @@
         }
     }
 
-    function updateHeader() {
-        const current = state.session && state.session.session;
-        refs.title.textContent = current ? text(current.title, "Training Coach") : "Training Coach";
-        refs.meta.textContent = current ? "A grounded conversation about your training" : "Grounded in your current Training Intelligence";
-    }
-
     function resizeComposer() {
         refs.input.style.height = "auto";
         refs.input.style.height = `${Math.min(refs.input.scrollHeight, 150)}px`;
@@ -923,7 +968,6 @@
                 state.usage = null;
                 renderSessions();
                 renderConversation();
-                updateHeader();
             }
         } catch (error) {
             state.sessionsError = "Unable to load conversations. Try again.";
@@ -939,6 +983,7 @@
         state.selectedSessionId = text(id);
         window.AppState.coachSessionId = state.selectedSessionId;
         window.persistPreferences();
+        closeOverflowMenu();
         closeDrawer();
         state.conversationLoading = true;
         if (!silent) showError("");
@@ -954,7 +999,6 @@
             state.usage = usage;
             renderConversation();
             renderUsage();
-            updateHeader();
         } catch (error) {
             if (requestToken !== state.loadToken) return;
             state.session = null;
@@ -1034,7 +1078,6 @@
             setPending(false);
             renderConversation();
             renderUsage();
-            updateHeader();
             refs.input.focus();
         }
     }
@@ -1073,13 +1116,17 @@
         }
     });
     refs.usageToggle.addEventListener("click", () => {
+        closeOverflowMenu();
         const expanded = refs.usageToggle.getAttribute("aria-expanded") === "true";
-        refs.usageToggle.setAttribute("aria-expanded", String(!expanded));
-        refs.usagePanel.classList.toggle("hidden", expanded);
+        setUsagePanelOpen(!expanded);
     });
+    refs.usageClose.addEventListener("click", () => setUsagePanelOpen(false, true));
     refs.drawerOpen.addEventListener("click", openDrawer);
     refs.drawerClose.addEventListener("click", closeDrawer);
     refs.drawerBackdrop.addEventListener("click", closeDrawer);
+    refs.historyCollapse.addEventListener("click", () => setHistoryRailCollapsed(true));
+    refs.historyRestore.addEventListener("click", () => setHistoryRailCollapsed(false));
+    refs.overflowToggle.addEventListener("click", toggleOverflowMenu);
     refs.deleteCancel.addEventListener("click", () => closeDeleteDialog(true));
     refs.deleteConfirm.addEventListener("click", confirmDelete);
     refs.deleteDialog.addEventListener("click", event => {
@@ -1097,7 +1144,15 @@
         focusable[next].focus();
     });
     document.addEventListener("keydown", event => {
+        if (event.key === "Escape" && state.overflowMenuOpen) {
+            closeOverflowMenu(true);
+            return;
+        }
         if (event.key !== "Escape") return;
+        if (refs.usageToggle.getAttribute("aria-expanded") === "true") {
+            setUsagePanelOpen(false, true);
+            return;
+        }
         if (state.deleteSessionId) {
             if (!state.deletePending) closeDeleteDialog(true);
             return;
@@ -1112,6 +1167,7 @@
         if (state.drawerOpen) closeDrawer();
     });
     document.addEventListener("click", event => {
+        if (state.overflowMenuOpen && !event.target.closest(".coach-overflow-wrap")) closeOverflowMenu();
         if (state.sessionMenuId && !event.target.closest(".coach-session-actions")) {
             state.sessionMenuId = "";
             renderSessions();
@@ -1119,5 +1175,6 @@
     });
 
     window.addEventListener("beforeunload", stopLoadingStages);
+    setHistoryRailCollapsed(readHistoryRailPreference(), false);
     window.CoachController = { activate, renderMarkdown };
 })();
