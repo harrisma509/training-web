@@ -46,6 +46,7 @@ if "fastapi" not in sys.modules:
         post = get
         patch = get
         put = get
+        delete = get
 
     fake_fastapi.APIRouter = FakeRouter
     fake_fastapi.Request = object

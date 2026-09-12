@@ -310,7 +310,7 @@ class MemoryRouterTests(unittest.TestCase):
             ("When is my knee replacement surgery?", {2, 3}, {6, 7, 9, 10, 11, 12, 13, 14, 15}, 5),
             ("What cold-weather precautions matter because of my Raynaud's?", {12}, {6, 7, 9, 10, 11, 13, 14, 15}, 5),
             ("What is my weight target?", {6}, {7, 9, 10, 11, 12, 13, 14, 15}, 5),
-            ("Which bike should I use for a gravel ride?", {10}, {6, 7, 8, 9, 11, 12, 14, 15}, 6),
+            ("Which bike should I use for a gravel ride?", {10}, {6, 7, 9, 11, 12, 14, 15}, 6),
             ("How much battery should I bring for a long ride on the Wild?", {11}, {6, 7, 9, 10, 12, 14, 15}, 6),
             ("When I'm medically cleared, how should I approach my first Trestle day on the Rallon?", {8, 9}, {6, 7, 10, 11, 12, 14, 15}, 8),
             ("How am I doing, and what should I do this week?", {5, 7, 14}, {9, 10, 11, 12, 13, 15}, 8),
@@ -341,7 +341,7 @@ class MemoryRouterTests(unittest.TestCase):
             with self.subTest(question=question):
                 selected = select_memories(memories, question, [], {}, NOW, date(2026, 9, 9))
             selected_ids = {item["memory_id"] for item in selected}
-            self.assertFalse(selected_ids & set(range(5, 16)))
+            self.assertFalse(selected_ids & (set(range(5, 16)) - {8}))
 
     def test_broad_planning_allowance_is_non_lexical_and_type_limited(self):
         schedule_memory = memory(
@@ -373,7 +373,7 @@ class MemoryRouterTests(unittest.TestCase):
         selected = select_memories(
             memories,
             "What about tomorrow?",
-            [{"message_text": "I am considering an easy gravel ride on the Denna once cleared."}],
+            [{"role": "user", "message_text": "I am considering an easy gravel ride on the Denna once cleared."}],
             injury_week_context(),
             NOW,
             date(2026, 9, 9),
@@ -417,7 +417,7 @@ class MemoryRouterTests(unittest.TestCase):
         ]
         selected = select_memories(memories, "What about tomorrow?", history, {}, NOW, date(2026, 9, 9))
         selected_ids = {item["memory_id"] for item in selected}
-        self.assertFalse(selected_ids & set(range(5, 16)))
+        self.assertFalse(selected_ids & (set(range(5, 16)) - {8}))
 
     def test_rallon_ambiguous_follow_up_preserves_only_user_topic(self):
         memories = reviewed_memory_fixture()

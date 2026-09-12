@@ -41,7 +41,7 @@ SCOPE_PHRASES = {
     "recovery": ("recover", "recovery", "fatigue", "tired", "sleep", "hrv", "resting heart rate", "sore", "soreness", "illness", "injury", "pain", "stitches", "wound", "surgery"),
     "strength": ("strength", "lifting", "weights", "arms", "legs", "core", "squat", "hinge", "press", "row", "prehab"),
     "bike_park": ("bike park", "park bike", "trestle", "keystone", "whistler", "lift served", "downhill", "jump", "drop", "pro line", "rallon"),
-    "emtb": ("e-mtb", "emtb", "wild", "denna","battery", "range extender", "motor", "bosch"),
+    "emtb": ("e-mtb", "emtb", "wild", "battery", "range extender", "motor", "bosch"),
     "gravel": ("gravel", "denna", "road ride", "pavement"),
     "mtb": ("mountain bike", "mtb", "technical trail", "singletrack", "descent", "trail climbing"),
     "weight": ("weight", "weigh-in", "calories", "food", "fat", "protein", "diet", "eating"),
@@ -266,6 +266,7 @@ BROAD_PLANNING_PHRASES = (
 )
 AMBIGUOUS_QUESTION_PHRASES = (
     "what about",
+    "tomorrow",
     "how long should",
     "what should make me stop",
     "what should make me stop early",

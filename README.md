@@ -105,5 +105,25 @@ Use live validation for:
 - runtime dependency checks
 - deployment correctness
 
+## Testing
+Run the automated unit tests from the repository root with the repository-local virtual environment:
+
+```bash
+python3 -m pip install -r requirements-dev.txt
+python3 -m pytest --collect-only -q
+python3 -m pytest -q
+```
+
+For a focused run:
+
+```bash
+python3 -m pytest tests/test_coach_orchestration.py -q
+python3 -m pytest -k budget -q
+```
+
+Existing `unittest.TestCase` tests run through pytest. The default suite uses fakes, mocks, and synthetic data; it must not contact OpenAI or other paid providers, Strava, production training-api, production PostgreSQL, Docker, SSH, or deployment operations. Automated unit tests are separate from manual runtime, provider, and deployment smoke tests.
+
+On Windows, activate the repository virtual environment first and use `python -m pytest -q` when `python3` is unavailable.
+
 ## One-sentence rule for future sessions
 This repo is the presentation and operational interface for training data; it reads shared database state and renders it, while the ETL repo owns the actual data pipeline and schema evolution.

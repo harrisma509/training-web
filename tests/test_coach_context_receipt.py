@@ -1,3 +1,4 @@
+import json
 import sys
 import types
 import unittest
@@ -32,6 +33,7 @@ if "fastapi" not in sys.modules:
         post = get
         patch = get
         put = get
+        delete = get
 
     fake_fastapi.APIRouter = FakeRouter
     fake_fastapi.Request = object
@@ -41,6 +43,7 @@ if "fastapi" not in sys.modules:
         def __init__(self, content, status_code=200):
             self.content = content
             self.status_code = status_code
+            self.body = json.dumps(content).encode("utf-8")
 
     fake_responses.JSONResponse = FakeJSONResponse
     sys.modules["fastapi"] = fake_fastapi
