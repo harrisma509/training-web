@@ -16,25 +16,25 @@ Important boundaries:
 ## Current architecture
 
 ### App shell
-- [index.html](index.html): main HTML shell, tabs, settings drawer, and header controls
-- [app.py](app.py): FastAPI bootstrap, router registration, static file mount
+- [index.html](../index.html): main HTML shell, tabs, settings drawer, and header controls
+- [app.py](../app.py): FastAPI bootstrap, router registration, static file mount
 
 ### Shared layers
-- [static/app-state.js](static/app-state.js): canonical state and preference owner
-- [static/api.js](static/api.js): shared fetch wrappers and endpoint contract
-- [static/utils.js](static/utils.js): shared formatting and safe-rendering helpers
-- [static/constants.js](static/constants.js): constants and threshold data only
+- [static/app-state.js](../static/app-state.js): canonical state and preference owner
+- [static/api.js](../static/api.js): shared fetch wrappers and endpoint contract
+- [static/utils.js](../static/utils.js): shared formatting and safe-rendering helpers
+- [static/constants.js](../static/constants.js): constants and threshold data only
 
 ### Feature modules
-- [static/daily.js](static/daily.js): daily table and data loading
-- [static/weekly.js](static/weekly.js): weekly table, commentary, audit drawer
-- [static/zones.js](static/zones.js): zone rendering and threshold highlighting
-- [static/yearly.js](static/yearly.js): yearly table and maintenance preview/calc
-- [static/gear.js](static/gear.js): gear filters and gear table rendering
-- [static/components.js](static/components.js): component view and gear selection
-- [static/settings.js](static/settings.js): settings drawer, preferences, system status
-- [static/sync.js](static/sync.js): sync pill and sync request flow
-- [static/app.js](static/app.js): tab switching and app-level shell wiring
+- [static/daily.js](../static/daily.js): daily table and data loading
+- [static/weekly.js](../static/weekly.js): weekly table, commentary, audit drawer
+- [static/zones.js](../static/zones.js): zone rendering and threshold highlighting
+- [static/yearly.js](../static/yearly.js): yearly table and maintenance preview/calc
+- [static/gear.js](../static/gear.js): gear filters and gear table rendering
+- [static/components.js](../static/components.js): component view and gear selection
+- [static/settings.js](../static/settings.js): settings drawer, preferences, system status
+- [static/sync.js](../static/sync.js): sync pill and sync request flow
+- [static/app.js](../static/app.js): tab switching and app-level shell wiring
 
 ## What is already in good shape
 

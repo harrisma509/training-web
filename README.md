@@ -125,5 +125,7 @@ Existing `unittest.TestCase` tests run through pytest. The default suite uses fa
 
 On Windows, activate the repository virtual environment first and use `python -m pytest -q` when `python3` is unavailable.
 
+For the complete testing and AI-assisted workflow, see [docs/TESTING_GUIDE.md](docs/TESTING_GUIDE.md). Related development notes: [docs/AI_DEV_GUIDE.md](docs/AI_DEV_GUIDE.md) and [docs/FRONTEND_REFACTOR_HANDOFF.md](docs/FRONTEND_REFACTOR_HANDOFF.md).
+
 ## One-sentence rule for future sessions
 This repo is the presentation and operational interface for training data; it reads shared database state and renders it, while the ETL repo owns the actual data pipeline and schema evolution.
