@@ -31,13 +31,17 @@
   const aiCoachTurnLimit = document.getElementById("aiCoachTurnLimit");
   const aiCoachOutputTokens = document.getElementById("aiCoachOutputTokens");
   const aiCoachReasoning = document.getElementById("aiCoachReasoning");
+  const aiCoachDailyHistoryDays = document.getElementById("aiCoachDailyHistoryDays");
+  const aiCoachWeeklyHistoryRows = document.getElementById("aiCoachWeeklyHistoryRows");
+  const aiCoachDailyHistoryDaysWarning = document.getElementById("aiCoachDailyHistoryDaysWarning");
+  const aiCoachWeeklyHistoryRowsWarning = document.getElementById("aiCoachWeeklyHistoryRowsWarning");
   const aiCoachSettingsUpdated = document.getElementById("aiCoachSettingsUpdated");
   const aiCoachSettingsStatus = document.getElementById("aiCoachSettingsStatus");
   const aiCoachSettingsError = document.getElementById("aiCoachSettingsError");
   const aiCoachSettingsRetry = document.getElementById("aiCoachSettingsRetry");
   const aiCoachSettingsCancel = document.getElementById("aiCoachSettingsCancel");
   const aiCoachSettingsSave = document.getElementById("aiCoachSettingsSave");
-  const aiCoachFields = [aiCoachMonthlyLimit, aiCoachTurnLimit, aiCoachOutputTokens, aiCoachReasoning].filter(Boolean);
+  const aiCoachFields = [aiCoachMonthlyLimit, aiCoachTurnLimit, aiCoachOutputTokens, aiCoachReasoning, aiCoachDailyHistoryDays, aiCoachWeeklyHistoryRows].filter(Boolean);
   const customInstructionFields = window.AICoachCustomInstructionsValidation.CUSTOM_INSTRUCTION_FIELDS;
   const customInstructionElements = {
     coaching_priorities: document.getElementById("aiCoachCustomCoachingPriorities"),
@@ -79,12 +83,16 @@
     max_turn_cost_usd: document.getElementById("aiCoachTurnLimitError"),
     max_output_tokens: document.getElementById("aiCoachOutputTokensError"),
     reasoning_effort: document.getElementById("aiCoachReasoningError"),
+    detailed_daily_history_days: document.getElementById("aiCoachDailyHistoryDaysError"),
+    weekly_history_rows: document.getElementById("aiCoachWeeklyHistoryRowsError"),
   };
   const aiCoachFieldIds = {
     monthly_cost_limit_usd: aiCoachMonthlyLimit,
     max_turn_cost_usd: aiCoachTurnLimit,
     max_output_tokens: aiCoachOutputTokens,
     reasoning_effort: aiCoachReasoning,
+    detailed_daily_history_days: aiCoachDailyHistoryDays,
+    weekly_history_rows: aiCoachWeeklyHistoryRows,
   };
   let selectedSettingsTab = "general";
   let aiCoachBaseline = null;
@@ -115,7 +123,12 @@
       .replace(/'/g, "&#39;");
   }
 
-  const validateAiCoachSettingsDraft = window.AICoachSettingsValidation.validateAiCoachSettingsDraft;
+  const {
+    detailedDailyHistoryWarning,
+    hydrateAiCoachSettingsFields,
+    validateAiCoachSettingsDraft,
+    weeklyHistoryWarning,
+  } = window.AICoachSettingsValidation;
 
   function normalizeAiCoachSettings(settings) {
     const normalized = settings || {};
@@ -130,6 +143,12 @@
         ? String(normalized.max_output_tokens)
         : "",
       reasoning_effort: String(normalized.reasoning_effort || ""),
+      detailed_daily_history_days: Number.isInteger(Number(normalized.detailed_daily_history_days))
+        ? String(normalized.detailed_daily_history_days)
+        : "",
+      weekly_history_rows: Number.isInteger(Number(normalized.weekly_history_rows))
+        ? String(normalized.weekly_history_rows)
+        : "",
       updated_at: normalized.updated_at || "",
     };
   }
@@ -358,6 +377,8 @@
       max_turn_cost_usd: aiCoachTurnLimit?.value || "",
       max_output_tokens: aiCoachOutputTokens?.value || "",
       reasoning_effort: aiCoachReasoning?.value || "",
+      detailed_daily_history_days: aiCoachDailyHistoryDays?.value || "",
+      weekly_history_rows: aiCoachWeeklyHistoryRows?.value || "",
     };
   }
 
@@ -367,6 +388,8 @@
       max_turn_cost_usd: Number(draft.max_turn_cost_usd),
       max_output_tokens: Number(draft.max_output_tokens),
       reasoning_effort: draft.reasoning_effort,
+      detailed_daily_history_days: Number(draft.detailed_daily_history_days),
+      weekly_history_rows: Number(draft.weekly_history_rows),
     };
   }
 
@@ -390,7 +413,7 @@
   }
 
   function renderAiCoachSettings() {
-    const draft = aiCoachDraft || { monthly_cost_limit_usd: "", max_turn_cost_usd: "", max_output_tokens: "", reasoning_effort: "" };
+    const draft = aiCoachDraft || { monthly_cost_limit_usd: "", max_turn_cost_usd: "", max_output_tokens: "", reasoning_effort: "", detailed_daily_history_days: "", weekly_history_rows: "" };
     const validation = validateAiCoachSettingsDraft(draft);
     aiCoachValidation = validation;
     const values = {
@@ -398,12 +421,12 @@
       max_turn_cost_usd: aiCoachTurnLimit,
       max_output_tokens: aiCoachOutputTokens,
       reasoning_effort: aiCoachReasoning,
+      detailed_daily_history_days: aiCoachDailyHistoryDays,
+      weekly_history_rows: aiCoachWeeklyHistoryRows,
     };
 
+    hydrateAiCoachSettingsFields(draft, values);
     Object.entries(values).forEach(([field, element]) => {
-      if (element && element.value !== draft[field]) {
-        element.value = draft[field];
-      }
       const errorElement = aiCoachFieldErrors[field];
       const message = validation.errors[field] || "";
       if (errorElement) {
@@ -422,7 +445,15 @@
       max_turn_cost_usd: aiCoachBaseline.max_turn_cost_usd,
       max_output_tokens: aiCoachBaseline.max_output_tokens,
       reasoning_effort: aiCoachBaseline.reasoning_effort,
+      detailed_daily_history_days: aiCoachBaseline.detailed_daily_history_days,
+      weekly_history_rows: aiCoachBaseline.weekly_history_rows,
     }));
+    if (aiCoachDailyHistoryDaysWarning) {
+      aiCoachDailyHistoryDaysWarning.textContent = detailedDailyHistoryWarning(draft);
+    }
+    if (aiCoachWeeklyHistoryRowsWarning) {
+      aiCoachWeeklyHistoryRowsWarning.textContent = weeklyHistoryWarning(draft);
+    }
     if (aiCoachSettingsSave) {
       aiCoachSettingsSave.disabled = aiCoachLoading || aiCoachSaving || !aiCoachBaseline || !dirty || !validation.valid;
     }

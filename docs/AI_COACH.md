@@ -400,6 +400,23 @@ The application fetches the current context from:
 GET /internal/coach/context/current
 ```
 
+The authenticated request includes `daily_days` and `weekly_rows`, loaded from
+the persisted `detailed_daily_history_days` and `weekly_history_rows` settings.
+`daily_days` is validated as an integer from `7` through `365` with default `28`.
+`weekly_rows` is validated as an integer from `4` through `104` with default `26`.
+Both values are independently validated by the Training API, and malformed
+persisted settings fail closed before context retrieval or provider creation.
+`recent_days` remains sparse and newest first: the API returns existing
+`daily_training` rows only, so the configured calendar window is not the same as
+the actual row count.
+
+`weekly_rows` bounds weekly Load history, weekly TID history, audit history, and
+recent weekly commentary. The corresponding commentary date lookback is
+`7 * weekly_rows` days. Weekly sections remain deterministically ordered and
+return fewer rows when fewer authoritative source rows exist; they do not
+synthesize missing weeks. Context coverage reports actual returned weekly rows,
+not the configured maximum.
+
 The request is server-to-server and includes:
 
 ```text
@@ -654,13 +671,17 @@ The context client:
 - Differentiates authentication, timeout, invalid-response, and unavailable-service failures
 - Does not log the context payload
 - Does not persist the full context in Coach tables
+- Sends the validated `daily_days` value only over the authenticated
+    server-to-server request; browser JavaScript never receives the Training API
+    token or URL
 
 The context JSON is serialized deterministically before provider inference.
 
 Current maximum serialized authoritative context size:
 
 ```text
-120,000 characters
+240,000 characters
+ 240,000 supports 100 days of day details.  this is mostly for cost control so some coding or issue doesn't send way too much data to the costly AI API
 ```
 
 If the authoritative context exceeds this limit, the request fails before the paid provider call rather than silently dropping arbitrary sections.

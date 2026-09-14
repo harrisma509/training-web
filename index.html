@@ -294,6 +294,7 @@
             <div id="aiCoachSettingsStatus" class="settings-status-message" role="status" aria-live="polite"></div>
             <div id="aiCoachSettingsError" class="settings-form-error" role="alert" aria-live="assertive"></div>
 
+            <div class="settings-section-heading">CONTEXT SENT TO COACH</div>
             <div class="settings-ai-coach-fields">
               <div class="settings-field">
                 <label for="aiCoachMonthlyLimit">Monthly application cost limit (USD)</label>
@@ -331,6 +332,24 @@
                 </select>
                 <div id="aiCoachReasoningHelp" class="settings-help-text">Server-controlled reasoning setting.</div>
                 <div id="aiCoachReasoningError" class="settings-field-error" role="alert"></div>
+              </div>
+
+              <div class="settings-field">
+                <label for="aiCoachDailyHistoryDays">Detailed daily history (calendar days)</label>
+                <input id="aiCoachDailyHistoryDays" type="number" min="7" max="365" step="1" inputmode="numeric"
+                  aria-describedby="aiCoachDailyHistoryDaysHelp aiCoachDailyHistoryDaysWarning aiCoachDailyHistoryDaysError">
+                <div id="aiCoachDailyHistoryDaysHelp" class="settings-help-text">Default is 28 days. Larger windows provide more daily detail but increase request size and may exceed the Coach context limit.</div>
+                <div id="aiCoachDailyHistoryDaysWarning" class="settings-warning-text" role="status"></div>
+                <div id="aiCoachDailyHistoryDaysError" class="settings-field-error" role="alert"></div>
+              </div>
+
+              <div class="settings-field">
+                <label for="aiCoachWeeklyHistoryRows">Weekly history (weeks)</label>
+                <input id="aiCoachWeeklyHistoryRows" type="number" min="4" max="104" step="1" inputmode="numeric"
+                  aria-describedby="aiCoachWeeklyHistoryRowsHelp aiCoachWeeklyHistoryRowsWarning aiCoachWeeklyHistoryRowsError">
+                <div id="aiCoachWeeklyHistoryRowsHelp" class="settings-help-text">Default is 26 weeks. Larger windows provide broader trend history but increase request size and may exceed the Coach context limit.</div>
+                <div id="aiCoachWeeklyHistoryRowsWarning" class="settings-warning-text" role="status"></div>
+                <div id="aiCoachWeeklyHistoryRowsError" class="settings-field-error" role="alert"></div>
               </div>
             </div>
 

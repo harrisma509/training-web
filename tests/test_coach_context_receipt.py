@@ -364,7 +364,7 @@ class OrchestrationReceiptTests(unittest.TestCase):
             result = respond_to_coach(
                 3,
                 "How is recovery?",
-                context_loader=lambda: context or CONTEXT,
+                context_loader=lambda daily_days, weekly_rows: context or CONTEXT,
                 provider_factory=lambda: provider,
                 settings_loader=lambda: self.settings,
                 custom_instructions_loader=lambda: self.instructions,

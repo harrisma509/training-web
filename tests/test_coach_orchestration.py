@@ -299,6 +299,8 @@ class CoachSettingsTests(unittest.TestCase):
             "max_turn_cost_usd": Decimal("0.25"),
             "max_output_tokens": 1200,
             "reasoning_effort": "low",
+            "detailed_daily_history_days": 28,
+            "weekly_history_rows": 26,
         })
         self.assertEqual(settings["monthly_cost_limit_usd"], Decimal("5.00"))
         self.assertEqual(validate_coach_settings({
@@ -306,6 +308,8 @@ class CoachSettingsTests(unittest.TestCase):
             "max_turn_cost_usd": Decimal("1.00"),
             "max_output_tokens": 8000,
             "reasoning_effort": "high",
+            "detailed_daily_history_days": 365,
+            "weekly_history_rows": 104,
         })["max_output_tokens"], 8000)
 
     def test_invalid_settings_reject_boundaries_booleans_and_fields(self):
@@ -314,11 +318,17 @@ class CoachSettingsTests(unittest.TestCase):
             "max_turn_cost_usd": Decimal("0.25"),
             "max_output_tokens": 1200,
             "reasoning_effort": "low",
+            "detailed_daily_history_days": 28,
         }
         for field, value in (
             ("monthly_cost_limit_usd", Decimal("25.01")),
             ("max_turn_cost_usd", Decimal("1.01")),
             ("max_output_tokens", 8001),
+            ("detailed_daily_history_days", 366),
+            ("detailed_daily_history_days", True),
+            ("weekly_history_rows", 3),
+            ("weekly_history_rows", 105),
+            ("weekly_history_rows", True),
             ("reasoning_effort", "unsupported"),
             ("max_output_tokens", True),
         ):
@@ -336,6 +346,8 @@ class CoachSettingsTests(unittest.TestCase):
             "max_turn_cost_usd": Decimal("0.25"),
             "max_output_tokens": 1200,
             "reasoning_effort": "low",
+            "detailed_daily_history_days": 28,
+            "weekly_history_rows": 26,
             "updated_at": __import__("datetime").datetime(2026, 9, 8, 12, 0),
         }
 
@@ -354,6 +366,8 @@ class CoachSettingsTests(unittest.TestCase):
             result = get_ai_coach_settings()
         self.assertEqual(result["monthly_cost_limit_usd"], "5.00")
         self.assertEqual(result["max_output_tokens"], 1200)
+        self.assertEqual(result["detailed_daily_history_days"], 28)
+        self.assertEqual(result["weekly_history_rows"], 26)
         self.assertEqual(result["updated_at"], "2026-09-08T12:00:00")
 
     def test_update_is_parameterized_and_scoped_to_singleton(self):
@@ -362,6 +376,8 @@ class CoachSettingsTests(unittest.TestCase):
             "max_turn_cost_usd": Decimal("1.00"),
             "max_output_tokens": 8000,
             "reasoning_effort": "high",
+            "detailed_daily_history_days": 365,
+            "weekly_history_rows": 104,
             "updated_at": __import__("datetime").datetime(2026, 9, 8, 12, 0),
         }
 
@@ -372,6 +388,8 @@ class CoachSettingsTests(unittest.TestCase):
                     "max_turn_cost_usd": "1.00",
                     "max_output_tokens": 8000,
                     "reasoning_effort": "high",
+                    "detailed_daily_history_days": 365,
+                    "weekly_history_rows": 104,
                 }
 
         class Cursor:
@@ -394,7 +412,7 @@ class CoachSettingsTests(unittest.TestCase):
         query, params = connection.cursor_instance.calls[0]
         self.assertTrue(connection.committed)
         self.assertEqual(result["max_output_tokens"], 8000)
-        self.assertEqual(params, (Decimal("0.00"), Decimal("1.00"), 8000, "high"))
+        self.assertEqual(params, (Decimal("0.00"), Decimal("1.00"), 8000, "high", 365, 104))
         self.assertIn("WHERE settings_id = 1", query)
         self.assertIn("%s", query)
 
@@ -403,6 +421,23 @@ class CoachSettingsTests(unittest.TestCase):
             result = get_ai_coach_settings()
         self.assertEqual(result.status_code, 503)
         self.assertEqual(result.content["detail"], "AI Coach settings are unavailable.")
+
+    def test_daily_history_validation_rejects_malformed_values(self):
+        base = {
+            "monthly_cost_limit_usd": Decimal("5.00"),
+            "max_turn_cost_usd": Decimal("0.25"),
+            "max_output_tokens": 1200,
+            "reasoning_effort": "low",
+            "detailed_daily_history_days": 28,
+            "weekly_history_rows": 26,
+        }
+        for value in (None, "28", 28.0, True, 6, 366):
+            with self.assertRaises(ValueError):
+                validate_coach_settings({**base, "detailed_daily_history_days": value})
+
+        for value in (None, "26", 26.0, True, 3, 105):
+            with self.assertRaises(ValueError):
+                validate_coach_settings({**base, "weekly_history_rows": value})
 
 
 class CoachOrchestrationTests(unittest.TestCase):
@@ -456,7 +491,7 @@ class CoachOrchestrationTests(unittest.TestCase):
             result = respond_to_coach(
                 3,
                 "How am I doing?",
-                context_loader=lambda: CONTEXT,
+                context_loader=lambda daily_days, weekly_rows: CONTEXT,
                 provider_factory=lambda: self.provider,
             )
 
@@ -474,6 +509,28 @@ class CoachOrchestrationTests(unittest.TestCase):
         self.assertEqual(complete.call_args.kwargs["total_tokens"], 130)
         self.assertEqual(complete.call_args.kwargs["estimated_cost_usd"], Decimal("0.000052"))
         fail.assert_not_called()
+
+    def test_saved_daily_history_setting_reaches_context_loader(self):
+        received = []
+
+        def context_loader(daily_days, weekly_rows):
+            received.append((daily_days, weekly_rows))
+            return CONTEXT
+
+        with patch("coach_orchestrator._start_coach_turn", return_value=({}, self.user_message, self.started)), \
+             patch("coach_orchestrator._recent_coach_messages", return_value=[]), \
+             patch("coach_orchestrator._complete_coach_turn", return_value=({"coach_message_id": 11}, self.completed)), \
+             patch("coach_orchestrator._coach_session_snapshot", return_value={}), \
+             patch("coach_orchestrator.enforce_monthly_budget"), \
+             patch("coach_orchestrator._fail_coach_turn"):
+            respond_to_coach(
+                3,
+                "Question",
+                context_loader=context_loader,
+                provider_factory=lambda: self.provider,
+            )
+
+        self.assertEqual(received, [(28, 26)])
 
     def test_persisted_settings_reach_request_and_cost_guards(self):
         settings = CoachSettings(
@@ -493,7 +550,7 @@ class CoachOrchestrationTests(unittest.TestCase):
             respond_to_coach(
                 3,
                 "Question",
-                context_loader=lambda: CONTEXT,
+                context_loader=lambda daily_days, weekly_rows: CONTEXT,
                 provider_factory=lambda: self.provider,
                 settings_loader=lambda: settings,
             )
@@ -516,7 +573,7 @@ class CoachOrchestrationTests(unittest.TestCase):
              patch("coach_orchestrator.preflight_cost", return_value=Decimal("0.10")) as preflight, \
              patch("coach_orchestrator.enforce_monthly_budget", return_value={"recorded_cost_usd": Decimal("0"), "unknown_cost_count": 0}), \
              patch("coach_orchestrator._fail_coach_turn"):
-            respond_to_coach(3, "Question", context_loader=lambda: CONTEXT, provider_factory=lambda: self.provider)
+            respond_to_coach(3, "Question", context_loader=lambda daily_days, weekly_rows: CONTEXT, provider_factory=lambda: self.provider)
 
         request = self.provider.requests[0]
         self.assertTrue(request.instructions.startswith(COACH_POLICY))
@@ -531,7 +588,7 @@ class CoachOrchestrationTests(unittest.TestCase):
              patch("coach_orchestrator.load_custom_instructions", side_effect=CustomInstructionsUnavailableError()), \
              patch("coach_orchestrator._fail_coach_turn") as fail:
             with self.assertRaises(Exception) as raised:
-                respond_to_coach(3, "Question", context_loader=lambda: CONTEXT, provider_factory=lambda: self.provider)
+                respond_to_coach(3, "Question", context_loader=lambda daily_days, weekly_rows: CONTEXT, provider_factory=lambda: self.provider)
         self.assertEqual(raised.exception.status_code, 503)
         self.assertEqual(raised.exception.category, "custom_instructions_unavailable")
         self.assertEqual(fail.call_args.kwargs["error_category"], "custom_instructions_unavailable")
@@ -544,7 +601,7 @@ class CoachOrchestrationTests(unittest.TestCase):
              patch("coach_orchestrator.enforce_monthly_budget", side_effect=CostLimitError()), \
              patch("coach_orchestrator._fail_coach_turn") as fail:
             with self.assertRaises(Exception) as raised:
-                respond_to_coach(3, "Question", context_loader=lambda: CONTEXT,
+                respond_to_coach(3, "Question", context_loader=lambda daily_days, weekly_rows: CONTEXT,
                                  provider_factory=lambda: self.provider,
                                  settings_loader=lambda: settings)
         self.assertEqual(raised.exception.status_code, 429)
@@ -556,7 +613,7 @@ class CoachOrchestrationTests(unittest.TestCase):
                patch("coach_orchestrator._recent_coach_messages", return_value=[]), \
              patch("coach_orchestrator._fail_coach_turn") as fail:
             with self.assertRaises(Exception) as raised:
-                respond_to_coach(3, "Question", context_loader=lambda: CONTEXT,
+                respond_to_coach(3, "Question", context_loader=lambda daily_days, weekly_rows: CONTEXT,
                                  provider_factory=lambda: self.provider,
                                  settings_loader=lambda: (_ for _ in ()).throw(CoachSettingsUnavailableError()))
         self.assertEqual(raised.exception.status_code, 503)
@@ -757,7 +814,7 @@ class CoachOrchestrationTests(unittest.TestCase):
         with patch("coach_orchestrator._start_coach_turn", return_value=({}, self.user_message, self.started)), \
              patch("coach_orchestrator._fail_coach_turn") as fail:
             with self.assertRaises(Exception) as raised:
-                respond_to_coach(3, "Question", context_loader=lambda: (_ for _ in ()).throw(
+                respond_to_coach(3, "Question", context_loader=lambda daily_days, weekly_rows: (_ for _ in ()).throw(
                     ContextUnavailableError("hidden")
                 ), provider_factory=lambda: self.provider)
         self.assertEqual(raised.exception.status_code, 503)
@@ -772,7 +829,7 @@ class CoachOrchestrationTests(unittest.TestCase):
                patch("coach_orchestrator.enforce_monthly_budget", return_value={"recorded_cost_usd": Decimal("0"), "unknown_cost_count": 0}), \
              patch("coach_orchestrator._fail_coach_turn") as fail:
             with self.assertRaises(Exception) as raised:
-                respond_to_coach(3, "Question", context_loader=lambda: CONTEXT, provider_factory=lambda: self.provider)
+                respond_to_coach(3, "Question", context_loader=lambda daily_days, weekly_rows: CONTEXT, provider_factory=lambda: self.provider)
         self.assertEqual(raised.exception.status_code, 504)
         fail.assert_called_once()
         self.assertEqual(fail.call_args.kwargs["status"], "timed_out")
@@ -857,7 +914,7 @@ class CoachOrchestrationTests(unittest.TestCase):
                     respond_to_coach(
                         3,
                         "Question",
-                        context_loader=lambda: CONTEXT,
+                        context_loader=lambda daily_days, weekly_rows: CONTEXT,
                         provider_factory=lambda: self.provider,
                     )
             self.assertEqual(raised.exception.status_code, 429)
@@ -873,7 +930,7 @@ class CoachOrchestrationTests(unittest.TestCase):
              patch("coach_orchestrator.preflight_cost", side_effect=BudgetUnavailableError()), \
              patch("coach_orchestrator._fail_coach_turn") as fail:
             with self.assertRaises(Exception) as raised:
-                respond_to_coach(3, "Question", context_loader=lambda: CONTEXT, provider_factory=lambda: self.provider)
+                respond_to_coach(3, "Question", context_loader=lambda daily_days, weekly_rows: CONTEXT, provider_factory=lambda: self.provider)
         self.assertEqual(raised.exception.status_code, 503)
         self.assertEqual(raised.exception.category, "budget_unavailable")
         self.assertEqual(raised.exception.detail, "Coach budget status is unavailable.")
@@ -896,7 +953,7 @@ class CoachOrchestrationTests(unittest.TestCase):
              patch("coach_orchestrator._recent_coach_messages", return_value=[]), \
              patch("coach_orchestrator._fail_coach_turn") as fail:
             with self.assertRaises(Exception) as raised:
-                respond_to_coach(3, "Question", context_loader=lambda: CONTEXT, provider_factory=lambda: self.provider)
+                respond_to_coach(3, "Question", context_loader=lambda daily_days, weekly_rows: CONTEXT, provider_factory=lambda: self.provider)
         self.assertEqual(raised.exception.status_code, 503)
         self.assertEqual(fail.call_args.kwargs["error_category"], "budget_unavailable")
         self.assertEqual(self.provider.requests, [])
@@ -907,7 +964,7 @@ class CoachOrchestrationTests(unittest.TestCase):
              patch("coach_cost.check_monthly_budget", lambda: (Decimal("1.00"), 1)), \
              patch("coach_orchestrator._fail_coach_turn") as fail:
             with self.assertRaises(Exception) as raised:
-                respond_to_coach(3, "Question", context_loader=lambda: CONTEXT, provider_factory=lambda: self.provider)
+                respond_to_coach(3, "Question", context_loader=lambda daily_days, weekly_rows: CONTEXT, provider_factory=lambda: self.provider)
         self.assertEqual(raised.exception.status_code, 503)
         self.assertEqual(fail.call_args.kwargs["error_category"], "budget_unavailable")
         self.assertEqual(self.provider.requests, [])
@@ -918,7 +975,7 @@ class CoachOrchestrationTests(unittest.TestCase):
              patch("coach_orchestrator.enforce_monthly_budget", side_effect=CostLimitError()), \
              patch("coach_orchestrator._fail_coach_turn") as fail:
             with self.assertRaises(Exception) as raised:
-                respond_to_coach(3, "Question", context_loader=lambda: CONTEXT, provider_factory=lambda: self.provider)
+                respond_to_coach(3, "Question", context_loader=lambda daily_days, weekly_rows: CONTEXT, provider_factory=lambda: self.provider)
         self.assertEqual(raised.exception.status_code, 429)
         self.assertEqual(fail.call_args.kwargs["error_category"], "budget_limit")
         self.assertEqual(self.provider.requests, [])
@@ -926,9 +983,10 @@ class CoachOrchestrationTests(unittest.TestCase):
     def test_context_client_uses_training_api_token_header(self):
         with patch.dict(os.environ, {"TRAINING_API_BASE_URL": "https://training.example", "TRAINING_API_TOKEN": "secret"}, clear=True), \
              patch("context_client.urlopen", return_value=FakeContextResponse(CONTEXT)) as open_url:
-            self.assertEqual(fetch_current_context(), CONTEXT)
+            self.assertEqual(fetch_current_context(180, 52), CONTEXT)
         request = open_url.call_args.args[0]
         self.assertEqual(request.get_header("X-internal-token"), "secret")
+        self.assertEqual(request.full_url, "https://training.example/internal/coach/context/current?daily_days=180&weekly_rows=52")
         self.assertNotIn("TRAINING_API_INTERNAL_TOKEN", os.environ)
 
     def test_context_network_errors_are_classified(self):
@@ -953,7 +1011,7 @@ class CoachOrchestrationTests(unittest.TestCase):
     def test_existing_started_turn_conflict_is_rejected_before_provider(self):
         with patch("coach_orchestrator._start_coach_turn", side_effect=CoachActiveTurn()):
             with self.assertRaises(CoachActiveTurn):
-                respond_to_coach(3, "Question", context_loader=lambda: CONTEXT, provider_factory=lambda: self.provider)
+                respond_to_coach(3, "Question", context_loader=lambda daily_days, weekly_rows: CONTEXT, provider_factory=lambda: self.provider)
         self.assertEqual(self.provider.requests, [])
 
     def test_monthly_budget_rejection_prevents_provider_execution(self):
@@ -962,7 +1020,7 @@ class CoachOrchestrationTests(unittest.TestCase):
              patch("coach_orchestrator.enforce_monthly_budget", side_effect=CostLimitError()), \
              patch("coach_orchestrator._fail_coach_turn") as fail:
             with self.assertRaises(Exception) as raised:
-                respond_to_coach(3, "Question", context_loader=lambda: CONTEXT, provider_factory=lambda: self.provider)
+                respond_to_coach(3, "Question", context_loader=lambda daily_days, weekly_rows: CONTEXT, provider_factory=lambda: self.provider)
         self.assertEqual(raised.exception.status_code, 429)
         self.assertEqual(fail.call_args.kwargs["error_category"], "budget_limit")
         self.assertEqual(self.provider.requests, [])

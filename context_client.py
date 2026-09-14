@@ -3,6 +3,7 @@
 import json
 import os
 import socket
+from urllib.parse import urlencode
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
@@ -23,7 +24,7 @@ REQUIRED_CONTEXT_SECTIONS = {
 }
 CONTEXT_TIMEOUT_SECONDS = 15.0
 CONTEXT_PATH = "/internal/coach/context/current"
-MAX_CONTEXT_CHARS = 120_000
+MAX_CONTEXT_CHARS = 240000 #max characters for context payload 240,000 supports 100 days of day details.  this is mostly for cost control so some coding or issue doesn't send way too much data to the costly AI API
 
 
 class ContextError(Exception):
@@ -58,15 +59,18 @@ def _setting(name):
     return value
 
 
-def _context_url(base_url):
-    return base_url.rstrip("/") + CONTEXT_PATH
+def _context_url(base_url, daily_days, weekly_rows):
+    return base_url.rstrip("/") + CONTEXT_PATH + "?" + urlencode({
+        "daily_days": daily_days,
+        "weekly_rows": weekly_rows,
+    })
 
 
-def fetch_current_context():
+def fetch_current_context(daily_days=28, weekly_rows=26):
     base_url = _setting("TRAINING_API_BASE_URL")
     token = _setting("TRAINING_API_TOKEN")
     request = Request(
-        _context_url(base_url),
+        _context_url(base_url, daily_days, weekly_rows),
         headers={"Accept": "application/json", "X-Internal-Token": token},
         method="GET",
     )

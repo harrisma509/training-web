@@ -37,6 +37,24 @@
             errors.max_output_tokens = "Maximum output tokens must be between 250 and 8000.";
         }
 
+        const rawDailyDays = String(draft?.detailed_daily_history_days ?? "").trim();
+        if (!rawDailyDays) {
+            errors.detailed_daily_history_days = "Detailed daily history is required.";
+        } else if (!/^\d+$/.test(rawDailyDays) || !Number.isSafeInteger(Number(rawDailyDays))) {
+            errors.detailed_daily_history_days = "Detailed daily history must be a whole number.";
+        } else if (Number(rawDailyDays) < 7 || Number(rawDailyDays) > 365) {
+            errors.detailed_daily_history_days = "Detailed daily history must be between 7 and 365.";
+        }
+
+        const rawWeeklyRows = String(draft?.weekly_history_rows ?? "").trim();
+        if (!rawWeeklyRows) {
+            errors.weekly_history_rows = "Weekly history is required.";
+        } else if (!/^\d+$/.test(rawWeeklyRows) || !Number.isSafeInteger(Number(rawWeeklyRows))) {
+            errors.weekly_history_rows = "Weekly history must be a whole number.";
+        } else if (Number(rawWeeklyRows) < 4 || Number(rawWeeklyRows) > 104) {
+            errors.weekly_history_rows = "Weekly history must be between 4 and 104.";
+        }
+
         if (!AI_COACH_REASONING_VALUES.includes(draft?.reasoning_effort)) {
             errors.reasoning_effort = "Choose a supported reasoning effort.";
         }
@@ -44,5 +62,31 @@
         return { valid: Object.keys(errors).length === 0, errors };
     }
 
-    return { AI_COACH_REASONING_VALUES, validateAiCoachSettingsDraft };
+    function hydrateAiCoachSettingsFields(draft, fields) {
+        Object.entries(fields).forEach(([field, element]) => {
+            if (element && element.value !== draft[field]) {
+                element.value = draft[field];
+            }
+        });
+    }
+
+    function detailedDailyHistoryWarning(draft) {
+        return Number(draft?.detailed_daily_history_days) > 90
+            ? "Extended history may substantially increase context size and cost."
+            : "";
+    }
+
+    function weeklyHistoryWarning(draft) {
+        return Number(draft?.weekly_history_rows) > 52
+            ? "Extended weekly history may increase context size and cost."
+            : "";
+    }
+
+    return {
+        AI_COACH_REASONING_VALUES,
+        detailedDailyHistoryWarning,
+        hydrateAiCoachSettingsFields,
+        validateAiCoachSettingsDraft,
+        weeklyHistoryWarning,
+    };
 });

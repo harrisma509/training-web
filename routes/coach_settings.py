@@ -15,6 +15,8 @@ DEFAULT_MONTHLY_COST_LIMIT = Decimal("5.00")
 DEFAULT_MAX_TURN_COST = Decimal("0.25")
 DEFAULT_MAX_OUTPUT_TOKENS = 1200
 DEFAULT_REASONING_EFFORT = "low"
+DEFAULT_DETAILED_DAILY_HISTORY_DAYS = 28
+DEFAULT_WEEKLY_HISTORY_ROWS = 26
 
 MONTHLY_COST_MIN = Decimal("0.00")
 MONTHLY_COST_MAX = Decimal("25.00")
@@ -22,12 +24,18 @@ TURN_COST_MIN = Decimal("0.01")
 TURN_COST_MAX = Decimal("1.00")
 OUTPUT_TOKENS_MIN = 250
 OUTPUT_TOKENS_MAX = 8000
+DETAILED_DAILY_HISTORY_DAYS_MIN = 7
+DETAILED_DAILY_HISTORY_DAYS_MAX = 365
+WEEKLY_HISTORY_ROWS_MIN = 4
+WEEKLY_HISTORY_ROWS_MAX = 104
 SUPPORTED_REASONING_EFFORTS = {"none", "low", "medium", "high"}
 EXPECTED_FIELDS = {
     "monthly_cost_limit_usd",
     "max_turn_cost_usd",
     "max_output_tokens",
     "reasoning_effort",
+    "detailed_daily_history_days",
+    "weekly_history_rows",
 }
 
 
@@ -42,6 +50,8 @@ class CoachSettings:
     max_output_tokens: int
     reasoning_effort: str
     updated_at: datetime | date | str
+    detailed_daily_history_days: int = DEFAULT_DETAILED_DAILY_HISTORY_DAYS
+    weekly_history_rows: int = DEFAULT_WEEKLY_HISTORY_ROWS
 
 
 def _decimal_value(value, field_name):
@@ -76,6 +86,10 @@ def validate_coach_settings(payload):
     turn_limit = _decimal_value(payload["max_turn_cost_usd"], "max_turn_cost_usd")
     output_tokens = _integer_value(payload["max_output_tokens"], "max_output_tokens")
     reasoning_effort = payload["reasoning_effort"]
+    detailed_daily_history_days = _integer_value(
+        payload["detailed_daily_history_days"], "detailed_daily_history_days"
+    )
+    weekly_history_rows = _integer_value(payload["weekly_history_rows"], "weekly_history_rows")
 
     if not MONTHLY_COST_MIN <= monthly_limit <= MONTHLY_COST_MAX:
         raise ValueError("monthly_cost_limit_usd is outside the allowed range.")
@@ -85,12 +99,18 @@ def validate_coach_settings(payload):
         raise ValueError("max_output_tokens is outside the allowed range.")
     if reasoning_effort not in SUPPORTED_REASONING_EFFORTS:
         raise ValueError("reasoning_effort is unsupported.")
+    if not DETAILED_DAILY_HISTORY_DAYS_MIN <= detailed_daily_history_days <= DETAILED_DAILY_HISTORY_DAYS_MAX:
+        raise ValueError("detailed_daily_history_days is outside the allowed range.")
+    if not WEEKLY_HISTORY_ROWS_MIN <= weekly_history_rows <= WEEKLY_HISTORY_ROWS_MAX:
+        raise ValueError("weekly_history_rows is outside the allowed range.")
 
     return {
         "monthly_cost_limit_usd": monthly_limit,
         "max_turn_cost_usd": turn_limit,
         "max_output_tokens": output_tokens,
         "reasoning_effort": reasoning_effort,
+        "detailed_daily_history_days": detailed_daily_history_days,
+        "weekly_history_rows": weekly_history_rows,
     }
 
 
@@ -109,7 +129,8 @@ def load_coach_settings():
                 cur.execute(
                     """
                     SELECT monthly_cost_limit_usd, max_turn_cost_usd,
-                           max_output_tokens, reasoning_effort, updated_at
+                              max_output_tokens, reasoning_effort,
+                              detailed_daily_history_days, weekly_history_rows, updated_at
                     FROM public.ai_coach_settings
                     WHERE settings_id = 1
                     """
@@ -126,6 +147,8 @@ def load_coach_settings():
                 "max_turn_cost_usd": row["max_turn_cost_usd"],
                 "max_output_tokens": row["max_output_tokens"],
                 "reasoning_effort": row["reasoning_effort"],
+                "detailed_daily_history_days": row["detailed_daily_history_days"],
+                "weekly_history_rows": row["weekly_history_rows"],
             }
         )
         if row.get("updated_at") is None:
@@ -143,6 +166,8 @@ def _settings_response(settings):
             "max_turn_cost_usd": settings.max_turn_cost_usd,
             "max_output_tokens": settings.max_output_tokens,
             "reasoning_effort": settings.reasoning_effort,
+            "detailed_daily_history_days": settings.detailed_daily_history_days,
+            "weekly_history_rows": settings.weekly_history_rows,
             "updated_at": settings.updated_at.isoformat() if hasattr(settings.updated_at, "isoformat") else settings.updated_at,
         }
     )
@@ -176,16 +201,21 @@ async def update_ai_coach_settings(request: Request):
                         max_turn_cost_usd = %s,
                         max_output_tokens = %s,
                         reasoning_effort = %s,
+                        detailed_daily_history_days = %s,
+                        weekly_history_rows = %s,
                         updated_at = now()
                     WHERE settings_id = 1
                     RETURNING monthly_cost_limit_usd, max_turn_cost_usd,
-                              max_output_tokens, reasoning_effort, updated_at
+                              max_output_tokens, reasoning_effort,
+                              detailed_daily_history_days, weekly_history_rows, updated_at
                     """,
                     (
                         values["monthly_cost_limit_usd"],
                         values["max_turn_cost_usd"],
                         values["max_output_tokens"],
                         values["reasoning_effort"],
+                        values["detailed_daily_history_days"],
+                        values["weekly_history_rows"],
                     ),
                 )
                 row = cur.fetchone()
@@ -199,6 +229,8 @@ async def update_ai_coach_settings(request: Request):
                 "max_turn_cost_usd": row["max_turn_cost_usd"],
                 "max_output_tokens": row["max_output_tokens"],
                 "reasoning_effort": row["reasoning_effort"],
+                "detailed_daily_history_days": row["detailed_daily_history_days"],
+                "weekly_history_rows": row["weekly_history_rows"],
                 "updated_at": row["updated_at"].isoformat()
                 if hasattr(row["updated_at"], "isoformat")
                 else row["updated_at"],

@@ -282,6 +282,14 @@
   margin-top: 4px;
 }
 
+.settings-section-heading {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  margin: 18px 0 8px;
+}
+
 .settings-field {
   display: grid;
   gap: 6px;
@@ -312,6 +320,17 @@
   color: var(--muted);
   font-size: 12px;
   line-height: 1.4;
+}
+
+.settings-warning-text {
+  color: var(--warning, #e5b567);
+  font-size: 12px;
+  line-height: 1.4;
+  min-height: 0;
+}
+
+.settings-warning-text:empty {
+  display: none;
 }
 
 .settings-form-error,

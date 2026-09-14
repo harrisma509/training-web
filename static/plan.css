@@ -201,10 +201,10 @@
 }
 
 .plan-day-load {
-    font-size: 11px;
+    font-size: 13px;
     min-width: 2.5ch;
     text-align: center;
-    color: var(--text);
+    color: rgb(37, 99, 235);
     flex: 0 0 auto;
     white-space: nowrap;
 }

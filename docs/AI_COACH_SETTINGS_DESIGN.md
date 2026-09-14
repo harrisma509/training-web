@@ -23,9 +23,13 @@ implemented; runtime deployment validation remains pending.
 | `max_turn_cost_usd` | `numeric(10,2)` | `0.25` | Maximum estimated cost for one Coach turn. |
 | `max_output_tokens` | `integer` | `1200` | Maximum normal Coach response output. |
 | `reasoning_effort` | `text` | `low` | Supported values: `none`, `low`, `medium`, `high`. |
+| `detailed_daily_history_days` | `integer` | `28` | Inclusive calendar-day window for sparse `recent_days` context. Application range is `7..365`. |
+| `weekly_history_rows` | `integer` | `26` | Maximum weekly rows for weekly Load, TID, audit history, and recent commentary. Application range is `4..104`. |
 | `updated_at` | `timestamptz` | `now()` | Last settings update timestamp. |
 
-The database bounds are conservative validity bounds, not application hard ceilings: monthly cost is `0.00..100.00`, turn cost is `0.01..5.00`, and output tokens are `1..10000`. Monthly and per-turn limits are independent; `max_turn_cost_usd` may exceed the monthly limit.
+The database bounds are conservative validity bounds, not application hard ceilings: monthly cost is `0.00..100.00`, turn cost is `0.01..5.00`, and output tokens are `1..10000`. `detailed_daily_history_days` is validated by application code from `7..365`; malformed persisted values fail closed. Monthly and per-turn limits are independent; `max_turn_cost_usd` may exceed the monthly limit.
+`weekly_history_rows` is validated by application code from `4..104`; malformed
+persisted values fail closed before context retrieval or provider creation.
 
 ## Backend contract
 
@@ -52,15 +56,21 @@ unknown-pricing failures remain `budget_unavailable`.
 
 The existing Settings shell now provides an `AI Coach` tab with:
 
-- `index.html` for the AI Coach tab and four editable controls.
+- `index.html` for the AI Coach tab and six editable controls, including the detailed daily-history window and weekly-history rows.
 - `static/settings.js` for load, edit, save, cancel, retry, validation, and status handling.
-- `static/settings.css` for the existing settings visual language and responsive layout.
+- `static/settings.css` for the existing settings visual language and responsive layout. Weekly history is the right-hand grid control beside Detailed daily history on desktop and stacks naturally on narrow screens.
 - `static/api.js` for the dedicated GET/PUT settings methods.
 
 The browser keeps only a module-local loaded baseline and draft while the drawer
 is open. It does not write authoritative Coach settings to localStorage. Do not
 put secrets, provider credentials, or deployment values in browser state or
 database settings.
+
+The saved `weekly_history_rows` value is propagated server-to-server to the
+Training API for each new paid Coach response. The API independently validates
+the same `4..104` range. The configured value is a maximum; context coverage
+continues to report the actual weekly rows returned when fewer source rows are
+available.
 
 ## Orchestration integration
 

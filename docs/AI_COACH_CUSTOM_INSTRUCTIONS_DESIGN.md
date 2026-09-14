@@ -97,7 +97,7 @@ Settings management operations.
 
 ## Existing guard compatibility
 
-The existing 120,000-character guard applies only to authoritative Training
+The existing 240,000-character guard applies only to authoritative Training  240,000 supports 100 days of day details.  this is mostly for cost control so some coding or issue doesn't send way too much data to the costly AI API
 API context and remains unchanged. The existing 24-message / 24,000-character
 guard applies only to recent conversation and remains unchanged. The existing
 output-token setting remains unrelated to Custom Instructions input size.

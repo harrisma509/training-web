@@ -179,10 +179,10 @@ def respond_to_coach(
     turn_id = started_turn["coach_turn_id"]
     started = time.perf_counter()
     try:
-        context = context_loader()
+        settings = (settings_loader or load_coach_settings)()
+        context = context_loader(settings.detailed_daily_history_days, settings.weekly_history_rows)
         history = _recent_coach_messages(session_id, user_message["coach_message_id"], MAX_HISTORY_MESSAGES, MAX_HISTORY_CHARS)
         input_text, context_characters, history_characters = _build_input(context, history, message)
-        settings = (settings_loader or load_coach_settings)()
         custom_instructions = (custom_instructions_loader or load_custom_instructions)()
         compiled_custom_instructions = compile_custom_instructions(custom_instructions)
         selected_memories = []
