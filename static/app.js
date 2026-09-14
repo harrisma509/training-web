@@ -109,6 +109,69 @@ const yearlyRefresh = document.getElementById("yearlyRefresh");
 const componentsBikeSelect = document.getElementById("componentsBikeSelect");
 
 const syncNowBtn = document.getElementById("syncNowBtn");
+const mobileMenuButton = document.getElementById("mobileMenuButton");
+const mobileCurrentDestination = document.getElementById("mobileCurrentDestination");
+const mobileNavigation = document.getElementById("mobileNavigation");
+
+function closeMobileNavigation(restoreFocus = false) {
+  if (!mobileMenuButton || !mobileNavigation) return;
+  mobileNavigation.classList.add("hidden");
+  mobileMenuButton.setAttribute("aria-expanded", "false");
+  if (restoreFocus) mobileMenuButton.focus();
+}
+
+function openMobileNavigation() {
+  if (!mobileMenuButton || !mobileNavigation) return;
+  mobileNavigation.classList.remove("hidden");
+  mobileMenuButton.setAttribute("aria-expanded", "true");
+  mobileNavigation.querySelector("button")?.focus();
+}
+
+function syncMobileNavigation(activeTab) {
+  const activeDesktopTab = document.querySelector(`.header-tabs button[data-tab="${activeTab}"]`)
+    || document.getElementById(`${activeTab}Tab`);
+  const destination = activeDesktopTab ? activeDesktopTab.textContent.trim() : "Daily";
+  if (mobileCurrentDestination) mobileCurrentDestination.textContent = destination;
+
+  document.querySelectorAll(".header-tabs button, #mobileNavigation button").forEach(button => {
+    const isActive = button.dataset.tab === activeTab || button.id === `${activeTab}Tab`;
+    button.classList.toggle("active", isActive);
+    if (isActive) button.setAttribute("aria-current", "page");
+    else button.removeAttribute("aria-current");
+  });
+}
+
+function buildMobileNavigation() {
+  if (!mobileNavigation) return;
+  document.querySelectorAll(".header-tabs button").forEach(desktopButton => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "mobile-navigation-item";
+    button.dataset.tab = desktopButton.id.replace(/Tab$/, "");
+    button.textContent = desktopButton.textContent.trim();
+    button.addEventListener("click", () => {
+      showTab(button.dataset.tab);
+      closeMobileNavigation();
+    });
+    mobileNavigation.appendChild(button);
+  });
+}
+
+buildMobileNavigation();
+mobileMenuButton?.addEventListener("click", () => {
+  const isOpen = mobileMenuButton.getAttribute("aria-expanded") === "true";
+  if (isOpen) closeMobileNavigation();
+  else openMobileNavigation();
+});
+document.addEventListener("keydown", event => {
+  if (event.key === "Escape" && mobileMenuButton?.getAttribute("aria-expanded") === "true") {
+    closeMobileNavigation(true);
+  }
+});
+document.addEventListener("click", event => {
+  if (mobileMenuButton?.getAttribute("aria-expanded") !== "true") return;
+  if (!event.target.closest(".mobile-navigation-bar, #mobileNavigation")) closeMobileNavigation();
+});
 
 function formatYearlyMaintenanceValue(value) {
   if (value === null || value === undefined || value === "") {
@@ -309,6 +372,7 @@ function showTab(tab) {
   componentsTab.classList.toggle("active", isComponents);
   yearlyTab.classList.toggle("active", isYearly);
   coachTab?.classList.toggle("active", isCoach);
+  syncMobileNavigation(normalizedTab);
 
   if (isPlan && typeof window.loadPlan === "function") {
     window.loadPlan();

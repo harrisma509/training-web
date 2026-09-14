@@ -7,7 +7,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <link rel="icon" href="/static/favicon.ico" type="image/x-icon">
   <link rel="shortcut icon" href="/static/favicon.ico" type="image/x-icon">
-  <link rel="stylesheet" href="/static/style.css">
+  <link rel="stylesheet" href="/static/style.css?v=20260914-mobile-nav">
   <link rel="stylesheet" href="/static/plan.css">
   <link rel="stylesheet" href="/static/goals.css">
   <link rel="stylesheet" href="/static/kpis.css">
@@ -24,6 +24,14 @@
       <div class="brand">
         <h1>Training Intelligence</h1>
         <div class="subtitle">Training Tracking</div>
+      </div>
+
+      <div class="mobile-navigation-bar">
+        <button id="mobileMenuButton" type="button" class="mobile-menu-button" aria-controls="mobileNavigation"
+          aria-expanded="false"><svg class="mobile-menu-icon" viewBox="0 0 20 20" aria-hidden="true" focusable="false">
+            <path d="M3 5h14M3 10h14M3 15h14"></path>
+          </svg><span>Menu</span></button>
+        <span id="mobileCurrentDestination" class="mobile-current-destination" aria-live="polite"></span>
       </div>
 
       <nav class="tabs header-tabs">
@@ -102,6 +110,8 @@
         </button>
       </div>
     </div>
+
+    <nav id="mobileNavigation" class="mobile-navigation hidden" aria-label="Primary navigation"></nav>
   </header>
 
   <div id="settingsDrawer" class="settings-drawer hidden" aria-hidden="true">
@@ -317,7 +327,8 @@
                 <label for="aiCoachOutputTokens">Maximum output tokens</label>
                 <input id="aiCoachOutputTokens" type="number" min="250" max="32000" step="1" inputmode="numeric"
                   aria-describedby="aiCoachOutputTokensHelp aiCoachOutputTokensError">
-                <div id="aiCoachOutputTokensHelp" class="settings-help-text">A maximum, not a requested answer length.  Each token is a piece of text and roughly 1 token equals 3-4 English characters.
+                <div id="aiCoachOutputTokensHelp" class="settings-help-text">A maximum, not a requested answer length.
+                  Each token is a piece of text and roughly 1 token equals 3-4 English characters.
                 </div>
                 <div id="aiCoachOutputTokensError" class="settings-field-error" role="alert"></div>
               </div>
@@ -338,7 +349,8 @@
                 <label for="aiCoachDailyHistoryDays">Detailed daily history (calendar days)</label>
                 <input id="aiCoachDailyHistoryDays" type="number" min="7" max="365" step="1" inputmode="numeric"
                   aria-describedby="aiCoachDailyHistoryDaysHelp aiCoachDailyHistoryDaysWarning aiCoachDailyHistoryDaysError">
-                <div id="aiCoachDailyHistoryDaysHelp" class="settings-help-text">Default is 28 days. Larger windows provide more daily detail but increase request size and may exceed the Coach context limit.</div>
+                <div id="aiCoachDailyHistoryDaysHelp" class="settings-help-text">Default is 28 days. Larger windows
+                  provide more daily detail but increase request size and may exceed the Coach context limit.</div>
                 <div id="aiCoachDailyHistoryDaysWarning" class="settings-warning-text" role="status"></div>
                 <div id="aiCoachDailyHistoryDaysError" class="settings-field-error" role="alert"></div>
               </div>
@@ -347,7 +359,8 @@
                 <label for="aiCoachWeeklyHistoryRows">Weekly history (weeks)</label>
                 <input id="aiCoachWeeklyHistoryRows" type="number" min="4" max="104" step="1" inputmode="numeric"
                   aria-describedby="aiCoachWeeklyHistoryRowsHelp aiCoachWeeklyHistoryRowsWarning aiCoachWeeklyHistoryRowsError">
-                <div id="aiCoachWeeklyHistoryRowsHelp" class="settings-help-text">Default is 26 weeks. Larger windows provide broader trend history but increase request size and may exceed the Coach context limit.</div>
+                <div id="aiCoachWeeklyHistoryRowsHelp" class="settings-help-text">Default is 26 weeks. Larger windows
+                  provide broader trend history but increase request size and may exceed the Coach context limit.</div>
                 <div id="aiCoachWeeklyHistoryRowsWarning" class="settings-warning-text" role="status"></div>
                 <div id="aiCoachWeeklyHistoryRowsError" class="settings-field-error" role="alert"></div>
               </div>
@@ -483,7 +496,10 @@
             <div class="settings-ai-coach-heading">
               <div>
                 <div id="aiCoachMemoriesTitle" class="settings-label">Durable Memories</div>
-                <p class="settings-help-text">Curated facts that help the Coach know you across sessions, so answers reflect your goals, history, equipment, preferences, and safety needs without requiring you to repeat them. The Coach starts with your current question and uses recent things you said only when needed for a follow-up; critical safety memories are always considered. Memories are never hard-deleted.</p>
+                <p class="settings-help-text">Curated facts that help the Coach know you across sessions, so answers
+                  reflect your goals, history, equipment, preferences, and safety needs without requiring you to repeat
+                  them. The Coach starts with your current question and uses recent things you said only when needed for
+                  a follow-up; critical safety memories are always considered. Memories are never hard-deleted.</p>
               </div>
               <label class="settings-memory-filter-label" for="aiCoachMemoryStatusFilter">Show
                 <select id="aiCoachMemoryStatusFilter">
@@ -904,8 +920,9 @@
           <header class="coach-main-header">
             <button id="coachDrawerOpen" class="coach-icon-button coach-mobile-only" type="button"
               aria-label="Open Coach sessions" aria-expanded="false">☰</button>
-            <button id="coachHistoryRestore" class="coach-history-restore" type="button" aria-controls="coachSessionRail"
-              aria-expanded="false" aria-label="Show chat history" title="Show chat history">
+            <button id="coachHistoryRestore" class="coach-history-restore" type="button"
+              aria-controls="coachSessionRail" aria-expanded="false" aria-label="Show chat history"
+              title="Show chat history">
               <svg class="coach-history-toggle-icon" viewBox="0 0 20 20" aria-hidden="true" focusable="false">
                 <path d="m12.5 4.5-5.5 5.5 5.5 5.5"></path>
               </svg>
@@ -932,7 +949,8 @@
               </div>
             </div>
           </header>
-          <div id="coachUsagePanel" class="coach-usage-panel hidden" aria-labelledby="coachUsageHeading" aria-live="polite">
+          <div id="coachUsagePanel" class="coach-usage-panel hidden" aria-labelledby="coachUsageHeading"
+            aria-live="polite">
             <div class="coach-usage-header">
               <h2 id="coachUsageHeading">Session info</h2>
               <button id="coachUsageClose" class="coach-usage-close" type="button" aria-label="Close session info"
@@ -1017,7 +1035,7 @@
   <script src="/static/vendor/chart.umd.min.js"></script>
   <script src="/static/charts.js"></script>
   <script src="/static/coach.js"></script>
-  <script src="/static/app.js"></script>
+  <script src="/static/app.js?v=20260914-mobile-nav"></script>
 </body>
 
 </html>
