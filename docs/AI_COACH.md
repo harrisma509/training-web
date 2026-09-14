@@ -681,7 +681,7 @@ Current maximum serialized authoritative context size:
 
 ```text
 240,000 characters
- 240,000 supports 100 days of day details.  this is mostly for cost control so some coding or issue doesn't send way too much data to the costly AI API
+A 240,000-character guard protects against runaway context, but it is not primarily a spending limit. It also protects latency, model focus, provider-window headroom, and accidental payload expansion. Your explicit per-turn and monthly spending limits remain the real cost controls.
 ```
 
 If the authoritative context exceeds this limit, the request fails before the paid provider call rather than silently dropping arbitrary sections.
