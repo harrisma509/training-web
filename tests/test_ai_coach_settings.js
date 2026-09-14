@@ -12,7 +12,7 @@ global.fetch = async (url, options = {}) => {
             return {
                 monthly_cost_limit_usd: "0.00",
                 max_turn_cost_usd: "1.00",
-                max_output_tokens: 8000,
+                max_output_tokens: 32000,
                 reasoning_effort: "high",
                 detailed_daily_history_days: 28,
                 weekly_history_rows: 26,
@@ -68,7 +68,7 @@ const {
     await window.api.saveAiCoachSettings({
         monthly_cost_limit_usd: 0,
         max_turn_cost_usd: 1,
-        max_output_tokens: 8000,
+        max_output_tokens: 32000,
         reasoning_effort: "high",
         detailed_daily_history_days: 28,
         weekly_history_rows: 26,
@@ -78,7 +78,7 @@ const {
     assert.deepEqual(JSON.parse(requests[1].options.body), {
         monthly_cost_limit_usd: 0,
         max_turn_cost_usd: 1,
-        max_output_tokens: 8000,
+        max_output_tokens: 32000,
         reasoning_effort: "high",
         detailed_daily_history_days: 28,
         weekly_history_rows: 26,
@@ -87,7 +87,7 @@ const {
     const valid = validateAiCoachSettingsDraft({
         monthly_cost_limit_usd: "0.00",
         max_turn_cost_usd: "1.00",
-        max_output_tokens: "8000",
+        max_output_tokens: "32000",
         reasoning_effort: "high",
         detailed_daily_history_days: "28",
         weekly_history_rows: "26",
@@ -108,6 +108,7 @@ const {
         ["monthly_cost_limit_usd", "25.01"],
         ["max_turn_cost_usd", "0.00"],
         ["max_output_tokens", "249"],
+        ["max_output_tokens", "32001"],
         ["max_output_tokens", "250.5"],
         ["detailed_daily_history_days", "6"],
         ["detailed_daily_history_days", "366"],

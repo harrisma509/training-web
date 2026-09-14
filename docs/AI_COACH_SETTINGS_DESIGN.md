@@ -27,7 +27,7 @@ implemented; runtime deployment validation remains pending.
 | `weekly_history_rows` | `integer` | `26` | Maximum weekly rows for weekly Load, TID, audit history, and recent commentary. Application range is `4..104`. |
 | `updated_at` | `timestamptz` | `now()` | Last settings update timestamp. |
 
-The database bounds are conservative validity bounds, not application hard ceilings: monthly cost is `0.00..100.00`, turn cost is `0.01..5.00`, and output tokens are `1..10000`. `detailed_daily_history_days` is validated by application code from `7..365`; malformed persisted values fail closed. Monthly and per-turn limits are independent; `max_turn_cost_usd` may exceed the monthly limit.
+The database bounds are conservative validity bounds, not application hard ceilings: monthly cost is `0.00..100.00`, turn cost is `0.01..5.00`, and output tokens are `1..32000`. `detailed_daily_history_days` is validated by application code from `7..365`; malformed persisted values fail closed. Monthly and per-turn limits are independent; `max_turn_cost_usd` may exceed the monthly limit.
 `weekly_history_rows` is validated by application code from `4..104`; malformed
 persisted values fail closed before context retrieval or provider creation.
 

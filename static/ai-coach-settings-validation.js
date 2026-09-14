@@ -33,8 +33,8 @@
             errors.max_output_tokens = "Maximum output tokens is required.";
         } else if (!/^\d+$/.test(rawTokens) || !Number.isSafeInteger(Number(rawTokens))) {
             errors.max_output_tokens = "Maximum output tokens must be a whole number.";
-        } else if (Number(rawTokens) < 250 || Number(rawTokens) > 8000) {
-            errors.max_output_tokens = "Maximum output tokens must be between 250 and 8000.";
+        } else if (Number(rawTokens) < 250 || Number(rawTokens) > 32000) {
+            errors.max_output_tokens = "Maximum output tokens must be between 250 and 32000.";
         }
 
         const rawDailyDays = String(draft?.detailed_daily_history_days ?? "").trim();

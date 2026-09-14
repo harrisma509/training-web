@@ -306,11 +306,11 @@ class CoachSettingsTests(unittest.TestCase):
         self.assertEqual(validate_coach_settings({
             "monthly_cost_limit_usd": Decimal("0.00"),
             "max_turn_cost_usd": Decimal("1.00"),
-            "max_output_tokens": 8000,
+            "max_output_tokens": 32000,
             "reasoning_effort": "high",
             "detailed_daily_history_days": 365,
             "weekly_history_rows": 104,
-        })["max_output_tokens"], 8000)
+        })["max_output_tokens"], 32000)
 
     def test_invalid_settings_reject_boundaries_booleans_and_fields(self):
         base = {
@@ -323,7 +323,7 @@ class CoachSettingsTests(unittest.TestCase):
         for field, value in (
             ("monthly_cost_limit_usd", Decimal("25.01")),
             ("max_turn_cost_usd", Decimal("1.01")),
-            ("max_output_tokens", 8001),
+            ("max_output_tokens", 32001),
             ("detailed_daily_history_days", 366),
             ("detailed_daily_history_days", True),
             ("weekly_history_rows", 3),
@@ -374,7 +374,7 @@ class CoachSettingsTests(unittest.TestCase):
         row = {
             "monthly_cost_limit_usd": Decimal("0.00"),
             "max_turn_cost_usd": Decimal("1.00"),
-            "max_output_tokens": 8000,
+            "max_output_tokens": 32000,
             "reasoning_effort": "high",
             "detailed_daily_history_days": 365,
             "weekly_history_rows": 104,
@@ -386,7 +386,7 @@ class CoachSettingsTests(unittest.TestCase):
                 return {
                     "monthly_cost_limit_usd": "0.00",
                     "max_turn_cost_usd": "1.00",
-                    "max_output_tokens": 8000,
+                    "max_output_tokens": 32000,
                     "reasoning_effort": "high",
                     "detailed_daily_history_days": 365,
                     "weekly_history_rows": 104,
@@ -411,8 +411,8 @@ class CoachSettingsTests(unittest.TestCase):
             result = asyncio.run(update_ai_coach_settings(Request()))
         query, params = connection.cursor_instance.calls[0]
         self.assertTrue(connection.committed)
-        self.assertEqual(result["max_output_tokens"], 8000)
-        self.assertEqual(params, (Decimal("0.00"), Decimal("1.00"), 8000, "high", 365, 104))
+        self.assertEqual(result["max_output_tokens"], 32000)
+        self.assertEqual(params, (Decimal("0.00"), Decimal("1.00"), 32000, "high", 365, 104))
         self.assertIn("WHERE settings_id = 1", query)
         self.assertIn("%s", query)
 
