@@ -68,8 +68,9 @@ const chartsVolumeTab = document.getElementById("chartsVolumeTab");
 const dailyTab = document.getElementById("dailyTab");
 const weeklyTab = document.getElementById("weeklyTab");
 const zonesTab = document.getElementById("zonesTab");
-const gearTab = document.getElementById("gearTab");
-const componentsTab = document.getElementById("componentsTab");
+const serviceTab = document.getElementById("serviceTab");
+const componentsSubtab = document.getElementById("componentsSubtab");
+const gearSubtab = document.getElementById("gearSubtab");
 const yearlyTab = document.getElementById("yearlyTab");
 const coachTab = document.getElementById("coachTab");
 const yearlyAnnualTab = document.getElementById("yearlyAnnualTab");
@@ -85,6 +86,7 @@ const chartsVolumePanel = document.getElementById("chartsVolumePanel");
 const dailyPane = document.getElementById("dailyPane");
 const weeklyPane = document.getElementById("weeklyPane");
 const zonesPane = document.getElementById("zonesPane");
+const servicePane = document.getElementById("servicePane");
 const gearPane = document.getElementById("gearPane");
 const componentsPane = document.getElementById("componentsPane");
 const yearlyPane = document.getElementById("yearlyPane");
@@ -104,7 +106,6 @@ const zonesLimit = document.getElementById("zonesLimit");
 const hideShoesCheckbox = document.getElementById("hideShoesCheckbox");
 const hideRetiredCheckbox = document.getElementById("hideRetiredCheckbox");
 const gearRefresh = document.getElementById("gearRefresh");
-const componentsRefresh = document.getElementById("componentsRefresh");
 const yearlyRefresh = document.getElementById("yearlyRefresh");
 const componentsBikeSelect = document.getElementById("componentsBikeSelect");
 
@@ -200,14 +201,24 @@ chartsTab?.addEventListener("click", () => showTab("charts"));
 dailyTab.addEventListener("click", () => showTab("daily"));
 weeklyTab.addEventListener("click", () => showTab("weekly"));
 zonesTab.addEventListener("click", () => showTab("zones"));
-gearTab.addEventListener("click", () => showTab("gear"));
-componentsTab.addEventListener("click", () => showTab("components"));
+serviceTab?.addEventListener("click", () => showTab("service"));
+componentsSubtab?.addEventListener("click", () => showServiceSubtab("components"));
+gearSubtab?.addEventListener("click", () => showServiceSubtab("gear"));
+document.querySelectorAll(".service-subtab").forEach((button, index, buttons) => {
+  button.addEventListener("keydown", event => {
+    if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
+    event.preventDefault();
+    const direction = event.key === "ArrowRight" ? 1 : -1;
+    const nextButton = buttons[(index + direction + buttons.length) % buttons.length];
+    nextButton.focus();
+    showServiceSubtab(nextButton.id === "gearSubtab" ? "gear" : "components");
+  });
+});
 yearlyTab.addEventListener("click", () => showTab("yearly"));
 coachTab?.addEventListener("click", () => showTab("coach"));
 yearlyAnnualTab?.addEventListener("click", () => showYearlyView("annual"));
 yearlyMonthlyTab?.addEventListener("click", () => showYearlyView("monthly"));
 gearRefresh.addEventListener("click", loadGear);
-componentsRefresh?.addEventListener("click", () => loadComponents());
 yearlyRefresh?.addEventListener("click", loadYearly);
 componentsBikeSelect?.addEventListener("change", event => {
   const selectedGearId = String(event.target.value || "").trim();
@@ -325,8 +336,30 @@ chartsVolumeTab?.addEventListener("click", () => showChartsCategory("volume"));
 
 window.showYearlyView = showYearlyView;
 
+function showServiceSubtab(subtab) {
+  const normalizedSubtab = ["components", "gear"].includes(subtab) ? subtab : "components";
+  state.serviceSubtab = normalizedSubtab;
+  persistPreferences();
+
+  const isComponents = normalizedSubtab === "components";
+  componentsPane.classList.toggle("hidden", !isComponents);
+  gearPane.classList.toggle("hidden", isComponents);
+  componentsControls.classList.toggle("hidden", !isComponents || state.activeTab !== "service");
+  gearControls.classList.toggle("hidden", isComponents || state.activeTab !== "service");
+
+  [componentsSubtab, gearSubtab].forEach(button => {
+    if (!button) return;
+    const isSelected = button === (isComponents ? componentsSubtab : gearSubtab);
+    button.classList.toggle("active", isSelected);
+    button.setAttribute("aria-selected", String(isSelected));
+    button.tabIndex = isSelected ? 0 : -1;
+  });
+}
+
+window.showServiceSubtab = showServiceSubtab;
+
 function showTab(tab) {
-  const normalizedTab = ["plan", "goals", "kpis", "charts", "daily", "weekly", "zones", "gear", "components", "yearly", "coach"].includes(tab) ? tab : "daily";
+  const normalizedTab = ["plan", "goals", "kpis", "charts", "daily", "weekly", "zones", "service", "yearly", "coach"].includes(tab) ? tab : "daily";
   state.activeTab = normalizedTab;
   persistPreferences();
 
@@ -337,8 +370,7 @@ function showTab(tab) {
   const isDaily = normalizedTab === "daily";
   const isWeekly = normalizedTab === "weekly";
   const isZones = normalizedTab === "zones";
-  const isGear = normalizedTab === "gear";
-  const isComponents = normalizedTab === "components";
+  const isService = normalizedTab === "service";
   const isYearly = normalizedTab === "yearly";
   const isCoach = normalizedTab === "coach";
 
@@ -349,16 +381,13 @@ function showTab(tab) {
   dailyPane.classList.toggle("hidden", !isDaily);
   weeklyPane.classList.toggle("hidden", !isWeekly);
   zonesPane.classList.toggle("hidden", !isZones);
-  gearPane.classList.toggle("hidden", !isGear);
-  componentsPane.classList.toggle("hidden", !isComponents);
+  servicePane.classList.toggle("hidden", !isService);
   yearlyPane.classList.toggle("hidden", !isYearly);
   coachPane?.classList.toggle("hidden", !isCoach);
 
   dailyControls.classList.toggle("hidden", !isDaily);
   weeklyControls.classList.toggle("hidden", !isWeekly);
   zonesControls.classList.toggle("hidden", !isZones);
-  gearControls.classList.toggle("hidden", !isGear);
-  componentsControls.classList.toggle("hidden", !isComponents);
   yearlyControls.classList.toggle("hidden", !isYearly);
 
   planTab?.classList.toggle("active", isPlan);
@@ -368,11 +397,17 @@ function showTab(tab) {
   dailyTab.classList.toggle("active", isDaily);
   weeklyTab.classList.toggle("active", isWeekly);
   zonesTab.classList.toggle("active", isZones);
-  gearTab.classList.toggle("active", isGear);
-  componentsTab.classList.toggle("active", isComponents);
+  serviceTab?.classList.toggle("active", isService);
   yearlyTab.classList.toggle("active", isYearly);
   coachTab?.classList.toggle("active", isCoach);
   syncMobileNavigation(normalizedTab);
+
+  if (isService) {
+    showServiceSubtab(state.serviceSubtab);
+  } else {
+    componentsControls.classList.add("hidden");
+    gearControls.classList.add("hidden");
+  }
 
   if (isPlan && typeof window.loadPlan === "function") {
     window.loadPlan();

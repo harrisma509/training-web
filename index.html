@@ -43,8 +43,7 @@
         <button id="kpisTab" type="button">KPIs</button>
         <button id="chartsTab" type="button">Charts</button>
         <button id="zonesTab" type="button">Zones</button>
-        <button id="gearTab" type="button">Gear</button>
-        <button id="componentsTab" type="button">Components</button>
+        <button id="serviceTab" type="button">Service</button>
         <button id="yearlyTab" type="button">Yearly</button>
       </nav>
 
@@ -86,12 +85,6 @@
 
         <div id="gearControls" class="control-group hidden">
           <button id="gearRefresh" type="button">Refresh</button>
-        </div>
-
-        <div id="componentsControls" class="control-group hidden">
-          <label for="componentsBikeSelect">Bike</label>
-          <select id="componentsBikeSelect"></select>
-          <button id="componentsRefresh" type="button">Refresh</button>
         </div>
 
         <div id="yearlyControls" class="control-group hidden">
@@ -164,8 +157,7 @@
                   <option value="daily">Daily</option>
                   <option value="weekly">Weekly</option>
                   <option value="zones">Zones</option>
-                  <option value="gear">Gear</option>
-                  <option value="components">Components</option>
+                  <option value="service">Service</option>
                   <option value="yearly">Yearly</option>
                   <option value="coach">Coach</option>
                 </select>
@@ -829,44 +821,57 @@
       </div>
     </section>
 
-    <section id="gearPane" class="hidden">
-      <div class="table-wrap">
-        <div class="gear-header-row">
-          <div class="gear-header-main">
-            <div class="gear-title">Gear</div>
-            <div class="gear-subtitle">Read-only usage summary from Strava activities.</div>
-          </div>
-          <div class="gear-header-actions">
-            <label class="gear-hide-shoes-label" for="hideShoesCheckbox">
-              <input id="hideShoesCheckbox" type="checkbox" checked>
-              Hide shoes
-            </label>
-            <label class="gear-hide-shoes-label" for="hideRetiredCheckbox">
-              <input id="hideRetiredCheckbox" type="checkbox" checked>
-              Hide retired
-            </label>
-          </div>
-        </div>
-        <table id="gearTable"></table>
+    <section id="servicePane" class="hidden" aria-label="Service">
+      <div class="service-subnav" role="tablist" aria-label="Service views">
+        <button id="componentsSubtab" class="service-subtab active" type="button" role="tab" aria-selected="true"
+          aria-controls="componentsPane" tabindex="0">Components</button>
+        <button id="gearSubtab" class="service-subtab" type="button" role="tab" aria-selected="false"
+          aria-controls="gearPane" tabindex="-1">Gear</button>
       </div>
-    </section>
 
-    <section id="componentsPane" class="hidden">
-      <div class="table-wrap">
-        <div class="gear-header-row">
-          <div class="gear-header-main">
-            <div class="gear-title">Components</div>
-            <div class="gear-subtitle">Track component configuration and service recency by bike.</div>
+      <section id="gearPane" class="hidden" role="tabpanel" aria-labelledby="gearSubtab" tabindex="0">
+        <div class="table-wrap">
+          <div class="gear-header-row">
+            <div class="gear-header-main">
+              <div class="gear-title">Gear</div>
+              <div class="gear-subtitle">Read-only usage summary from Strava activities.</div>
+            </div>
+            <div class="gear-header-actions">
+              <label class="gear-hide-shoes-label" for="hideShoesCheckbox">
+                <input id="hideShoesCheckbox" type="checkbox" checked>
+                Hide shoes
+              </label>
+              <label class="gear-hide-shoes-label" for="hideRetiredCheckbox">
+                <input id="hideRetiredCheckbox" type="checkbox" checked>
+                Hide retired
+              </label>
+            </div>
           </div>
-          <div class="components-toolbar">
-            <div id="componentsSummary" class="components-summary"></div>
-            <button id="componentsAddButton" type="button" class="button-secondary">Add Component</button>
+          <table id="gearTable"></table>
+        </div>
+      </section>
+
+      <section id="componentsPane" role="tabpanel" aria-labelledby="componentsSubtab" tabindex="0">
+        <div class="table-wrap">
+          <div class="gear-header-row">
+            <div class="gear-header-main">
+              <div class="gear-title">Components</div>
+              <div class="gear-subtitle">Track component configuration and service recency by bike.</div>
+            </div>
+            <div class="components-toolbar">
+              <div id="componentsControls" class="control-group hidden">
+                <label for="componentsBikeSelect">Bike</label>
+                <select id="componentsBikeSelect"></select>
+              </div>
+              <div id="componentsSummary" class="components-summary"></div>
+              <button id="componentsAddButton" type="button" class="button-secondary">Add Component</button>
+            </div>
+          </div>
+          <div id="componentsTableWrap" class="components-table-wrap">
+            <table id="componentsTable"></table>
           </div>
         </div>
-        <div id="componentsTableWrap" class="components-table-wrap">
-          <table id="componentsTable"></table>
-        </div>
-      </div>
+      </section>
     </section>
 
     <section id="yearlyPane" class="hidden">
@@ -1015,19 +1020,19 @@
   </main>
 
   <script src="/static/constants.js"></script>
-  <script src="/static/app-state.js"></script>
+  <script src="/static/app-state.js?v=20260914-service-nav"></script>
   <script src="/static/utils.js"></script>
   <script src="/static/api.js"></script>
   <script src="/static/weekly.js"></script>
   <script src="/static/zones.js"></script>
-  <script src="/static/gear.js"></script>
-  <script src="/static/components.js"></script>
+  <script src="/static/gear.js?v=20260914-service-nav"></script>
+  <script src="/static/components.js?v=20260914-service-nav"></script>
   <script src="/static/sync.js"></script>
   <script src="/static/yearly.js"></script>
   <script src="/static/ai-coach-settings-validation.js"></script>
   <script src="/static/ai-coach-custom-instructions-validation.js"></script>
   <script src="/static/coach-memories.js"></script>
-  <script src="/static/settings.js"></script>
+  <script src="/static/settings.js?v=20260914-service-nav"></script>
   <script src="/static/daily.js"></script>
   <script src="/static/plan.js"></script>
   <script src="/static/goals.js"></script>
@@ -1035,7 +1040,7 @@
   <script src="/static/vendor/chart.umd.min.js"></script>
   <script src="/static/charts.js"></script>
   <script src="/static/coach.js"></script>
-  <script src="/static/app.js?v=20260914-mobile-nav"></script>
+  <script src="/static/app.js?v=20260914-service-nav"></script>
 </body>
 
 </html>

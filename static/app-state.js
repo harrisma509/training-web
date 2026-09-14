@@ -9,8 +9,10 @@
   window.DEFAULT_PREFERENCES = Object.freeze({
     appearance: "system",
     activeTab: "daily",
+    serviceSubtab: "components",
     rememberLastTab: true,
     startupTab: "daily",
+    startupServiceSubtab: "components",
     chartsCategory: "fitness",
     chartsCategoryMigrationVersion: 1,
     defaultBikeGearId: "",
@@ -85,10 +87,26 @@
       return value;
     };
 
+    const rawActiveTab = normalizeTabValue(raw.activeTab);
+    const rawStartupTab = normalizeTabValue(raw.startupTab);
+    const isValidServiceSubtab = value => ["components", "gear"].includes(value);
+    const activeServiceSubtab = isValidServiceSubtab(raw.serviceSubtab)
+      ? raw.serviceSubtab
+      : rawActiveTab === "gear" ? "gear" : "components";
+    const startupServiceSubtab = isValidServiceSubtab(raw.startupServiceSubtab)
+      ? raw.startupServiceSubtab
+      : rawStartupTab === "gear" ? "gear" : "components";
+
     next.appearance = ["system", "light", "dark"].includes(next.appearance) ? next.appearance : "system";
-    next.activeTab = ["plan", "goals", "kpis", "charts", "daily", "weekly", "zones", "gear", "components", "yearly", "coach"].includes(normalizeTabValue(next.activeTab)) ? normalizeTabValue(next.activeTab) : "daily";
+    next.activeTab = ["plan", "goals", "kpis", "charts", "daily", "weekly", "zones", "service", "yearly", "coach"].includes(rawActiveTab)
+      ? rawActiveTab
+      : ["gear", "components"].includes(rawActiveTab) ? "service" : "daily";
+    next.serviceSubtab = activeServiceSubtab;
     next.rememberLastTab = next.rememberLastTab !== false;
-    next.startupTab = ["plan", "goals", "kpis", "charts", "daily", "weekly", "zones", "gear", "components", "yearly", "coach"].includes(normalizeTabValue(next.startupTab)) ? normalizeTabValue(next.startupTab) : "daily";
+    next.startupTab = ["plan", "goals", "kpis", "charts", "daily", "weekly", "zones", "service", "yearly", "coach"].includes(rawStartupTab)
+      ? rawStartupTab
+      : ["gear", "components"].includes(rawStartupTab) ? "service" : "daily";
+    next.startupServiceSubtab = startupServiceSubtab;
     const storedChartsCategory = String(next.chartsCategory || "").trim().toLowerCase();
     const migratedChartsCategory = !hasChartsCategoryMigration && storedChartsCategory === "load"
       ? "fitness"
@@ -128,8 +146,10 @@
     const snapshot = {
       appearance: window.AppState.appearance,
       activeTab: window.AppState.activeTab,
+      serviceSubtab: window.AppState.serviceSubtab,
       rememberLastTab: window.AppState.rememberLastTab,
       startupTab: window.AppState.startupTab,
+      startupServiceSubtab: window.AppState.startupServiceSubtab,
       chartsCategory: window.AppState.chartsCategory,
       chartsCategoryMigrationVersion: window.AppState.chartsCategoryMigrationVersion,
       defaultBikeGearId: window.AppState.defaultBikeGearId,

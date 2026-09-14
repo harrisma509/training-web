@@ -878,6 +878,7 @@
 
     if (window.AppState.rememberLastTab === false) {
       window.AppState.activeTab = window.AppState.startupTab || "daily";
+      window.AppState.serviceSubtab = window.AppState.startupServiceSubtab || "components";
     }
 
     applyAppearancePreference();
@@ -1011,7 +1012,7 @@
 
     startupTab?.addEventListener("change", (event) => {
       const selectedTab = event.target.value === "overview" ? "plan" : event.target.value;
-      if (!["plan", "goals", "kpis", "charts", "daily", "weekly", "zones", "gear", "components", "yearly"].includes(selectedTab)) {
+      if (!["plan", "goals", "kpis", "charts", "daily", "weekly", "zones", "service", "yearly", "coach"].includes(selectedTab)) {
         return;
       }
 

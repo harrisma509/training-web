@@ -97,7 +97,6 @@ function renderComponentsSummary() {
   }
 
   summaryEl.innerHTML = `
-    <div class="components-summary-bike">${componentEscapeHtml(componentSafe(bike.display_name, bike.gear_id || ""))}</div>
     <div class="components-summary-metrics">
       <span class="status-pill status-muted">${formatComponentInteger(bike.ride_count, "0")} rides</span>
       <span class="status-pill status-muted">${formatComponentNumber(bike.miles, 1, "0.0")} mi</span>
@@ -844,7 +843,7 @@ function ensureComponentAddControls() {
       return;
     }
 
-      drawer.dataset.componentId = "new";
+    drawer.dataset.componentId = "new";
     form.reset();
     setComponentEditorBaselineMode("current_snapshot");
     setComponentEditorAdvancedVisibility(false);
@@ -1041,10 +1040,10 @@ async function openComponentServiceDrawer(componentId, componentName = "") {
     const latest = services[0] || null;
     const usageText = latest && (latest.mileage_at_service != null || latest.hours_at_service != null || latest.rides_at_service != null)
       ? [
-          latest.mileage_at_service != null ? `${formatComponentNumber(latest.mileage_at_service, 1, "0.0")} mi` : null,
-          latest.hours_at_service != null ? `${formatComponentNumber(latest.hours_at_service, 1, "0.0")} hr` : null,
-          latest.rides_at_service != null ? `${formatComponentInteger(latest.rides_at_service)} rides` : null,
-        ].filter(Boolean).join(" • ")
+        latest.mileage_at_service != null ? `${formatComponentNumber(latest.mileage_at_service, 1, "0.0")} mi` : null,
+        latest.hours_at_service != null ? `${formatComponentNumber(latest.hours_at_service, 1, "0.0")} hr` : null,
+        latest.rides_at_service != null ? `${formatComponentInteger(latest.rides_at_service)} rides` : null,
+      ].filter(Boolean).join(" • ")
       : "No usage snapshot available";
     usageEl.textContent = usageText;
     if (component) {
@@ -1685,20 +1684,20 @@ async function loadComponents() {
     const payload = window.api && typeof window.api.fetchComponents === "function"
       ? await window.api.fetchComponents(selectedGearId)
       : await fetch(selectedGearId
-          ? `/api/gear/components?gear_id=${encodeURIComponent(selectedGearId)}`
-          : "/api/gear/components").then(async response => {
-            if (!response.ok) {
-              if (response.status === 400 && selectedGearId) {
-                window.AppState.componentsSelectedGearId = "";
-                if (typeof persistPreferences === "function") {
-                  persistPreferences();
-                }
-                return loadComponents();
+        ? `/api/gear/components?gear_id=${encodeURIComponent(selectedGearId)}`
+        : "/api/gear/components").then(async response => {
+          if (!response.ok) {
+            if (response.status === 400 && selectedGearId) {
+              window.AppState.componentsSelectedGearId = "";
+              if (typeof persistPreferences === "function") {
+                persistPreferences();
               }
-              throw new Error(`Components endpoint failed: ${response.status}`);
+              return loadComponents();
             }
-            return response.json();
-          });
+            throw new Error(`Components endpoint failed: ${response.status}`);
+          }
+          return response.json();
+        });
 
     window.AppState.componentsData = payload;
     window.AppState.componentsSelectedGearId = componentSafe(payload.selected_gear_id, "");
@@ -1722,7 +1721,7 @@ async function loadComponents() {
   renderComponentsSummary();
   renderComponentsTable();
 
-  if (window.AppState.activeTab === "components") {
+  if (window.AppState.activeTab === "service" && window.AppState.serviceSubtab === "components") {
     renderHeaderSummary();
   }
 }

@@ -165,7 +165,7 @@ async function loadGear() {
   }
   renderGearTable();
 
-  if (window.AppState.activeTab === "gear") {
+  if (window.AppState.activeTab === "service" && window.AppState.serviceSubtab === "gear") {
     renderHeaderSummary();
   }
 }
