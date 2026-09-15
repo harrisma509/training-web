@@ -892,14 +892,17 @@ function ensureComponentServiceDrawer() {
       <div class="components-service-body">
         <div id="componentServiceContext" class="components-service-context"></div>
         <form id="componentServiceForm" class="components-service-form">
-          <div class="drawer-field-group">
-            <label for="componentServiceDate">Service date</label>
-            <input id="componentServiceDate" name="service_date" type="date" required>
-          </div>
-          <div class="drawer-field-group">
-            <label for="componentServiceType">Service type</label>
-            <select id="componentServiceType" name="service_type" required>
-              <option value="">Select a service type</option>
+          <section class="components-service-section" aria-labelledby="componentServiceDetailsTitle">
+            <div id="componentServiceDetailsTitle" class="drawer-section-title">Service details</div>
+            <div class="components-service-field-grid">
+              <div class="drawer-field-group">
+                <label for="componentServiceDate">Service date <span aria-hidden="true">*</span></label>
+                <input id="componentServiceDate" name="service_date" type="date" required>
+              </div>
+              <div class="drawer-field-group">
+                <label for="componentServiceAction">Action <span aria-hidden="true">*</span></label>
+                <select id="componentServiceAction" name="action" required>
+                  <option value="">Select an action</option>
               <option value="Inspection">Inspection</option>
               <option value="Adjustment">Adjustment</option>
               <option value="Cleaning">Cleaning</option>
@@ -916,27 +919,60 @@ function ensureComponentServiceDrawer() {
               <option value="Wheel">Wheel</option>
               <option value="Replacement">Replacement</option>
               <option value="Other">Other</option>
-            </select>
-          </div>
-          <div class="drawer-field-group">
-            <label for="componentServiceProvider">Service provider</label>
-            <input id="componentServiceProvider" name="service_provider" type="text" placeholder="Optional">
-          </div>
-          <div class="drawer-field-group">
-            <label for="componentServiceCost">Service cost</label>
-            <input id="componentServiceCost" name="service_cost" type="number" min="0" step="0.01" placeholder="Optional">
-          </div>
-          <div class="drawer-field-group">
-            <label for="componentServiceNotes">Notes</label>
-            <textarea id="componentServiceNotes" name="notes" rows="4" placeholder="Describe the work performed"></textarea>
-          </div>
-          <div class="drawer-field-group">
-            <label>Usage snapshot</label>
-            <div id="componentServiceUsage" class="components-service-usage">Unavailable</div>
-          </div>
+                </select>
+              </div>
+              <div class="drawer-field-group">
+                <label for="componentServiceProvider">Provider / Performed by</label>
+                <input id="componentServiceProvider" name="performed_by" type="text" placeholder="Optional">
+              </div>
+              <div class="drawer-field-group">
+                <label for="componentServiceLocation">Service location</label>
+                <input id="componentServiceLocation" name="service_location" type="text" placeholder="Optional">
+              </div>
+              <div class="drawer-field-group">
+                <label for="componentServiceCost">Cost</label>
+                <input id="componentServiceCost" name="cost" type="number" min="0" step="0.01" placeholder="Optional">
+              </div>
+            </div>
+          </section>
+          <section class="components-service-section" aria-labelledby="componentServiceProductTitle">
+            <div id="componentServiceProductTitle" class="drawer-section-title">Product information</div>
+            <div class="components-service-field-grid">
+              <div class="drawer-field-group">
+                <label for="componentServiceProduct">Product name</label>
+                <input id="componentServiceProduct" name="product_name" type="text" placeholder="Optional">
+              </div>
+              <div class="drawer-field-group">
+                <label for="componentServiceManufacturer">Manufacturer</label>
+                <input id="componentServiceManufacturer" name="manufacturer" type="text" placeholder="Optional">
+              </div>
+              <div class="drawer-field-group">
+                <label for="componentServiceModel">Model</label>
+                <input id="componentServiceModel" name="model" type="text" placeholder="Optional">
+              </div>
+            </div>
+          </section>
+          <section class="components-service-section" aria-labelledby="componentServiceNotesTitle">
+            <div id="componentServiceNotesTitle" class="drawer-section-title">Notes</div>
+            <div class="drawer-field-group">
+              <label for="componentServiceNotes">Notes</label>
+              <textarea id="componentServiceNotes" name="notes" rows="3" placeholder="Describe the work performed"></textarea>
+            </div>
+          </section>
+          <section class="components-service-section" aria-labelledby="componentServiceSnapshotTitle">
+            <div id="componentServiceSnapshotTitle" class="drawer-section-title">Bike snapshot at event</div>
+            <div id="componentServiceSnapshotGrid" class="components-service-snapshot-grid" aria-live="polite">
+              <div><span>Mileage</span><output id="componentServiceMileage" aria-label="Mileage">Unavailable</output></div>
+              <div><span>Hours</span><output id="componentServiceHours" aria-label="Hours">Unavailable</output></div>
+              <div><span>Rides</span><output id="componentServiceRides" aria-label="Rides">Unavailable</output></div>
+              <div><span>Elevation (ft)</span><output id="componentServiceElevation" aria-label="Elevation in feet">Unavailable</output></div>
+            </div>
+            <div id="componentServiceSnapshotStatus" class="components-service-snapshot-status">Snapshot unavailable.</div>
+            <button type="button" id="componentServiceRetryBtn" class="button-secondary small hidden">Retry snapshot</button>
+          </section>
           <div class="drawer-actions">
             <button type="button" id="componentServiceCancelBtn" class="button-secondary">Cancel</button>
-            <button type="submit" id="componentServiceSaveBtn" class="button-primary">Save Service</button>
+            <button type="submit" id="componentServiceSaveBtn" class="button-primary" disabled>Save Service</button>
           </div>
         </form>
       </div>
@@ -945,8 +981,12 @@ function ensureComponentServiceDrawer() {
 
   const closeBtn = drawer.querySelector("#componentServiceCloseBtn");
   const cancelBtn = drawer.querySelector("#componentServiceCancelBtn");
+  const retryBtn = drawer.querySelector("#componentServiceRetryBtn");
   closeBtn.addEventListener("click", () => closeComponentServiceDrawer());
   cancelBtn.addEventListener("click", () => closeComponentServiceDrawer());
+  retryBtn.addEventListener("click", () => {
+    requestComponentServiceSnapshot(drawer, drawer.dataset.snapshotDate || "");
+  });
   drawer.addEventListener("click", event => {
     if (event.target === drawer) {
       closeComponentServiceDrawer();
@@ -959,23 +999,29 @@ function ensureComponentServiceDrawer() {
     if (!componentId) {
       return;
     }
-    const formData = new FormData(event.currentTarget);
-    const payload = {
-      service_date: formData.get("service_date") || "",
-      service_type: formData.get("service_type") || "",
-      notes: formData.get("notes") || "",
-      service_provider: formData.get("service_provider") || "",
-      service_cost: formData.get("service_cost") || null,
-      service_location: "",
-    };
-
-    if (!payload.service_date || !payload.service_type) {
-      setComponentServiceStatus("Service date and service type are required.", "error");
+    if (!canSaveComponentService(drawer)) {
+      setComponentServiceStatus("Complete the required fields and wait for the snapshot to finish.", "error");
       return;
     }
+    if (drawer.dataset.submitting === "true") {
+      return;
+    }
+    const formData = new FormData(event.currentTarget);
+    const payload = {
+      service_date: String(formData.get("service_date") || "").trim(),
+      action: String(formData.get("action") || "").trim(),
+      product_name: componentServiceOptionalValue(formData.get("product_name")),
+      manufacturer: componentServiceOptionalValue(formData.get("manufacturer")),
+      model: componentServiceOptionalValue(formData.get("model")),
+      performed_by: componentServiceOptionalValue(formData.get("performed_by")),
+      service_location: componentServiceOptionalValue(formData.get("service_location")),
+      cost: formData.get("cost") === "" ? null : String(formData.get("cost") || "").trim(),
+      notes: componentServiceOptionalValue(formData.get("notes")),
+    };
 
     const saveBtn = event.currentTarget.querySelector("#componentServiceSaveBtn");
     saveBtn.disabled = true;
+    drawer.dataset.submitting = "true";
     try {
       const saved = await window.api.createComponentService(componentId, payload);
       if (saved && saved.service_event_id) {
@@ -988,12 +1034,160 @@ function ensureComponentServiceDrawer() {
     } catch (error) {
       setComponentServiceStatus(error.message || "Unable to save the service record.", "error");
     } finally {
+      delete drawer.dataset.submitting;
       saveBtn.disabled = false;
+      updateComponentServiceSaveState(drawer);
+    }
+  });
+
+  drawer.querySelector("#componentServiceDate").addEventListener("change", () => {
+    requestComponentServiceSnapshot(drawer, drawer.querySelector("#componentServiceDate").value);
+  });
+  drawer.querySelector("#componentServiceForm").addEventListener("input", () => updateComponentServiceSaveState(drawer));
+  document.addEventListener("keydown", event => {
+    if (event.key === "Escape" && !drawer.classList.contains("hidden")) {
+      closeComponentServiceDrawer();
     }
   });
 
   document.body.appendChild(drawer);
   return drawer;
+}
+
+function componentServiceOptionalValue(value) {
+  const normalized = String(value || "").trim();
+  return normalized || null;
+}
+
+function componentServiceLocalDate(value = new Date()) {
+  const year = value.getFullYear();
+  const month = String(value.getMonth() + 1).padStart(2, "0");
+  const day = String(value.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function componentServiceDateLabel(value) {
+  const parsed = new Date(`${value}T00:00:00`);
+  if (Number.isNaN(parsed.getTime())) {
+    return value;
+  }
+  return new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", year: "numeric" }).format(parsed);
+}
+
+function componentServiceSnapshotValue(value, formatter, suffix) {
+  if (value === null || value === undefined || value === "") {
+    return "Unavailable";
+  }
+  return `${formatter(value)} ${suffix}`;
+}
+
+function renderComponentServiceSnapshot(drawer, snapshot) {
+  const values = {
+    componentServiceMileage: componentServiceSnapshotValue(snapshot.odometer_miles, value => formatComponentNumber(value, 1, "0.0"), "mi"),
+    componentServiceHours: componentServiceSnapshotValue(snapshot.odometer_hours, value => formatComponentNumber(value, 1, "0.0"), "hr"),
+    componentServiceRides: componentServiceSnapshotValue(snapshot.odometer_rides, value => formatComponentInteger(value), "rides"),
+    componentServiceElevation: componentServiceSnapshotValue(snapshot.odometer_elevation_ft, value => formatComponentInteger(value), "ft"),
+  };
+  Object.entries(values).forEach(([id, value]) => {
+    const output = drawer.querySelector(`#${id}`);
+    if (output) {
+      output.textContent = value;
+    }
+  });
+  const availability = snapshot.metric_availability || {};
+  const unavailable = Object.values(availability).some(value => value === false);
+  const statusEl = drawer.querySelector("#componentServiceSnapshotStatus");
+  statusEl.textContent = unavailable
+    ? "Some source metrics are unavailable; available values will be saved."
+    : `Calculated through ${componentServiceDateLabel(snapshot.service_date)}.`;
+  statusEl.className = `components-service-snapshot-status${unavailable ? " warning" : ""}`;
+}
+
+function resetComponentServiceSnapshot(drawer) {
+  ["componentServiceMileage", "componentServiceHours", "componentServiceRides", "componentServiceElevation"].forEach(id => {
+    const output = drawer.querySelector(`#${id}`);
+    if (output) {
+      output.textContent = "Unavailable";
+    }
+  });
+  const statusEl = drawer.querySelector("#componentServiceSnapshotStatus");
+  statusEl.textContent = "Calculating snapshot...";
+  statusEl.className = "components-service-snapshot-status pending";
+  drawer.querySelector("#componentServiceRetryBtn").classList.add("hidden");
+  delete drawer.dataset.snapshotDate;
+  delete drawer.dataset.snapshotState;
+}
+
+function canSaveComponentService(drawer) {
+  const form = drawer.querySelector("#componentServiceForm");
+  const dateValue = drawer.querySelector("#componentServiceDate").value;
+  const actionValue = drawer.querySelector("#componentServiceAction").value.trim();
+  return form.checkValidity()
+    && Boolean(dateValue)
+    && Boolean(actionValue)
+    && drawer.dataset.snapshotState === "ready"
+    && drawer.dataset.snapshotDate === dateValue
+    && drawer.dataset.submitting !== "true";
+}
+
+function updateComponentServiceSaveState(drawer) {
+  const saveBtn = drawer.querySelector("#componentServiceSaveBtn");
+  if (saveBtn) {
+    saveBtn.disabled = !canSaveComponentService(drawer);
+  }
+}
+
+async function requestComponentServiceSnapshot(drawer, serviceDate) {
+  const componentId = String(drawer.dataset.componentId || "").trim();
+  const requestSequence = Number(drawer.dataset.snapshotRequestSequence || 0) + 1;
+  drawer.dataset.snapshotRequestSequence = String(requestSequence);
+  drawer.dataset.snapshotDateRequested = serviceDate;
+  resetComponentServiceSnapshot(drawer);
+  updateComponentServiceSaveState(drawer);
+
+  if (!serviceDate) {
+    drawer.dataset.snapshotState = "error";
+    drawer.querySelector("#componentServiceSnapshotStatus").textContent = "Service date is required.";
+    drawer.querySelector("#componentServiceSnapshotStatus").className = "components-service-snapshot-status error";
+    updateComponentServiceSaveState(drawer);
+    return;
+  }
+  if (serviceDate > componentServiceLocalDate()) {
+    drawer.dataset.snapshotState = "error";
+    drawer.querySelector("#componentServiceSnapshotStatus").textContent = "Service date cannot be in the future.";
+    drawer.querySelector("#componentServiceSnapshotStatus").className = "components-service-snapshot-status error";
+    updateComponentServiceSaveState(drawer);
+    return;
+  }
+
+  try {
+    const snapshot = await window.api.fetchComponentServiceSnapshot(componentId, serviceDate);
+    if (String(drawer.dataset.snapshotRequestSequence) !== String(requestSequence)
+      || drawer.classList.contains("hidden")
+      || drawer.dataset.componentId !== componentId
+      || drawer.querySelector("#componentServiceDate").value !== serviceDate) {
+      return;
+    }
+    drawer.dataset.snapshotDate = snapshot.service_date;
+    drawer.dataset.snapshotState = snapshot.calculation_succeeded === false ? "error" : "ready";
+    renderComponentServiceSnapshot(drawer, snapshot);
+    if (snapshot.calculation_succeeded === false) {
+      drawer.querySelector("#componentServiceSnapshotStatus").textContent = "Snapshot unavailable.";
+      drawer.querySelector("#componentServiceRetryBtn").classList.remove("hidden");
+    }
+  } catch (error) {
+    if (String(drawer.dataset.snapshotRequestSequence) !== String(requestSequence)
+      || drawer.classList.contains("hidden")
+      || drawer.querySelector("#componentServiceDate").value !== serviceDate) {
+      return;
+    }
+    drawer.dataset.snapshotState = "error";
+    const statusEl = drawer.querySelector("#componentServiceSnapshotStatus");
+    statusEl.textContent = error.message || "Snapshot unavailable.";
+    statusEl.className = "components-service-snapshot-status error";
+    drawer.querySelector("#componentServiceRetryBtn").classList.remove("hidden");
+  }
+  updateComponentServiceSaveState(drawer);
 }
 
 function setComponentServiceStatus(message, kind = "info") {
@@ -1010,11 +1204,7 @@ async function openComponentServiceDrawer(componentId, componentName = "") {
   const drawer = ensureComponentServiceDrawer();
   const form = drawer.querySelector("#componentServiceForm");
   const dateInput = drawer.querySelector("#componentServiceDate");
-  const typeInput = drawer.querySelector("#componentServiceType");
-  const providerInput = drawer.querySelector("#componentServiceProvider");
-  const costInput = drawer.querySelector("#componentServiceCost");
-  const notesInput = drawer.querySelector("#componentServiceNotes");
-  const usageEl = drawer.querySelector("#componentServiceUsage");
+  const actionInput = drawer.querySelector("#componentServiceAction");
   const titleEl = drawer.querySelector("#componentServiceTitle");
   const subtitleEl = drawer.querySelector("#componentServiceSubtitle");
   const statusEl = drawer.querySelector("#componentServiceStatus");
@@ -1025,42 +1215,33 @@ async function openComponentServiceDrawer(componentId, componentName = "") {
   statusEl.classList.add("hidden");
   form.reset();
   drawer.dataset.componentId = String(componentId);
+  drawer._componentServiceReturnFocus = document.activeElement;
+  delete drawer.dataset.submitting;
+  drawer.dataset.snapshotRequestSequence = "0";
 
-  const today = new Date();
-  dateInput.value = today.toISOString().slice(0, 10);
-  typeInput.value = "";
-  providerInput.value = "";
-  costInput.value = "";
-  notesInput.value = "";
-
-  try {
-    const payload = await window.api.fetchComponentServices(componentId);
-    const component = payload && payload.component ? payload.component : null;
-    const services = Array.isArray(payload && payload.services) ? payload.services : [];
-    const latest = services[0] || null;
-    const usageText = latest && (latest.mileage_at_service != null || latest.hours_at_service != null || latest.rides_at_service != null)
-      ? [
-        latest.mileage_at_service != null ? `${formatComponentNumber(latest.mileage_at_service, 1, "0.0")} mi` : null,
-        latest.hours_at_service != null ? `${formatComponentNumber(latest.hours_at_service, 1, "0.0")} hr` : null,
-        latest.rides_at_service != null ? `${formatComponentInteger(latest.rides_at_service)} rides` : null,
-      ].filter(Boolean).join(" • ")
-      : "No usage snapshot available";
-    usageEl.textContent = usageText;
-    if (component) {
-      const context = [
-        component.component_name,
-        component.component_group,
-        component.bike_name ? `Bike: ${component.bike_name}` : null,
-      ].filter(Boolean).join(" • ");
-      drawer.querySelector("#componentServiceContext").innerHTML = `<div class="components-service-context-row"><strong>Component:</strong> ${componentEscapeHtml(context)}</div>`;
-    }
-  } catch (error) {
-    usageEl.textContent = "No usage snapshot available";
-  }
+  dateInput.value = componentServiceLocalDate();
+  actionInput.value = "";
+  const component = window.AppState.componentsData && Array.isArray(window.AppState.componentsData.components)
+    ? window.AppState.componentsData.components.find(item => String(item.gear_component_id) === String(componentId))
+    : null;
+  const selectedBike = window.AppState.componentsData && window.AppState.componentsData.selected_bike
+    ? window.AppState.componentsData.selected_bike
+    : {};
+  const contextEl = drawer.querySelector("#componentServiceContext");
+  contextEl.innerHTML = `
+    <dl class="components-service-context-grid">
+      <div><dt>Bike</dt><dd>${componentEscapeHtml(selectedBike.display_name || selectedBike.gear_name || "Unknown bike")}</dd></div>
+      <div><dt>Component</dt><dd>${componentEscapeHtml(component && component.component_name || componentName || "Component")}</dd></div>
+      <div><dt>Group</dt><dd>${componentEscapeHtml(component && component.component_group || "-")}</dd></div>
+      <div><dt>Position</dt><dd>${componentEscapeHtml(component && component.position || "-")}</dd></div>
+    </dl>
+  `;
 
   drawer.classList.remove("hidden");
   drawer.setAttribute("aria-hidden", "false");
-  setTimeout(() => typeInput.focus(), 50);
+  requestComponentServiceSnapshot(drawer, dateInput.value);
+  updateComponentServiceSaveState(drawer);
+  setTimeout(() => actionInput.focus(), 50);
 }
 
 function closeComponentServiceDrawer() {
@@ -1070,7 +1251,16 @@ function closeComponentServiceDrawer() {
   }
   drawer.classList.add("hidden");
   drawer.setAttribute("aria-hidden", "true");
+  const returnFocus = drawer._componentServiceReturnFocus;
   delete drawer.dataset.componentId;
+  delete drawer.dataset.snapshotRequestSequence;
+  delete drawer.dataset.snapshotDate;
+  delete drawer.dataset.snapshotState;
+  delete drawer.dataset.snapshotDateRequested;
+  if (returnFocus && typeof returnFocus.focus === "function") {
+    returnFocus.focus();
+  }
+  delete drawer._componentServiceReturnFocus;
 }
 
 function formatServiceHistoryDate(value) {
@@ -1162,6 +1352,10 @@ function ensureComponentHistoryDrawer() {
         <div id="componentHistoryList" class="components-history-list"></div>
         <div id="componentHistoryEventEditor" class="components-history-editor hidden"></div>
       </div>
+      <div class="components-history-editor-footer components-editor-footer hidden" aria-hidden="true">
+        <button type="button" id="componentHistoryEditorCancelBtn" class="button-secondary" tabindex="-1">Cancel</button>
+        <button type="submit" id="componentHistoryEditorSaveBtn" class="button-primary" form="componentHistoryEventForm" tabindex="-1">Save Changes</button>
+      </div>
       <div class="components-history-footer">
         <button type="button" id="componentHistoryRetryBtn" class="button-secondary hidden">Retry</button>
         <button type="button" id="componentHistoryDoneBtn" class="button-primary">Close</button>
@@ -1215,6 +1409,53 @@ function setComponentHistoryStatus(message, kind = "info") {
   statusEl.textContent = message;
   statusEl.classList.remove("hidden", "status-error", "status-success", "status-info");
   statusEl.classList.add(kind === "error" ? "status-error" : kind === "success" ? "status-success" : "status-info");
+}
+
+function setComponentHistoryMode(mode = "history") {
+  const drawer = document.getElementById("componentHistoryDrawer");
+  if (!drawer) {
+    return;
+  }
+
+  const isEditor = mode === "editor";
+  const listEl = drawer.querySelector("#componentHistoryList");
+  const editorEl = drawer.querySelector("#componentHistoryEventEditor");
+  const refreshBtn = drawer.querySelector("#componentHistoryRefreshBtn");
+  const footerEl = drawer.querySelector(".components-history-footer");
+  const doneBtn = drawer.querySelector("#componentHistoryDoneBtn");
+  const editorFooterEl = drawer.querySelector(".components-history-editor-footer");
+  const editorCancelBtn = drawer.querySelector("#componentHistoryEditorCancelBtn");
+  const editorSaveBtn = drawer.querySelector("#componentHistoryEditorSaveBtn");
+
+  drawer.dataset.historyEditorMode = isEditor ? "editor" : "history";
+  if (listEl) {
+    listEl.classList.toggle("hidden", isEditor);
+  }
+  if (editorEl) {
+    editorEl.classList.toggle("hidden", !isEditor);
+  }
+  if (refreshBtn) {
+    refreshBtn.classList.toggle("hidden", isEditor);
+    refreshBtn.setAttribute("aria-hidden", isEditor ? "true" : "false");
+    refreshBtn.tabIndex = isEditor ? -1 : 0;
+  }
+  if (footerEl) {
+    footerEl.classList.toggle("hidden", isEditor);
+    footerEl.setAttribute("aria-hidden", isEditor ? "true" : "false");
+  }
+  if (doneBtn) {
+    doneBtn.tabIndex = isEditor ? -1 : 0;
+  }
+  if (editorFooterEl) {
+    editorFooterEl.classList.toggle("hidden", !isEditor);
+    editorFooterEl.setAttribute("aria-hidden", isEditor ? "false" : "true");
+  }
+  if (editorCancelBtn) {
+    editorCancelBtn.tabIndex = isEditor ? 0 : -1;
+  }
+  if (editorSaveBtn) {
+    editorSaveBtn.tabIndex = isEditor ? 0 : -1;
+  }
 }
 
 function renderComponentHistoryList(services = []) {
@@ -1300,15 +1541,16 @@ function renderComponentHistoryList(services = []) {
 
   listEl.querySelectorAll(".components-history-edit-button").forEach(button => {
     button.addEventListener("click", async event => {
-      const serviceEventId = String(event.currentTarget.dataset.serviceEventId || "").trim();
-      const componentId = String(event.currentTarget.dataset.componentId || "").trim();
+      const trigger = event.currentTarget;
+      const serviceEventId = String(trigger.dataset.serviceEventId || "").trim();
+      const componentId = String(trigger.dataset.componentId || "").trim();
       if (!serviceEventId || !componentId) {
         return;
       }
       const drawer = document.getElementById("componentHistoryDrawer");
       const eventData = Array.isArray(window.AppState.componentHistoryEvents) ? window.AppState.componentHistoryEvents.find(item => String(item.service_event_id) === serviceEventId) : null;
+      drawer.dataset.historyEditorReturnEventId = serviceEventId;
       await openComponentHistoryEventEditor(componentId, serviceEventId, eventData || {});
-      drawer.dataset.returnFocus = event.currentTarget.id || "";
     });
   });
 }
@@ -1384,6 +1626,7 @@ async function openComponentHistoryDrawer(componentId, componentName = "") {
   drawer.dataset.componentName = componentName || "";
   drawer.dataset.componentArchived = "false";
   drawer.dataset.returnFocus = previousId || "";
+  setComponentHistoryMode("history");
 
   const titleEl = drawer.querySelector("#componentHistoryTitle");
   if (titleEl) {
@@ -1415,7 +1658,8 @@ function closeComponentHistoryDrawer() {
   delete drawer.dataset.componentName;
   delete drawer.dataset.componentArchived;
   delete drawer.dataset.historyRequestId;
-  delete drawer.dataset.historyEditorMode;
+  delete drawer.dataset.historyEditorReturnEventId;
+  setComponentHistoryMode("history");
 
   const focusTarget = drawer.dataset.returnFocus || "";
   if (focusTarget) {
@@ -1435,14 +1679,18 @@ function closeComponentHistoryEditor() {
 
   const listEl = drawer.querySelector("#componentHistoryList");
   const editorEl = drawer.querySelector("#componentHistoryEventEditor");
-  if (listEl) {
-    listEl.classList.remove("hidden");
-  }
+  setComponentHistoryMode("history");
   if (editorEl) {
-    editorEl.classList.add("hidden");
     editorEl.innerHTML = "";
   }
-  drawer.dataset.historyEditorMode = "history";
+  const eventId = String(drawer.dataset.historyEditorReturnEventId || "").trim();
+  const focusTarget = eventId
+    ? drawer.querySelector(`.components-history-edit-button[data-service-event-id="${CSS.escape(eventId)}"]`)
+    : null;
+  if (focusTarget && typeof focusTarget.focus === "function") {
+    focusTarget.focus();
+  }
+  delete drawer.dataset.historyEditorReturnEventId;
 }
 
 function formatHistoryInputValue(value) {
@@ -1515,34 +1763,53 @@ async function openComponentHistoryEventEditor(componentId, serviceEventId, even
 
   editorEl.classList.remove("hidden");
   editorEl.innerHTML = `
-    <div class="components-history-editor-shell" role="dialog" aria-modal="false" aria-labelledby="componentHistoryEditorTitle">
-      <div class="components-history-editor-header">
+    <section class="components-history-editor-shell" aria-labelledby="componentHistoryEditorTitle">
+      <div class="components-history-editor-header components-service-header">
         <div>
           <div id="componentHistoryEditorTitle" class="components-history-title">Edit Service Event</div>
           <div class="components-history-subtitle">${componentEscapeHtml(component.component_name || "Component")} · ${componentEscapeHtml(component.component_group || "Service")}</div>
         </div>
       </div>
       <div id="componentHistoryEditorStatus" class="components-history-status hidden" aria-live="polite"></div>
-      <form id="componentHistoryEventForm" class="components-history-editor-form">
-        <div class="components-history-editor-grid">
-          <div class="components-history-editor-block">
-            <div class="drawer-section-title">Context</div>
-            <div class="components-history-context-pair"><strong>Bike</strong><span>${componentEscapeHtml(currentBike.display_name || currentBike.gear_name || "Unknown bike")}</span></div>
-            <div class="components-history-context-pair"><strong>Component</strong><span>${componentEscapeHtml(component.component_name || "Component")}</span></div>
-            <div class="components-history-context-pair"><strong>Group</strong><span>${componentEscapeHtml(component.component_group || "-")}</span></div>
-            <div class="components-history-context-pair"><strong>Position</strong><span>${componentEscapeHtml(component.position || "-")}</span></div>
-            <div class="components-history-context-pair"><strong>Event ID</strong><span>#${componentEscapeHtml(String(serviceEventId || ""))}</span></div>
-          </div>
-          <div class="components-history-editor-block">
-            <div class="drawer-section-title">Service details</div>
+      <form id="componentHistoryEventForm" class="components-history-editor-form components-service-form">
+        <section class="components-history-editor-section components-service-section" aria-labelledby="historyEditorContextTitle">
+          <div id="historyEditorContextTitle" class="drawer-section-title">Context</div>
+          <dl class="components-service-context-grid components-history-editor-context-grid">
+            <div><dt>Bike</dt><dd>${componentEscapeHtml(currentBike.display_name || currentBike.gear_name || "Unknown bike")}</dd></div>
+            <div><dt>Component</dt><dd>${componentEscapeHtml(component.component_name || "Component")}</dd></div>
+            <div><dt>Group</dt><dd>${componentEscapeHtml(component.component_group || "-")}</dd></div>
+            <div><dt>Position</dt><dd>${componentEscapeHtml(component.position || "-")}</dd></div>
+            <div class="components-history-editor-event-id"><dt>Event ID</dt><dd>#${componentEscapeHtml(String(serviceEventId || ""))}</dd></div>
+          </dl>
+        </section>
+        <section class="components-history-editor-section components-service-section" aria-labelledby="historyEditorDetailsTitle">
+          <div id="historyEditorDetailsTitle" class="drawer-section-title">Service details</div>
+          <div class="components-service-field-grid components-history-editor-details-grid">
             <div class="drawer-field-group">
-              <label for="historyEditorDate">Service date</label>
+              <label for="historyEditorDate">Service date <span aria-hidden="true">*</span></label>
               <input id="historyEditorDate" name="service_date" type="date" value="${componentEscapeHtml(formatHistoryInputValue(normalizedHistoryData.service_date))}" required>
             </div>
             <div class="drawer-field-group">
-              <label for="historyEditorAction">Action</label>
+              <label for="historyEditorAction">Action <span aria-hidden="true">*</span></label>
               <input id="historyEditorAction" name="action" type="text" value="${componentEscapeHtml(formatHistoryInputValue(normalizedHistoryData.service_type))}" required>
             </div>
+            <div class="drawer-field-group">
+              <label for="historyEditorProvider">Provider / Performed by</label>
+              <input id="historyEditorProvider" name="service_provider" type="text" value="${componentEscapeHtml(formatHistoryInputValue(normalizedHistoryData.service_provider))}">
+            </div>
+            <div class="drawer-field-group">
+              <label for="historyEditorLocation">Service location</label>
+              <input id="historyEditorLocation" name="service_location" type="text" value="${componentEscapeHtml(formatHistoryInputValue(normalizedHistoryData.service_location))}">
+            </div>
+            <div class="drawer-field-group">
+              <label for="historyEditorCost">Cost</label>
+              <input id="historyEditorCost" name="cost" type="number" min="0" step="0.01" value="${componentEscapeHtml(formatHistoryInputValue(normalizedHistoryData.cost))}">
+            </div>
+          </div>
+        </section>
+        <section class="components-history-editor-section components-service-section" aria-labelledby="historyEditorProductTitle">
+          <div id="historyEditorProductTitle" class="drawer-section-title">Product information</div>
+          <div class="components-service-field-grid">
             <div class="drawer-field-group">
               <label for="historyEditorProduct">Product name</label>
               <input id="historyEditorProduct" name="product_name" type="text" value="${componentEscapeHtml(formatHistoryInputValue(normalizedHistoryData.product_name))}">
@@ -1556,57 +1823,32 @@ async function openComponentHistoryEventEditor(componentId, serviceEventId, even
               <input id="historyEditorModel" name="model" type="text" value="${componentEscapeHtml(formatHistoryInputValue(normalizedHistoryData.model))}">
             </div>
           </div>
-          <div class="components-history-editor-block">
-            <div class="drawer-section-title">Snapshot</div>
-            <div class="drawer-field-group">
-              <label for="historyEditorMileage">Mileage</label>
-              <input id="historyEditorMileage" name="odometer_miles" type="number" min="0" step="0.1" value="${componentEscapeHtml(formatHistoryInputValue(normalizedHistoryData.mileage_at_service))}">
-            </div>
-            <div class="drawer-field-group">
-              <label for="historyEditorHours">Hours</label>
-              <input id="historyEditorHours" name="odometer_hours" type="number" min="0" step="0.1" value="${componentEscapeHtml(formatHistoryInputValue(normalizedHistoryData.hours_at_service))}">
-            </div>
-            <div class="drawer-field-group">
-              <label for="historyEditorRides">Rides</label>
-              <input id="historyEditorRides" name="odometer_rides" type="number" min="0" step="1" value="${componentEscapeHtml(formatHistoryInputValue(normalizedHistoryData.rides_at_service))}">
-            </div>
-            <div class="drawer-field-group">
-              <label for="historyEditorElevation">Elevation (ft)</label>
-              <input id="historyEditorElevation" name="odometer_elevation_ft" type="number" min="0" step="1" value="${componentEscapeHtml(formatHistoryInputValue(normalizedHistoryData.elevation_at_service))}">
-            </div>
-            <div class="drawer-field-group">
-              <label for="historyEditorCost">Cost</label>
-              <input id="historyEditorCost" name="cost" type="number" min="0" step="0.01" value="${componentEscapeHtml(formatHistoryInputValue(normalizedHistoryData.cost))}">
-            </div>
+        </section>
+        <section class="components-history-editor-section components-service-section" aria-labelledby="historyEditorNotesTitle">
+          <div id="historyEditorNotesTitle" class="drawer-section-title">Notes</div>
+          <div class="drawer-field-group">
+            <label for="historyEditorNotes">Notes</label>
+            <textarea id="historyEditorNotes" name="notes" rows="4">${componentEscapeHtml(formatHistoryInputValue(normalizedHistoryData.notes))}</textarea>
           </div>
-          <div class="components-history-editor-block">
-            <div class="drawer-section-title">Service provider</div>
-            <div class="drawer-field-group">
-              <label for="historyEditorProvider">Provider</label>
-              <input id="historyEditorProvider" name="service_provider" type="text" value="${componentEscapeHtml(formatHistoryInputValue(normalizedHistoryData.service_provider))}">
-            </div>
-            <div class="drawer-field-group">
-              <label for="historyEditorLocation">Service location</label>
-              <input id="historyEditorLocation" name="service_location" type="text" value="${componentEscapeHtml(formatHistoryInputValue(normalizedHistoryData.service_location))}">
-            </div>
-            <div class="drawer-field-group">
-              <label for="historyEditorNotes">Notes</label>
-              <textarea id="historyEditorNotes" name="notes" rows="5">${componentEscapeHtml(formatHistoryInputValue(normalizedHistoryData.notes))}</textarea>
-            </div>
+        </section>
+        <section class="components-history-editor-section components-service-section" aria-labelledby="historyEditorSnapshotTitle">
+          <div id="historyEditorSnapshotTitle" class="drawer-section-title">Bike snapshot at event</div>
+          <div class="components-service-snapshot-grid components-history-editor-snapshot-grid">
+            <div class="drawer-field-group"><label for="historyEditorMileage">Mileage</label><input id="historyEditorMileage" name="odometer_miles" type="number" min="0" step="0.01" value="${componentEscapeHtml(formatHistoryInputValue(normalizedHistoryData.mileage_at_service))}"></div>
+            <div class="drawer-field-group"><label for="historyEditorHours">Hours</label><input id="historyEditorHours" name="odometer_hours" type="number" min="0" step="0.01" value="${componentEscapeHtml(formatHistoryInputValue(normalizedHistoryData.hours_at_service))}"></div>
+            <div class="drawer-field-group"><label for="historyEditorRides">Rides</label><input id="historyEditorRides" name="odometer_rides" type="number" min="0" step="1" value="${componentEscapeHtml(formatHistoryInputValue(normalizedHistoryData.rides_at_service))}"></div>
+            <div class="drawer-field-group"><label for="historyEditorElevation">Elevation (ft)</label><input id="historyEditorElevation" name="odometer_elevation_ft" type="number" min="0" step="1" value="${componentEscapeHtml(formatHistoryInputValue(normalizedHistoryData.elevation_at_service))}"></div>
           </div>
-        </div>
-        <div class="components-history-editor-footer">
-          <button type="button" id="componentHistoryEditorCancelBtn" class="button-secondary">Cancel</button>
-          <button type="submit" id="componentHistoryEditorSaveBtn" class="button-primary">Save</button>
-        </div>
+          <div class="components-history-editor-snapshot-hint">Historical correction fields. Changing these values updates the saved event snapshot.</div>
+        </section>
       </form>
-    </div>
+    </section>
   `;
 
   const statusEl = editorEl.querySelector("#componentHistoryEditorStatus");
   const form = editorEl.querySelector("#componentHistoryEventForm");
-  const cancelBtn = editorEl.querySelector("#componentHistoryEditorCancelBtn");
-  const saveBtn = editorEl.querySelector("#componentHistoryEditorSaveBtn");
+  const cancelBtn = drawer.querySelector("#componentHistoryEditorCancelBtn");
+  const saveBtn = drawer.querySelector("#componentHistoryEditorSaveBtn");
 
   const setStatus = (message, kind = "info") => {
     if (!statusEl) {
@@ -1670,10 +1912,11 @@ async function openComponentHistoryEventEditor(componentId, serviceEventId, even
     }
   });
 
-  drawer.dataset.historyEditorMode = "editor";
+  setComponentHistoryMode("editor");
   const closeBtn = drawer.querySelector("#componentHistoryCloseBtn");
   if (closeBtn) {
-    closeBtn.focus();
+    const firstField = editorEl.querySelector("#historyEditorDate");
+    (firstField || closeBtn).focus();
   }
 }
 

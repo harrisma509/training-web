@@ -10,7 +10,7 @@ Owns a read-only endpoint that combines:
 """
 
 import re
-from datetime import date, timedelta
+from datetime import date
 from decimal import Decimal, InvalidOperation
 from typing import Optional
 
@@ -100,6 +100,202 @@ def _coerce_optional_decimal(value):
     except (InvalidOperation, TypeError, ValueError):
         return None
     return numeric
+
+
+RIDE_ACTIVITY_SQL = """
+    lower(coalesce(sa.activity_category, '')) = 'ride'
+    or lower(coalesce(sa.sport_type, '')) in (
+        'ride',
+        'road',
+        'gravel',
+        'mountain bike',
+        'mtb',
+        'e-bike',
+        'ebike',
+        'cycling',
+        'virtual ride',
+        'indoor cycle'
+    )
+    or lower(coalesce(sa.sport_type, '')) like '%%bike%%'
+"""
+
+
+SNAPSHOT_FIELDS = (
+    "odometer_miles",
+    "odometer_hours",
+    "odometer_rides",
+    "odometer_elevation_ft",
+)
+
+LEGACY_SNAPSHOT_FIELDS = (
+    "mileage_at_service",
+    "hours_at_service",
+    "rides_at_service",
+    "elevation_at_service",
+)
+
+
+def _parse_service_date(value, *, required=True):
+    if value in (None, ""):
+        if required:
+            raise ValueError("service_date is required.")
+        return None
+
+    try:
+        parsed = date.fromisoformat(str(value).strip())
+    except (TypeError, ValueError):
+        raise ValueError("service_date must be a valid ISO date.") from None
+
+    if parsed > date.today():
+        raise ValueError("service_date cannot be in the future.")
+    return parsed
+
+
+def _normalize_optional_text(value):
+    if value is None:
+        return None
+    normalized = _normalize_text(value)
+    if normalized.lower() in {"", "null", "none", "undefined"}:
+        return None
+    return normalized
+
+
+def _parse_nonnegative_decimal(value, field_name):
+    if value is None or (isinstance(value, str) and not value.strip()):
+        return None
+    if isinstance(value, str) and value.strip().lower() in {"null", "none", "undefined"}:
+        return None
+    try:
+        parsed = Decimal(str(value).strip())
+    except (InvalidOperation, TypeError, ValueError):
+        raise ValueError(f"{field_name} must be a valid non-negative number.") from None
+    if parsed < 0:
+        raise ValueError(f"{field_name} cannot be negative.")
+    return parsed
+
+
+def _parse_nonnegative_integer(value, field_name):
+    if value is None or (isinstance(value, str) and not value.strip()):
+        return None
+    if isinstance(value, str) and value.strip().lower() in {"null", "none", "undefined"}:
+        return None
+    try:
+        parsed = Decimal(str(value).strip())
+    except (InvalidOperation, TypeError, ValueError):
+        raise ValueError(f"{field_name} must be a valid non-negative integer.") from None
+    if parsed != parsed.to_integral_value():
+        raise ValueError(f"{field_name} must be a valid non-negative integer.")
+    if parsed < 0:
+        raise ValueError(f"{field_name} cannot be negative.")
+    return int(parsed)
+
+
+def _calculate_component_snapshot(cur, gear_component_id, service_date):
+    cur.execute(
+        """
+            select gear_component_id, gear_id
+            from gear_component
+            where gear_component_id = %s
+        """,
+        (gear_component_id,),
+    )
+    component = cur.fetchone()
+    if component is None:
+        raise LookupError("Component not found.")
+
+    cur.execute(
+        f"""
+            select
+                count(sa.activity_id) as qualifying_activity_count,
+                count(sa.distance_mi) as known_miles_count,
+                sum(sa.distance_mi) as total_miles,
+                count(sa.moving_sec) as known_moving_count,
+                sum(sa.moving_sec) as total_moving_sec,
+                count(sa.elevation_ft) as known_elevation_count,
+                sum(sa.elevation_ft) as total_elevation_ft,
+                count(sa.activity_id) filter (where {RIDE_ACTIVITY_SQL}) as total_rides
+            from strava_activities sa
+            where sa.gear_id = %s
+              and sa.date_local <= %s
+        """,
+        (component["gear_id"], service_date),
+    )
+    row = cur.fetchone() or {}
+    qualifying_count = int(row.get("qualifying_activity_count") or 0)
+
+    miles_available = qualifying_count == 0 or int(row.get("known_miles_count") or 0) > 0
+    hours_available = qualifying_count == 0 or int(row.get("known_moving_count") or 0) > 0
+    elevation_available = qualifying_count == 0 or int(row.get("known_elevation_count") or 0) > 0
+
+    snapshot = {
+        "gear_component_id": component["gear_component_id"],
+        "gear_id": component["gear_id"],
+        "service_date": service_date,
+        "odometer_miles": row.get("total_miles") if miles_available else None,
+        "odometer_hours": (Decimal(row.get("total_moving_sec")) / Decimal("3600")) if hours_available and row.get("total_moving_sec") is not None else (Decimal("0") if qualifying_count == 0 else None),
+        "odometer_rides": int(row.get("total_rides") or 0),
+        "odometer_elevation_ft": row.get("total_elevation_ft") if elevation_available else None,
+        "metric_availability": {
+            "odometer_miles": miles_available,
+            "odometer_hours": hours_available,
+            "odometer_rides": True,
+            "odometer_elevation_ft": elevation_available,
+        },
+        "calculation_succeeded": True,
+    }
+    if qualifying_count == 0:
+        snapshot["odometer_miles"] = Decimal("0")
+        snapshot["odometer_hours"] = Decimal("0")
+        snapshot["odometer_elevation_ft"] = 0
+    return snapshot
+
+
+def _snapshot_json(snapshot):
+    return {
+        key: (
+            {nested_key: json_safe(nested_value) for nested_key, nested_value in value.items()}
+            if isinstance(value, dict)
+            else json_safe(value)
+        )
+        for key, value in snapshot.items()
+    }
+
+
+def _service_event_json(row, snapshot=None):
+    payload = {
+        "service_event_id": row["service_event_id"],
+        "gear_component_id": row["gear_component_id"],
+        "gear_id": row["gear_id"],
+        "service_date": json_safe(row["service_date"]),
+        "action": row["action"],
+        "product_name": row.get("product_name"),
+        "manufacturer": row.get("manufacturer"),
+        "model": row.get("model"),
+        "notes": row.get("notes"),
+        "cost": json_safe(row.get("cost")),
+        "odometer_miles": json_safe(row.get("odometer_miles")),
+        "odometer_hours": json_safe(row.get("odometer_hours")),
+        "odometer_rides": json_safe(row.get("odometer_rides")),
+        "odometer_elevation_ft": json_safe(row.get("odometer_elevation_ft")),
+        "performed_by": row.get("performed_by"),
+        "service_location": row.get("service_location"),
+        "created_at": json_safe(row.get("created_at")),
+        "updated_at": json_safe(row.get("updated_at")),
+    }
+    payload.update(
+        {
+            "service_type": payload["action"],
+            "mileage_at_service": payload["odometer_miles"],
+            "hours_at_service": payload["odometer_hours"],
+            "rides_at_service": payload["odometer_rides"],
+            "elevation_at_service": payload["odometer_elevation_ft"],
+            "service_provider": payload["performed_by"],
+        }
+    )
+    if snapshot is not None:
+        payload["metric_availability"] = snapshot["metric_availability"]
+        payload["calculation_succeeded"] = snapshot["calculation_succeeded"]
+    return payload
 
 
 @router.get("/api/gear/components")
@@ -1135,151 +1331,128 @@ def api_component_services(gear_component_id: int):
     return JSONResponse({"component": component_payload, "services": services})
 
 
+@router.get("/api/components/{gear_component_id}/service-snapshot")
+def api_component_service_snapshot(gear_component_id: int, service_date: str | None = None):
+    if gear_component_id <= 0:
+        return JSONResponse({"detail": "gear_component_id must be positive."}, status_code=400)
+    try:
+        parsed_date = _parse_service_date(service_date)
+    except ValueError as error:
+        return JSONResponse({"detail": str(error)}, status_code=400)
+
+    try:
+        with db_conn() as conn:
+            with conn.cursor() as cur:
+                snapshot = _calculate_component_snapshot(cur, gear_component_id, parsed_date)
+    except LookupError as error:
+        return JSONResponse({"detail": str(error)}, status_code=404)
+    except Exception:
+        return JSONResponse({"detail": "Unable to calculate the service snapshot."}, status_code=500)
+
+    return JSONResponse(_snapshot_json(snapshot))
+
+
 @router.post("/api/components/{gear_component_id}/services")
 def api_create_component_service(gear_component_id: int, payload: dict | None = Body(default=None)):
     if payload is None or not isinstance(payload, dict):
         return JSONResponse({"detail": "Request body must be an object."}, status_code=400)
+    if gear_component_id <= 0:
+        return JSONResponse({"detail": "gear_component_id must be positive."}, status_code=400)
 
-    raw_service_date = payload.get("service_date")
     try:
-        service_date = date.fromisoformat(str(raw_service_date)) if raw_service_date not in (None, "") else None
-    except ValueError:
-        return JSONResponse({"detail": "service_date must be a valid ISO date."}, status_code=400)
+        service_date = _parse_service_date(payload.get("service_date"))
+        action = _normalize_text(payload.get("action") if "action" in payload else payload.get("service_type"))
+        if not action:
+            raise ValueError("action is required.")
+        if any(field in payload for field in SNAPSHOT_FIELDS + LEGACY_SNAPSHOT_FIELDS):
+            raise ValueError("Snapshot fields are calculated by the server and cannot be submitted.")
+        product_name = _normalize_optional_text(payload.get("product_name"))
+        manufacturer = _normalize_optional_text(payload.get("manufacturer"))
+        model = _normalize_optional_text(payload.get("model"))
+        notes = _normalize_optional_text(payload.get("notes"))
+        performed_by = _normalize_optional_text(
+            payload.get("performed_by") if "performed_by" in payload else payload.get("service_provider")
+        )
+        service_location = _normalize_optional_text(payload.get("service_location"))
+        cost = _parse_nonnegative_decimal(
+            payload.get("cost") if "cost" in payload else payload.get("service_cost"),
+            "cost",
+        )
+    except ValueError as error:
+        return JSONResponse({"detail": str(error)}, status_code=400)
 
-    if service_date is None:
-        return JSONResponse({"detail": "service_date is required."}, status_code=400)
-
-    if service_date > date.today() + timedelta(days=365):
-        return JSONResponse({"detail": "service_date cannot be more than one year in the future."}, status_code=400)
-
-    service_type = _normalize_text(payload.get("service_type"))
-    if not service_type:
-        return JSONResponse({"detail": "service_type is required."}, status_code=400)
-
-    notes = _normalize_text(payload.get("notes"))
-    service_provider = _normalize_text(payload.get("service_provider"))
-    if service_provider == "null":
-        service_provider = ""
-
-    raw_cost = payload.get("service_cost")
-    cost = None
-    if raw_cost not in (None, "", "null", "None"):
-        try:
-            cost = Decimal(str(raw_cost))
-        except (InvalidOperation, TypeError, ValueError):
-            return JSONResponse({"detail": "service_cost must be a valid non-negative number."}, status_code=400)
-        if cost < 0:
-            return JSONResponse({"detail": "service_cost cannot be negative."}, status_code=400)
-
-    with db_conn() as conn:
-        with conn.cursor() as cur:
-            cur.execute(
-                """
-                    select gear_id
-                    from gear_component
-                    where gear_component_id = %s
-                """,
-                (gear_component_id,),
-            )
-            component_row = cur.fetchone()
-            if not component_row:
-                raise HTTPException(status_code=404, detail="Component not found.")
-
-            gear_id = component_row["gear_id"]
-
-            cur.execute(
-                """
-                    select
-                        coalesce(sum(coalesce(sa.distance_mi, 0)), 0) as total_miles,
-                        coalesce(sum(coalesce(sa.moving_sec, 0)) / 3600.0, 0) as total_hours,
-                        count(sa.activity_id) filter (
-                            where lower(coalesce(sa.activity_category, '')) = 'ride'
-                                or lower(coalesce(sa.sport_type, '')) in (
-                                    'ride', 'road', 'gravel', 'mountain bike', 'mtb', 'e-bike', 'ebike',
-                                    'cycling', 'virtual ride', 'indoor cycle'
-                                )
-                                or lower(coalesce(sa.sport_type, '')) like '%%bike%%'
-                        ) as total_rides
-                    from strava_activities sa
-                    where sa.gear_id = %s
-                """,
-                (gear_id,),
-            )
-            usage_snapshot = cur.fetchone()
-
-            odometer_miles = float(usage_snapshot["total_miles"]) if usage_snapshot and usage_snapshot["total_miles"] is not None else None
-            odometer_hours = float(usage_snapshot["total_hours"]) if usage_snapshot and usage_snapshot["total_hours"] is not None else None
-            odometer_rides = int(usage_snapshot["total_rides"]) if usage_snapshot and usage_snapshot["total_rides"] is not None else None
-
-            cur.execute(
-                """
-                    insert into gear_service_event (
+    try:
+        with db_conn() as conn:
+            with conn.cursor() as cur:
+                snapshot = _calculate_component_snapshot(cur, gear_component_id, service_date)
+                cur.execute(
+                    """
+                        insert into gear_service_event (
+                            gear_component_id,
+                            gear_id,
+                            service_date,
+                            action,
+                            product_name,
+                            manufacturer,
+                            model,
+                            notes,
+                            cost,
+                            odometer_miles,
+                            odometer_hours,
+                            odometer_rides,
+                            odometer_elevation_ft,
+                            performed_by,
+                            service_location,
+                            source,
+                            source_reference
+                        )
+                        values (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 'app', %s)
+                        returning
+                            service_event_id,
+                            gear_component_id,
+                            gear_id,
+                            service_date,
+                            action,
+                            product_name,
+                            manufacturer,
+                            model,
+                            notes,
+                            cost,
+                            odometer_miles,
+                            odometer_hours,
+                            odometer_rides,
+                            odometer_elevation_ft,
+                            performed_by,
+                            service_location,
+                            created_at,
+                            updated_at
+                    """,
+                    (
                         gear_component_id,
-                        gear_id,
+                        snapshot["gear_id"],
                         service_date,
                         action,
+                        product_name,
+                        manufacturer,
+                        model,
                         notes,
                         cost,
-                        odometer_miles,
-                        odometer_hours,
-                        odometer_rides,
+                        snapshot["odometer_miles"],
+                        snapshot["odometer_hours"],
+                        snapshot["odometer_rides"],
+                        snapshot["odometer_elevation_ft"],
                         performed_by,
                         service_location,
-                        source,
-                        source_reference
-                    )
-                    values (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 'app', %s)
-                    returning
-                        service_event_id,
-                        gear_component_id,
-                        gear_id,
-                        service_date,
-                        action,
-                        notes,
-                        cost,
-                        odometer_miles,
-                        odometer_hours,
-                        odometer_rides,
-                        performed_by,
-                        service_location,
-                        created_at,
-                        updated_at
-                """,
-                (
-                    gear_component_id,
-                    gear_id,
-                    service_date,
-                    service_type,
-                    notes or None,
-                    cost,
-                    odometer_miles,
-                    odometer_hours,
-                    odometer_rides,
-                    service_provider or None,
-                    payload.get("service_location") or None,
-                    f"component:{gear_component_id}",
-                ),
-            )
-            row = cur.fetchone()
+                        f"component:{gear_component_id}",
+                    ),
+                )
+                row = cur.fetchone()
+    except LookupError as error:
+        return JSONResponse({"detail": str(error)}, status_code=404)
+    except Exception:
+        return JSONResponse({"detail": "Unable to save the service event."}, status_code=500)
 
-    return JSONResponse(
-        {
-            "service_event_id": row["service_event_id"],
-            "gear_component_id": row["gear_component_id"],
-            "gear_id": row["gear_id"],
-            "service_date": json_safe(row["service_date"]),
-            "service_type": row["action"],
-            "notes": row["notes"],
-            "cost": json_safe(row["cost"]),
-            "mileage_at_service": json_safe(row["odometer_miles"]),
-            "hours_at_service": json_safe(row["odometer_hours"]),
-            "rides_at_service": json_safe(row["odometer_rides"]),
-            "service_provider": row["performed_by"],
-            "service_location": row["service_location"],
-            "created_at": json_safe(row["created_at"]),
-            "updated_at": json_safe(row["updated_at"]),
-        }
-    )
+    return JSONResponse(_service_event_json(row, snapshot))
 
 
 @router.patch("/api/components/{gear_component_id}/services/{service_event_id}")
@@ -1345,11 +1518,11 @@ def api_update_component_service(gear_component_id: int, service_event_id: int, 
                 service_date = existing["service_date"]
             else:
                 try:
-                    service_date = date.fromisoformat(str(raw_service_date))
-                except ValueError:
-                    return JSONResponse({"detail": "service_date must be a valid ISO date."}, status_code=400)
-                if service_date > date.today() + timedelta(days=365):
-                    return JSONResponse({"detail": "service_date cannot be more than one year in the future."}, status_code=400)
+                    service_date = _parse_service_date(raw_service_date)
+                except ValueError as error:
+                    return JSONResponse({"detail": str(error)}, status_code=400)
+            if service_date > date.today():
+                return JSONResponse({"detail": "service_date cannot be in the future."}, status_code=400)
 
             raw_action = payload.get("action")
             if raw_action in (None, ""):
@@ -1368,7 +1541,7 @@ def api_update_component_service(gear_component_id: int, service_event_id: int, 
                     return None
                 return normalized
 
-            def _resolve_optional_numeric(field_name, current_value):
+            def _resolve_optional_numeric(field_name, current_value, integer=False):
                 raw_value = payload.get(field_name)
                 if raw_value in (None, ""):
                     return current_value
@@ -1379,12 +1552,9 @@ def api_update_component_service(gear_component_id: int, service_event_id: int, 
                     if raw_value == "":
                         return current_value
                 try:
-                    numeric = float(raw_value)
-                except (TypeError, ValueError):
-                    return JSONResponse({"detail": f"{field_name} must be a valid number."}, status_code=400)
-                if numeric < 0:
-                    return JSONResponse({"detail": f"{field_name} cannot be negative."}, status_code=400)
-                return numeric
+                    return (_parse_nonnegative_integer if integer else _parse_nonnegative_decimal)(raw_value, field_name)
+                except ValueError as error:
+                    return JSONResponse({"detail": str(error)}, status_code=400)
 
             product_name = _resolve_optional_text("product_name", existing["product_name"])
             manufacturer = _resolve_optional_text("manufacturer", existing["manufacturer"])
@@ -1409,17 +1579,14 @@ def api_update_component_service(gear_component_id: int, service_event_id: int, 
 
             odometer_miles = _resolve_optional_numeric("odometer_miles", existing["odometer_miles"])
             odometer_hours = _resolve_optional_numeric("odometer_hours", existing["odometer_hours"])
-            odometer_rides = _resolve_optional_numeric("odometer_rides", existing["odometer_rides"])
-            odometer_elevation_ft = _resolve_optional_numeric("odometer_elevation_ft", existing["odometer_elevation_ft"])
+            odometer_rides = _resolve_optional_numeric("odometer_rides", existing["odometer_rides"], integer=True)
+            odometer_elevation_ft = _resolve_optional_numeric(
+                "odometer_elevation_ft", existing["odometer_elevation_ft"], integer=True
+            )
 
-            if isinstance(odometer_rides, (float, int)):
-                odometer_rides = int(odometer_rides)
-            if isinstance(odometer_miles, (float, int)) and not isinstance(odometer_miles, bool):
-                odometer_miles = float(odometer_miles)
-            if isinstance(odometer_hours, (float, int)) and not isinstance(odometer_hours, bool):
-                odometer_hours = float(odometer_hours)
-            if isinstance(odometer_elevation_ft, (float, int)) and not isinstance(odometer_elevation_ft, bool):
-                odometer_elevation_ft = float(odometer_elevation_ft)
+            for value in (odometer_miles, odometer_hours, odometer_rides, odometer_elevation_ft):
+                if isinstance(value, JSONResponse):
+                    return value
 
             cur.execute(
                 """

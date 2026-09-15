@@ -150,6 +150,11 @@
       return fetchJson(`/api/components/${encodeURIComponent(gearComponentId)}/services`);
     },
 
+    async fetchComponentServiceSnapshot(gearComponentId, serviceDate) {
+      const params = new URLSearchParams({ service_date: String(serviceDate || "") });
+      return fetchJson(`/api/components/${encodeURIComponent(gearComponentId)}/service-snapshot?${params.toString()}`);
+    },
+
     async createComponent(payload = {}) {
       const response = await fetch("/api/gear/components", {
         method: "POST",
