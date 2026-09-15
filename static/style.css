@@ -610,57 +610,80 @@ td {
 #componentsTable {
   width: max-content;
   min-width: 0;
-  max-width: 100%;
+  max-width: none;
   table-layout: auto;
   font-size: 12px;
+  margin: 0;
 }
 
-#componentsTable th:nth-child(1),
-#componentsTable td:nth-child(1) {
-  width: 200px;
-  min-width: 200px;
-}
-
-#componentsTable th:nth-child(2),
-#componentsTable td:nth-child(2),
-#componentsTable th:nth-child(3),
-#componentsTable td:nth-child(3),
-#componentsTable th:nth-child(4),
-#componentsTable td:nth-child(4) {
-  width: 108px;
-  min-width: 108px;
+#componentsTable th,
+#componentsTable td {
+  width: auto;
+  min-width: 0;
+  padding-left: 4px;
+  padding-right: 4px;
 }
 
 #componentsTable th:nth-child(5),
 #componentsTable td:nth-child(5) {
-  width: 250px;
-  min-width: 250px;
+  width: 326px;
+  min-width: 326px;
+  max-width: 326px;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: normal;
 }
 
 #componentsTable th:nth-child(6),
-#componentsTable td:nth-child(6),
 #componentsTable th:nth-child(7),
-#componentsTable td:nth-child(7),
 #componentsTable th:nth-child(8),
+#componentsTable th:nth-child(9) {
+  width: 60px;
+  min-width: 60px;
+  max-width: 60px;
+  white-space: normal;
+  overflow-wrap: break-word;
+  word-break: normal;
+  text-align: center;
+}
+
+#componentsTable td:nth-child(6),
+#componentsTable td:nth-child(7),
 #componentsTable td:nth-child(8),
-#componentsTable th:nth-child(9),
 #componentsTable td:nth-child(9) {
-  width: 96px;
-  min-width: 96px;
+  width: 60px;
+  min-width: 60px;
+  max-width: 60px;
   text-align: right;
+  white-space: nowrap;
+}
+
+#componentsTable th {
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  vertical-align: bottom;
 }
 
 #componentsTable th:nth-child(10),
 #componentsTable td:nth-child(10) {
-  width: 170px;
-  min-width: 170px;
+  width: 105px;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 #componentsTable th:nth-child(11),
 #componentsTable td:nth-child(11) {
-  width: 280px;
-  min-width: 280px;
+  width: 350px;
+  min-width: 350px;
+  max-width: 350px;
   white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+#componentsTableWrap {
+  min-width: 0;
 }
 
 .components-toolbar {
@@ -693,6 +716,14 @@ td {
   display: flex;
   flex-direction: column;
   gap: 6px;
+  min-width: 0;
+}
+
+.components-action-stack > span {
+  display: block;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .components-cell-name {
