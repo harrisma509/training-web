@@ -44,3 +44,5 @@ The response includes canonical service-event fields and the existing compatibil
 ## Update Compatibility
 
 `PATCH /api/components/{gear_component_id}/services/{service_event_id}` retains the existing history-editor contract. Omitted fields preserve their current values. Explicit clearing follows the existing compatibility behavior. Future dates are rejected, negative values are rejected, and decimal rides or elevation values are rejected rather than truncated.
+
+The Edit Service Event form loads the stored snapshot unchanged. Recalculation is explicit and uses the read-only preview route; the editor shows saved versus calculated values before any fields change. `Use Calculated Snapshot` applies available values in browser memory only, while unavailable metrics preserve their existing values. The existing `Save Changes` action is required to send the update.

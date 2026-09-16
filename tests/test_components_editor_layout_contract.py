@@ -1,4 +1,6 @@
 from pathlib import Path
+import json
+import subprocess
 import unittest
 
 
@@ -45,7 +47,63 @@ class ComponentsEditorLayoutContractTests(unittest.TestCase):
         self.assertIn('name="odometer_hours" type="number" min="0" step="0.01"', COMPONENTS_JS)
         self.assertIn('name="odometer_rides" type="number" min="0" step="1"', COMPONENTS_JS)
         self.assertIn('name="odometer_elevation_ft" type="number" min="0" step="1"', COMPONENTS_JS)
-        self.assertIn('components.js?v=20260915-components-service-form-v6', INDEX_HTML)
+        self.assertIn('components.js?v=20260915-components-service-form-v8', INDEX_HTML)
+
+    def test_editor_recalculation_is_explicit_and_comparison_precedes_apply(self):
+        editor_start = COMPONENTS_JS.index("async function openComponentHistoryEventEditor")
+        editor_source = COMPONENTS_JS[editor_start:]
+
+        self.assertIn('id="historyEditorRecalculateBtn"', editor_source)
+        self.assertIn("Recalculate from Strava", editor_source)
+        self.assertIn('id="historyEditorSnapshotComparison"', editor_source)
+        self.assertIn('id="historyEditorKeepSavedBtn"', editor_source)
+        self.assertIn('id="historyEditorUseCalculatedBtn"', editor_source)
+        self.assertIn("window.api.fetchComponentServiceSnapshot(componentId, serviceDate)", COMPONENTS_JS)
+        self.assertIn("renderHistoryEditorSnapshotComparison", editor_source)
+        self.assertIn("Calculated snapshot applied. Save Changes to update this event.", editor_source)
+
+        open_editor_body = editor_source[:editor_source.index("recalculateBtn.addEventListener")]
+        self.assertNotIn("fetchComponentServiceSnapshot", open_editor_body)
+
+    def test_editor_recalculation_preserves_unavailable_values_and_rejects_stale_responses(self):
+        self.assertIn("historyEditorSnapshotAvailable", COMPONENTS_JS)
+        self.assertIn("snapshot[key] !== null", COMPONENTS_JS)
+        self.assertIn("metric_availability", COMPONENTS_JS)
+        self.assertIn("drawer.dataset.historyEditorSnapshotRequest", COMPONENTS_JS)
+        self.assertIn("drawer.dataset.historyEditorEventId === String(serviceEventId)", COMPONENTS_JS)
+        self.assertIn("serviceDate > componentServiceLocalDate()", COMPONENTS_JS)
+        self.assertIn("Some calculated metrics are unavailable", COMPONENTS_JS)
+        self.assertIn("Keep Saved Values", COMPONENTS_JS)
+
+    def test_calculated_snapshot_values_are_normalized_for_editor_steps(self):
+        script = f"""
+const fs = require('fs');
+const vm = require('vm');
+global.window = {{}};
+global.document = {{getElementById: () => null}};
+vm.runInThisContext(fs.readFileSync({json.dumps((REPOSITORY_ROOT / 'static' / 'components.js').as_posix())}, 'utf8'));
+process.stdout.write(JSON.stringify([
+  historyEditorSnapshotInputValue(216.28722222222223, 'odometer_hours'),
+  historyEditorSnapshotInputValue(2217.71, 'odometer_miles'),
+  historyEditorSnapshotInputValue(0, 'odometer_rides'),
+  historyEditorSnapshotInputValue(147.4, 'odometer_rides'),
+  historyEditorSnapshotInputValue(400417, 'odometer_elevation_ft'),
+  historyEditorSnapshotInputValue(null, 'odometer_miles')
+]));
+"""
+        result = subprocess.run(
+            ["node", "--eval", script],
+            cwd=REPOSITORY_ROOT,
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(
+            json.loads(result.stdout),
+            ["216.29", "2217.71", "0", None, "400417", None],
+        )
+        self.assertIn("historyEditorSnapshotInputValue(calculated[key], key)", COMPONENTS_JS)
+        self.assertNotIn("editorEl.querySelector(selector).value = String(calculated[key])", COMPONENTS_JS)
 
 
 if __name__ == "__main__":

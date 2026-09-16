@@ -149,7 +149,7 @@
   min-width: 0;
 }
 
-.components-action-stack > span {
+.components-action-stack>span {
   display: block;
   white-space: normal;
   overflow-wrap: anywhere;
@@ -281,7 +281,7 @@
   margin: 0;
 }
 
-.components-service-context-grid > div {
+.components-service-context-grid>div {
   min-width: 0;
   display: grid;
   gap: 3px;
@@ -308,7 +308,7 @@
   gap: 10px;
 }
 
-.components-service-snapshot-grid > div {
+.components-service-snapshot-grid>div {
   min-width: 0;
   display: grid;
   gap: 4px;
@@ -573,7 +573,7 @@
   padding: 0 0 12px;
 }
 
-.components-history-editor-shell > .components-history-status {
+.components-history-editor-shell>.components-history-status {
   margin: 0;
 }
 
@@ -603,7 +603,7 @@
   display: inline;
 }
 
-.components-history-editor-snapshot-grid > div {
+.components-history-editor-snapshot-grid>div {
   min-width: 0;
 }
 
@@ -615,6 +615,67 @@
   color: var(--muted);
   font-size: 11px;
   line-height: 1.45;
+}
+
+.components-history-snapshot-toolbar,
+.components-history-snapshot-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.components-history-snapshot-toolbar {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.components-history-snapshot-comparison {
+  display: grid;
+  gap: 1px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--line);
+  font-size: 12px;
+}
+
+.components-history-snapshot-comparison-header,
+.components-history-snapshot-comparison-row {
+  display: grid;
+  grid-template-columns: minmax(90px, 1.2fr) minmax(80px, 1fr) minmax(100px, 1fr);
+  gap: 10px;
+  align-items: center;
+  padding: 7px 9px;
+  background: var(--panel2);
+}
+
+.components-history-snapshot-comparison-header {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.components-history-snapshot-comparison-row.differs {
+  background: rgba(96, 165, 250, 0.1);
+}
+
+.components-history-snapshot-comparison-row span:last-child {
+  font-variant-numeric: tabular-nums;
+}
+
+.components-history-snapshot-comparison-row em {
+  color: var(--blue);
+  font-size: 10px;
+  font-style: normal;
+  font-weight: 700;
+}
+
+.components-history-snapshot-actions {
+  justify-content: flex-end;
 }
 
 .components-service-usage,
@@ -660,9 +721,27 @@
   .components-history-editor-event-id {
     grid-column: auto;
   }
+
+  .components-history-snapshot-comparison-header,
+  .components-history-snapshot-comparison-row {
+    grid-template-columns: minmax(74px, 1fr) minmax(70px, 1fr) minmax(88px, 1fr);
+    gap: 6px;
+    padding: 7px;
+  }
+
+  .components-history-snapshot-toolbar,
+  .components-history-snapshot-actions {
+    align-items: stretch;
+  }
+
+  .components-history-snapshot-toolbar button,
+  .components-history-snapshot-actions button {
+    width: 100%;
+  }
 }
 
 @media (min-width: 761px) and (max-width: 900px) {
+
   .components-history-editor-details-grid,
   .components-history-editor-context-grid,
   .components-history-editor-snapshot-grid {

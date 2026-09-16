@@ -1700,6 +1700,129 @@ function formatHistoryInputValue(value) {
   return String(value);
 }
 
+function historyEditorSnapshotMetric(value, metric) {
+  if (value === null || value === undefined || value === "") {
+    return "Unavailable";
+  }
+  if (metric === "rides" || metric === "elevation") {
+    return formatComponentInteger(value, "Unavailable");
+  }
+  return formatComponentNumber(value, 2, "Unavailable");
+}
+
+function historyEditorSnapshotAvailable(snapshot, key) {
+  const availability = snapshot && snapshot.metric_availability;
+  return snapshot && snapshot[key] !== null && snapshot[key] !== undefined && snapshot[key] !== ""
+    && (!availability || availability[key] !== false);
+}
+
+function historyEditorSnapshotInputValue(value, key) {
+  if (value === null || value === undefined || value === "") {
+    return null;
+  }
+  const numericValue = Number(value);
+  if (!Number.isFinite(numericValue)) {
+    return null;
+  }
+  if (key === "odometer_rides" || key === "odometer_elevation_ft") {
+    return Number.isInteger(numericValue) ? String(numericValue) : null;
+  }
+  const roundedValue = Math.round((numericValue + Number.EPSILON) * 100) / 100;
+  return roundedValue.toFixed(2);
+}
+
+function renderHistoryEditorSnapshotComparison(editorEl, saved, calculated) {
+  const comparison = editorEl.querySelector("#historyEditorSnapshotComparison");
+  const actions = editorEl.querySelector("#historyEditorSnapshotActions");
+  if (!comparison || !actions) {
+    return;
+  }
+  const metrics = [
+    ["Mileage", "odometer_miles", "mileage"],
+    ["Hours", "odometer_hours", "hours"],
+    ["Rides", "odometer_rides", "rides"],
+    ["Elevation", "odometer_elevation_ft", "elevation"],
+  ];
+  comparison.innerHTML = `
+    <div class="components-history-snapshot-comparison-header"><span>Metric</span><span>Saved</span><span>Calculated</span></div>
+    ${metrics.map(([label, key, format]) => {
+    const calculatedAvailable = historyEditorSnapshotAvailable(calculated, key);
+    const savedValue = historyEditorSnapshotMetric(saved[key], format);
+    const calculatedValue = calculatedAvailable ? historyEditorSnapshotMetric(calculated[key], format) : "Unavailable";
+    const differs = calculatedAvailable && String(saved[key] ?? "") !== String(calculated[key] ?? "");
+    return `<div class="components-history-snapshot-comparison-row${differs ? " differs" : ""}"><span>${label}</span><span>${savedValue}</span><span>${calculatedValue}${differs ? " (Changed)" : ""}</span></div>`;
+  }).join("")}
+  `;
+  comparison.classList.remove("hidden");
+  actions.classList.remove("hidden");
+}
+
+function invalidateHistoryEditorSnapshot(drawer, message = "") {
+  drawer.dataset.historyEditorSnapshotRequest = String(Number(drawer.dataset.historyEditorSnapshotRequest || 0) + 1);
+  delete drawer.dataset.historyEditorSnapshotPending;
+  delete drawer.dataset.historyEditorSnapshot;
+  const comparison = drawer.querySelector("#historyEditorSnapshotComparison");
+  const actions = drawer.querySelector("#historyEditorSnapshotActions");
+  if (comparison) {
+    comparison.classList.add("hidden");
+    comparison.innerHTML = "";
+  }
+  if (actions) {
+    actions.classList.add("hidden");
+  }
+  const status = drawer.querySelector("#componentHistoryEditorStatus");
+  if (message && status) {
+    status.textContent = message;
+    status.className = "components-history-status status-info";
+  }
+}
+
+async function recalculateHistoryEditorSnapshot(drawer, componentId, serviceEventId, savedSnapshot, setStatus) {
+  const dateInput = drawer.querySelector("#historyEditorDate");
+  const recalculateButton = drawer.querySelector("#historyEditorRecalculateBtn");
+  const serviceDate = String(dateInput.value || "").trim();
+  if (!serviceDate) {
+    setStatus("Service date is required before recalculating.", "error");
+    return;
+  }
+  if (serviceDate > componentServiceLocalDate()) {
+    setStatus("Service date cannot be in the future.", "error");
+    return;
+  }
+  const requestToken = Number(drawer.dataset.historyEditorSnapshotRequest || 0) + 1;
+  drawer.dataset.historyEditorSnapshotRequest = String(requestToken);
+  drawer.dataset.historyEditorSnapshotPending = "true";
+  recalculateButton.disabled = true;
+  setStatus(`Calculating through ${componentServiceDateLabel(serviceDate)}...`, "info");
+  try {
+    const calculated = await window.api.fetchComponentServiceSnapshot(componentId, serviceDate);
+    const stillCurrent = drawer.dataset.historyEditorMode === "editor"
+      && drawer.dataset.componentId === String(componentId)
+      && drawer.dataset.historyEditorEventId === String(serviceEventId)
+      && drawer.querySelector("#historyEditorDate").value === serviceDate
+      && String(drawer.dataset.historyEditorSnapshotRequest) === String(requestToken);
+    if (!stillCurrent) {
+      return;
+    }
+    drawer.dataset.historyEditorSnapshot = JSON.stringify(calculated);
+    delete drawer.dataset.historyEditorSnapshotPending;
+    renderHistoryEditorSnapshotComparison(drawer.querySelector("#componentHistoryEventEditor"), savedSnapshot, calculated);
+    const unavailable = Object.values(calculated.metric_availability || {}).some(value => value === false);
+    setStatus(unavailable
+      ? "Some calculated metrics are unavailable. Existing values will be preserved for those fields."
+      : `Calculated through ${componentServiceDateLabel(serviceDate)}.`, "info");
+  } catch (error) {
+    if (String(drawer.dataset.historyEditorSnapshotRequest) === String(requestToken)) {
+      delete drawer.dataset.historyEditorSnapshotPending;
+      setStatus(error.message || "Unable to calculate the snapshot.", "error");
+    }
+  } finally {
+    if (String(drawer.dataset.historyEditorSnapshotRequest) === String(requestToken)) {
+      recalculateButton.disabled = false;
+    }
+  }
+}
+
 async function openComponentHistoryEventEditor(componentId, serviceEventId, eventData = {}) {
   const drawer = document.getElementById("componentHistoryDrawer");
   if (!drawer) {
@@ -1753,6 +1876,8 @@ async function openComponentHistoryEventEditor(componentId, serviceEventId, even
     rides_at_service: historyData.rides_at_service ?? historyData.odometer_rides ?? "",
     elevation_at_service: historyData.elevation_at_service ?? historyData.odometer_elevation_ft ?? "",
   };
+  drawer.dataset.historyEditorEventId = String(serviceEventId);
+  drawer.dataset.historyEditorComponentId = String(componentId);
 
   if (listEl) {
     listEl.classList.add("hidden");
@@ -1833,6 +1958,10 @@ async function openComponentHistoryEventEditor(componentId, serviceEventId, even
         </section>
         <section class="components-history-editor-section components-service-section" aria-labelledby="historyEditorSnapshotTitle">
           <div id="historyEditorSnapshotTitle" class="drawer-section-title">Bike snapshot at event</div>
+          <div class="components-history-snapshot-toolbar">
+            <span id="historyEditorSnapshotSource">Saved snapshot for ${componentEscapeHtml(componentServiceDateLabel(normalizedHistoryData.service_date))}.</span>
+            <button type="button" id="historyEditorRecalculateBtn" class="button-secondary">Recalculate from Strava</button>
+          </div>
           <div class="components-service-snapshot-grid components-history-editor-snapshot-grid">
             <div class="drawer-field-group"><label for="historyEditorMileage">Mileage</label><input id="historyEditorMileage" name="odometer_miles" type="number" min="0" step="0.01" value="${componentEscapeHtml(formatHistoryInputValue(normalizedHistoryData.mileage_at_service))}"></div>
             <div class="drawer-field-group"><label for="historyEditorHours">Hours</label><input id="historyEditorHours" name="odometer_hours" type="number" min="0" step="0.01" value="${componentEscapeHtml(formatHistoryInputValue(normalizedHistoryData.hours_at_service))}"></div>
@@ -1840,6 +1969,11 @@ async function openComponentHistoryEventEditor(componentId, serviceEventId, even
             <div class="drawer-field-group"><label for="historyEditorElevation">Elevation (ft)</label><input id="historyEditorElevation" name="odometer_elevation_ft" type="number" min="0" step="1" value="${componentEscapeHtml(formatHistoryInputValue(normalizedHistoryData.elevation_at_service))}"></div>
           </div>
           <div class="components-history-editor-snapshot-hint">Historical correction fields. Changing these values updates the saved event snapshot.</div>
+          <div id="historyEditorSnapshotComparison" class="components-history-snapshot-comparison hidden" aria-label="Saved and calculated snapshot comparison"></div>
+          <div class="components-history-snapshot-actions hidden" id="historyEditorSnapshotActions">
+            <button type="button" id="historyEditorKeepSavedBtn" class="button-secondary">Keep Saved Values</button>
+            <button type="button" id="historyEditorUseCalculatedBtn" class="button-primary">Use Calculated Snapshot</button>
+          </div>
         </section>
       </form>
     </section>
@@ -1849,6 +1983,13 @@ async function openComponentHistoryEventEditor(componentId, serviceEventId, even
   const form = editorEl.querySelector("#componentHistoryEventForm");
   const cancelBtn = drawer.querySelector("#componentHistoryEditorCancelBtn");
   const saveBtn = drawer.querySelector("#componentHistoryEditorSaveBtn");
+  const recalculateBtn = editorEl.querySelector("#historyEditorRecalculateBtn");
+  const savedSnapshot = {
+    odometer_miles: normalizedHistoryData.mileage_at_service,
+    odometer_hours: normalizedHistoryData.hours_at_service,
+    odometer_rides: normalizedHistoryData.rides_at_service,
+    odometer_elevation_ft: normalizedHistoryData.elevation_at_service,
+  };
 
   const setStatus = (message, kind = "info") => {
     if (!statusEl) {
@@ -1864,6 +2005,32 @@ async function openComponentHistoryEventEditor(componentId, serviceEventId, even
       saveBtn.disabled = false;
     }
   };
+
+  recalculateBtn.addEventListener("click", () => recalculateHistoryEditorSnapshot(drawer, componentId, serviceEventId, savedSnapshot, setStatus));
+  editorEl.querySelector("#historyEditorDate").addEventListener("change", event => {
+    invalidateHistoryEditorSnapshot(drawer, event.currentTarget.value !== normalizedHistoryData.service_date
+      ? "Service date changed. Snapshot values are still the saved values. Recalculate from Strava for the new date if needed."
+      : "Saved snapshot retained.");
+    recalculateBtn.disabled = false;
+  });
+  editorEl.querySelector("#historyEditorKeepSavedBtn").addEventListener("click", () => {
+    invalidateHistoryEditorSnapshot(drawer, "Saved snapshot retained.");
+  });
+  editorEl.querySelector("#historyEditorUseCalculatedBtn").addEventListener("click", () => {
+    const calculated = JSON.parse(drawer.dataset.historyEditorSnapshot || "null");
+    if (!calculated) {
+      return;
+    }
+    [["odometer_miles", "#historyEditorMileage"], ["odometer_hours", "#historyEditorHours"], ["odometer_rides", "#historyEditorRides"], ["odometer_elevation_ft", "#historyEditorElevation"]].forEach(([key, selector]) => {
+      if (historyEditorSnapshotAvailable(calculated, key)) {
+        const inputValue = historyEditorSnapshotInputValue(calculated[key], key);
+        if (inputValue !== null) {
+          editorEl.querySelector(selector).value = inputValue;
+        }
+      }
+    });
+    invalidateHistoryEditorSnapshot(drawer, "Calculated snapshot applied. Save Changes to update this event.");
+  });
 
   cancelBtn.addEventListener("click", () => {
     closeComponentHistoryEditor();
