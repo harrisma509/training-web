@@ -47,7 +47,21 @@ class ComponentsEditorLayoutContractTests(unittest.TestCase):
         self.assertIn('name="odometer_hours" type="number" min="0" step="0.01"', COMPONENTS_JS)
         self.assertIn('name="odometer_rides" type="number" min="0" step="1"', COMPONENTS_JS)
         self.assertIn('name="odometer_elevation_ft" type="number" min="0" step="1"', COMPONENTS_JS)
-        self.assertIn('components.js?v=20260915-components-service-form-v8', INDEX_HTML)
+        self.assertIn('components.js?v=20260915-components-service-form-v14', INDEX_HTML)
+
+    def test_advanced_settings_disclosure_contract(self):
+        self.assertEqual(COMPONENTS_JS.count('id="componentEditorAdvancedToggle"'), 1)
+        self.assertEqual(COMPONENTS_JS.count('id="componentEditorAdvancedFields"'), 1)
+        self.assertIn('aria-expanded="false"', COMPONENTS_JS)
+        self.assertIn('aria-controls="componentEditorAdvancedFields"', COMPONENTS_JS)
+        self.assertIn('toggle.setAttribute("aria-expanded", String(visible))', COMPONENTS_JS)
+        self.assertIn('toggle.textContent = visible ? "Hide advanced settings" : "Show advanced settings"', COMPONENTS_JS)
+        self.assertIn('body.scrollTop += fieldsRect.bottom - bodyRect.bottom + 12', COMPONENTS_JS)
+        self.assertIn('id="componentEditorWarning" name="warning_percent" type="number" min="0.01" max="100" step="0.01"', COMPONENTS_JS)
+        self.assertIn('id="componentEditorOrder" name="display_order" type="number" min="0" step="1"', COMPONENTS_JS)
+        self.assertIn('id="componentEditorNotes" name="notes" rows="4"', COMPONENTS_JS)
+        self.assertIn('setComponentEditorAdvancedVisibility(false)', COMPONENTS_JS)
+        self.assertIn('.components-editor-grid {', COMPONENTS_CSS)
 
     def test_editor_recalculation_is_explicit_and_comparison_precedes_apply(self):
         editor_start = COMPONENTS_JS.index("async function openComponentHistoryEventEditor")
@@ -59,7 +73,7 @@ class ComponentsEditorLayoutContractTests(unittest.TestCase):
         self.assertIn('id="historyEditorKeepSavedBtn"', editor_source)
         self.assertIn('id="historyEditorUseCalculatedBtn"', editor_source)
         self.assertIn("window.api.fetchComponentServiceSnapshot(componentId, serviceDate)", COMPONENTS_JS)
-        self.assertIn("renderHistoryEditorSnapshotComparison", editor_source)
+        self.assertIn("renderHistoryEditorSnapshotComparison", COMPONENTS_JS)
         self.assertIn("Calculated snapshot applied. Save Changes to update this event.", editor_source)
 
         open_editor_body = editor_source[:editor_source.index("recalculateBtn.addEventListener")]

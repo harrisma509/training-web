@@ -124,24 +124,6 @@
 }
 
 /* Component action controls */
-.components-inline-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-
-.components-inline-actions button,
-.components-record-service-button,
-.components-history-button,
-.components-edit-button,
-.components-archive-button,
-.components-restore-button {
-  padding: 3px 6px;
-  font-size: 11px;
-  line-height: 1.2;
-  border-radius: 6px;
-}
-
 .components-action-stack {
   display: flex;
   flex-direction: column;
@@ -158,6 +140,86 @@
 
 .components-cell-name {
   font-weight: 700;
+  white-space: normal;
+}
+
+.components-cell-name>span:first-child {
+  overflow-wrap: anywhere;
+}
+
+.components-overflow-trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  margin-left: 4px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 18px;
+  line-height: 1;
+  vertical-align: middle;
+  cursor: pointer;
+}
+
+.components-overflow-trigger:hover,
+.components-overflow-trigger[aria-expanded="true"] {
+  border-color: var(--line);
+  background: var(--panel2);
+  color: var(--text);
+}
+
+.components-overflow-trigger:focus-visible {
+  outline: 2px solid var(--blue);
+  outline-offset: 2px;
+}
+
+.components-overflow-menu {
+  position: fixed;
+  z-index: 1200;
+  min-width: 190px;
+  padding: 5px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.28);
+}
+
+.components-overflow-menu button {
+  display: block;
+  width: 100%;
+  padding: 9px 10px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+  font-size: 12px;
+  line-height: 1.25;
+  cursor: pointer;
+}
+
+.components-overflow-menu button:hover,
+.components-overflow-menu button:focus-visible {
+  outline: none;
+  background: var(--panel2);
+}
+
+.components-overflow-menu button:focus-visible {
+  box-shadow: inset 0 0 0 2px var(--blue);
+}
+
+.components-overflow-menu [role="separator"] {
+  height: 1px;
+  margin: 5px 4px;
+  background: var(--line);
+}
+
+.components-overflow-menu .components-overflow-menu-destructive {
+  color: var(--red);
 }
 
 .components-archived-row {
@@ -530,6 +592,48 @@
   text-transform: uppercase;
 }
 
+.components-history-detail-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 12px;
+}
+
+.components-history-lifespan {
+  min-width: 190px;
+  padding: 9px 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel2);
+}
+
+.components-history-lifespan-title {
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+}
+
+.components-history-lifespan-value {
+  margin-top: 3px;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.components-history-lifespan-note {
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.components-history-lifespan-review {
+  border-color: rgba(251, 191, 36, 0.45);
+}
+
+.components-history-lifespan-review .components-history-lifespan-value {
+  color: var(--yellow);
+}
+
 .components-history-meta {
   color: var(--muted);
   font-size: 12px;
@@ -693,6 +797,19 @@
 
 /* Responsive Components behavior */
 @media (max-width: 760px) {
+  .components-history-detail-row {
+    grid-template-columns: 1fr;
+  }
+
+  .components-history-lifespan {
+    min-width: 0;
+    width: 100%;
+  }
+
+  .components-editor-grid {
+    grid-template-columns: 1fr;
+  }
+
   .components-service-panel {
     width: calc(100vw - 16px);
     max-height: calc(100vh - 16px);

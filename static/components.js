@@ -139,6 +139,154 @@ function renderComponentsBikeSelect() {
   }
 }
 
+let componentOverflowMenuState = null;
+
+function closeComponentOverflowMenu({ restoreFocus = false } = {}) {
+  const menu = document.getElementById("componentsOverflowMenu");
+  const state = componentOverflowMenuState;
+  componentOverflowMenuState = null;
+  if (state && state.trigger) {
+    state.trigger.setAttribute("aria-expanded", "false");
+  }
+  if (menu) {
+    menu.classList.add("hidden");
+    menu.setAttribute("aria-hidden", "true");
+    menu.innerHTML = "";
+  }
+  if (restoreFocus && state && state.trigger && typeof state.trigger.focus === "function") {
+    state.trigger.focus();
+  }
+}
+
+function positionComponentOverflowMenu(menu, trigger) {
+  const triggerRect = trigger.getBoundingClientRect();
+  const menuRect = menu.getBoundingClientRect();
+  const margin = 8;
+  let left = Math.min(triggerRect.left, window.innerWidth - menuRect.width - margin);
+  let top = triggerRect.bottom + margin;
+  if (top + menuRect.height > window.innerHeight - margin && triggerRect.top - margin - menuRect.height >= margin) {
+    top = triggerRect.top - menuRect.height - margin;
+  }
+  left = Math.max(margin, left);
+  top = Math.max(margin, top);
+  menu.style.left = `${left}px`;
+  menu.style.top = `${top}px`;
+}
+
+function ensureComponentOverflowMenu() {
+  let menu = document.getElementById("componentsOverflowMenu");
+  if (menu) {
+    return menu;
+  }
+
+  menu = document.createElement("div");
+  menu.id = "componentsOverflowMenu";
+  menu.className = "components-overflow-menu hidden";
+  menu.setAttribute("role", "menu");
+  menu.setAttribute("aria-hidden", "true");
+  document.body.appendChild(menu);
+
+  menu.addEventListener("click", async event => {
+    const item = event.target.closest("[data-component-action]");
+    if (!item || !menu.contains(item) || !componentOverflowMenuState) {
+      return;
+    }
+    const state = componentOverflowMenuState;
+    const action = item.dataset.componentAction;
+    closeComponentOverflowMenu();
+    if (action === "record") {
+      await openComponentServiceDrawer(state.componentId, state.componentName);
+    } else if (action === "history") {
+      await openComponentHistoryDrawer(state.componentId, state.componentName);
+    } else if (action === "edit") {
+      await openComponentEditor(state.componentId);
+    } else if (action === "archive") {
+      await archiveComponentFromRow(state.componentId, state.componentName);
+    } else if (action === "restore") {
+      await restoreComponentFromRow(state.componentId, state.componentName);
+    }
+  });
+
+  menu.addEventListener("keydown", event => {
+    const items = [...menu.querySelectorAll("[data-component-action]")];
+    const currentIndex = items.indexOf(document.activeElement);
+    if (event.key === "Escape") {
+      event.preventDefault();
+      closeComponentOverflowMenu({ restoreFocus: true });
+    } else if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+      event.preventDefault();
+      const direction = event.key === "ArrowDown" ? 1 : -1;
+      items[(currentIndex + direction + items.length) % items.length].focus();
+    } else if (event.key === "Home" || event.key === "End") {
+      event.preventDefault();
+      items[event.key === "Home" ? 0 : items.length - 1].focus();
+    } else if (event.key === "Tab") {
+      closeComponentOverflowMenu();
+    }
+  });
+
+  document.addEventListener("pointerdown", event => {
+    if (componentOverflowMenuState && !menu.contains(event.target) && event.target !== componentOverflowMenuState.trigger) {
+      closeComponentOverflowMenu();
+    }
+  });
+  window.addEventListener("resize", () => closeComponentOverflowMenu());
+  document.addEventListener("scroll", () => closeComponentOverflowMenu(), true);
+  return menu;
+}
+
+function openComponentOverflowMenu(trigger) {
+  const menu = ensureComponentOverflowMenu();
+  const componentId = String(trigger.dataset.componentId || "").trim();
+  const componentName = trigger.dataset.componentName || "Component";
+  const archived = trigger.dataset.archived === "true";
+  if (!componentId) {
+    return;
+  }
+  if (componentOverflowMenuState && componentOverflowMenuState.trigger === trigger) {
+    closeComponentOverflowMenu({ restoreFocus: true });
+    return;
+  }
+  closeComponentOverflowMenu();
+  const menuId = "componentsOverflowMenu";
+  const actionMarkup = archived
+    ? `
+      <button type="button" role="menuitem" data-component-action="history">Service History</button>
+      <div role="separator"></div>
+      <button type="button" role="menuitem" data-component-action="restore">Restore Component</button>
+    `
+    : `
+      <button type="button" role="menuitem" data-component-action="record">Record Service</button>
+      <button type="button" role="menuitem" data-component-action="history">Service History</button>
+      <div role="separator"></div>
+      <button type="button" role="menuitem" data-component-action="edit">Edit Component</button>
+      <button type="button" role="menuitem" data-component-action="archive" class="components-overflow-menu-destructive">Archive Component</button>
+    `;
+  menu.innerHTML = actionMarkup;
+  componentOverflowMenuState = { componentId, componentName, trigger };
+  trigger.setAttribute("aria-expanded", "true");
+  trigger.setAttribute("aria-controls", menuId);
+  menu.classList.remove("hidden");
+  menu.setAttribute("aria-hidden", "false");
+  positionComponentOverflowMenu(menu, trigger);
+  menu.querySelector("[data-component-action]").focus();
+}
+
+function archiveComponentFromRow(componentId, name) {
+  if (!window.confirm(`Archive ${name}? This keeps the component record but hides it from the active list.`)) {
+    return Promise.resolve();
+  }
+  return window.api.archiveComponent(componentId)
+    .then(() => loadComponents())
+    .catch(error => window.alert(error.message || "Unable to archive component."));
+}
+
+function restoreComponentFromRow(componentId, name) {
+  return window.api.restoreComponent(componentId)
+    .then(() => loadComponents())
+    .catch(error => window.alert(error.message || `Unable to restore ${name}.`));
+}
+
 function renderComponentsTable() {
   const table = document.getElementById("componentsTable");
   if (!table) {
@@ -148,6 +296,7 @@ function renderComponentsTable() {
   const payload = window.AppState.componentsData || {};
   const rows = Array.isArray(payload.components) ? payload.components : [];
   const archived = Array.isArray(payload.archived_components) ? payload.archived_components : [];
+  closeComponentOverflowMenu();
 
   if (rows.length === 0 && archived.length === 0) {
     table.innerHTML = `
@@ -181,21 +330,11 @@ function renderComponentsTable() {
     const rowId = row.gear_component_id;
     const rowHtml = `
       <tr data-component-id="${componentEscapeHtml(String(rowId || ""))}">
-        <td class="components-cell-name">${componentEscapeHtml(componentSafe(row.component_name, ""))}</td>
+        <td class="components-cell-name"><span>${componentEscapeHtml(componentSafe(row.component_name, ""))}</span><button type="button" class="components-overflow-trigger" data-component-id="${componentEscapeHtml(String(rowId || ""))}" data-component-name="${componentEscapeHtml(componentSafe(row.component_name, ""))}" data-archived="false" aria-label="Actions for ${componentEscapeHtml(componentSafe(row.component_name, ""))}" title="Component actions" aria-haspopup="menu" aria-expanded="false" aria-controls="componentsOverflowMenu">⋯</button></td>
         <td>${componentEscapeHtml(componentSafe(row.component_group, "-"))}</td>
         <td>${componentEscapeHtml(componentSafe(row.position, "-"))}</td>
         <td>${componentEscapeHtml(componentSafe(latestEvent ? latestEvent.service_date : null, "-"))}</td>
-        <td>
-          <div class="components-action-stack">
-            <span>${componentEscapeHtml(formatLatestAction(latestEvent))}</span>
-            <div class="components-inline-actions">
-              <button type="button" class="components-record-service-button" data-component-id="${componentEscapeHtml(String(rowId || ""))}" data-component-name="${componentEscapeHtml(componentSafe(row.component_name, ""))}" aria-label="Record service for ${componentEscapeHtml(componentSafe(row.component_name, ""))}">Record</button>
-              <button type="button" class="components-history-button" data-component-id="${componentEscapeHtml(String(rowId || ""))}" data-component-name="${componentEscapeHtml(componentSafe(row.component_name, ""))}" aria-label="View service history for ${componentEscapeHtml(componentSafe(row.component_name, ""))}">History</button>
-              <button type="button" class="components-edit-button" data-component-id="${componentEscapeHtml(String(rowId || ""))}" data-component-name="${componentEscapeHtml(componentSafe(row.component_name, ""))}" aria-label="Edit ${componentEscapeHtml(componentSafe(row.component_name, ""))}">Edit</button>
-              <button type="button" class="components-archive-button" data-component-id="${componentEscapeHtml(String(rowId || ""))}" data-component-name="${componentEscapeHtml(componentSafe(row.component_name, ""))}" aria-label="Archive ${componentEscapeHtml(componentSafe(row.component_name, ""))}">Archive</button>
-            </div>
-          </div>
-        </td>
+        <td><div class="components-action-stack"><span>${componentEscapeHtml(formatLatestAction(latestEvent))}</span></div></td>
         <td>${formatComponentNumber(usage.miles_since_service, 1)}</td>
         <td>${formatComponentNumber(usage.hours_since_service, 1)}</td>
         <td>${formatComponentInteger(usage.rides_since_service)}</td>
@@ -211,16 +350,11 @@ function renderComponentsTable() {
     const rowId = row.gear_component_id;
     return `
       <tr class="components-archived-row" data-component-id="${componentEscapeHtml(String(rowId || ""))}">
-        <td class="components-cell-name">${componentEscapeHtml(componentSafe(row.component_name, ""))} <span class="components-archived-tag">Archived</span></td>
+        <td class="components-cell-name"><span>${componentEscapeHtml(componentSafe(row.component_name, ""))}</span> <span class="components-archived-tag">Archived</span><button type="button" class="components-overflow-trigger" data-component-id="${componentEscapeHtml(String(rowId || ""))}" data-component-name="${componentEscapeHtml(componentSafe(row.component_name, ""))}" data-archived="true" aria-label="Actions for ${componentEscapeHtml(componentSafe(row.component_name, ""))}" title="Component actions" aria-haspopup="menu" aria-expanded="false" aria-controls="componentsOverflowMenu">⋯</button></td>
         <td>${componentEscapeHtml(componentSafe(row.component_group, "-"))}</td>
         <td>${componentEscapeHtml(componentSafe(row.position, "-"))}</td>
         <td>-</td>
-        <td>
-          <div class="components-inline-actions">
-            <button type="button" class="components-history-button" data-component-id="${componentEscapeHtml(String(rowId || ""))}" data-component-name="${componentEscapeHtml(componentSafe(row.component_name, ""))}" aria-label="View service history for ${componentEscapeHtml(componentSafe(row.component_name, ""))}">History</button>
-            <button type="button" class="components-restore-button" data-component-id="${componentEscapeHtml(String(rowId || ""))}" data-component-name="${componentEscapeHtml(componentSafe(row.component_name, ""))}">Restore</button>
-          </div>
-        </td>
+        <td>-</td>
         <td>-</td>
         <td>-</td>
         <td>-</td>
@@ -252,69 +386,8 @@ function renderComponentsTable() {
     </tbody>
   `;
 
-  table.querySelectorAll(".components-record-service-button").forEach(button => {
-    button.addEventListener("click", async event => {
-      const componentId = String(event.currentTarget.dataset.componentId || "").trim();
-      if (!componentId) {
-        return;
-      }
-      await openComponentServiceDrawer(componentId, event.currentTarget.dataset.componentName || "");
-    });
-  });
-
-  table.querySelectorAll(".components-history-button").forEach(button => {
-    button.addEventListener("click", async event => {
-      const componentId = String(event.currentTarget.dataset.componentId || "").trim();
-      if (!componentId) {
-        return;
-      }
-      await openComponentHistoryDrawer(componentId, event.currentTarget.dataset.componentName || "");
-    });
-  });
-
-  table.querySelectorAll(".components-edit-button").forEach(button => {
-    button.addEventListener("click", async event => {
-      const componentId = String(event.currentTarget.dataset.componentId || "").trim();
-      if (!componentId) {
-        return;
-      }
-      await openComponentEditor(componentId);
-    });
-  });
-
-  table.querySelectorAll(".components-archive-button").forEach(button => {
-    button.addEventListener("click", async event => {
-      const componentId = String(event.currentTarget.dataset.componentId || "").trim();
-      if (!componentId) {
-        return;
-      }
-      const name = event.currentTarget.dataset.componentName || "this component";
-      if (!window.confirm(`Archive ${name}? This keeps the component record but hides it from the active list.`)) {
-        return;
-      }
-      try {
-        await window.api.archiveComponent(componentId);
-        await loadComponents();
-      } catch (error) {
-        window.alert(error.message || "Unable to archive component.");
-      }
-    });
-  });
-
-  table.querySelectorAll(".components-restore-button").forEach(button => {
-    button.addEventListener("click", async event => {
-      const componentId = String(event.currentTarget.dataset.componentId || "").trim();
-      if (!componentId) {
-        return;
-      }
-      const name = event.currentTarget.dataset.componentName || "this component";
-      try {
-        await window.api.restoreComponent(componentId);
-        await loadComponents();
-      } catch (error) {
-        window.alert(error.message || `Unable to restore ${name}.`);
-      }
-    });
+  table.querySelectorAll(".components-overflow-trigger").forEach(button => {
+    button.addEventListener("click", event => openComponentOverflowMenu(event.currentTarget));
   });
 }
 
@@ -466,6 +539,8 @@ function setComponentEditorAdvancedVisibility(visible) {
   }
   section.classList.toggle("hidden", !visible);
   toggle.textContent = visible ? "Hide advanced settings" : "Show advanced settings";
+  toggle.setAttribute("aria-expanded", String(visible));
+  toggle.setAttribute("aria-controls", "componentEditorAdvancedFields");
 }
 
 function setComponentEditorBaselineMode(mode) {
@@ -614,7 +689,7 @@ function ensureComponentEditorDrawer() {
               </div>
 
               <div class="drawer-advanced-toggle-wrap">
-                <button type="button" id="componentEditorAdvancedToggle" class="button-secondary small">Show advanced settings</button>
+                <button type="button" id="componentEditorAdvancedToggle" class="button-secondary small" aria-expanded="false" aria-controls="componentEditorAdvancedFields">Show advanced settings</button>
               </div>
 
               <div id="componentEditorAdvancedFields" class="drawer-advanced-fields hidden">
@@ -666,11 +741,6 @@ function ensureComponentEditorDrawer() {
     });
   }
 
-  advancedToggle.addEventListener("click", () => {
-    const hidden = form.querySelector("#componentEditorAdvancedFields").classList.contains("hidden");
-    setComponentEditorAdvancedVisibility(!hidden);
-  });
-
   baselineButtons.forEach(button => {
     button.addEventListener("click", () => setComponentEditorBaselineMode(button.dataset.mode || "current_snapshot"));
   });
@@ -680,6 +750,23 @@ function ensureComponentEditorDrawer() {
   closeBtn.addEventListener("click", () => closeComponentEditor());
   cancelBtn.addEventListener("click", () => closeComponentEditor());
   drawer.addEventListener("click", event => {
+    const advancedButton = event.target.closest("#componentEditorAdvancedToggle");
+    if (advancedButton && drawer.contains(advancedButton)) {
+      const advancedFields = drawer.querySelector("#componentEditorAdvancedFields");
+      const visible = advancedFields && advancedFields.classList.contains("hidden") === false;
+      setComponentEditorAdvancedVisibility(!visible);
+      if (!visible) {
+        const body = drawer.querySelector(".components-editor-body");
+        const bodyRect = body.getBoundingClientRect();
+        const fieldsRect = advancedFields.getBoundingClientRect();
+        if (fieldsRect.bottom > bodyRect.bottom) {
+          body.scrollTop += fieldsRect.bottom - bodyRect.bottom + 12;
+        } else if (fieldsRect.top < bodyRect.top) {
+          body.scrollTop -= bodyRect.top - fieldsRect.top + 12;
+        }
+      }
+      return;
+    }
     if (event.target === drawer) {
       closeComponentEditor();
     }
@@ -1322,6 +1409,165 @@ function formatComponentHistoryCost(rawCost) {
   }).format(numberValue);
 }
 
+const COMPONENT_LIFECYCLE_ACTIONS = new Set(["replace", "replacement", "installation", "new"]);
+
+function normalizeComponentLifecycleAction(value) {
+  return displayText(value).toLowerCase();
+}
+
+function isComponentLifecycleBoundary(service) {
+  const action = service && typeof service === "object" ? service.service_type : service;
+  return COMPONENT_LIFECYCLE_ACTIONS.has(normalizeComponentLifecycleAction(action));
+}
+
+function parseComponentHistoryDate(value) {
+  const text = displayText(value);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(text)) {
+    return null;
+  }
+  const [year, month, day] = text.split("-").map(Number);
+  const parsed = new Date(year, month - 1, day);
+  return parsed.getFullYear() === year && parsed.getMonth() === month - 1 && parsed.getDate() === day ? parsed : null;
+}
+
+function componentHistoryDayDelta(earlierDate, laterDate) {
+  const start = parseComponentHistoryDate(earlierDate);
+  const end = parseComponentHistoryDate(laterDate);
+  if (!start || !end || end < start) {
+    return null;
+  }
+  return Math.round((end - start) / 86400000);
+}
+
+function componentHistoryEventIdSort(a, b) {
+  const aId = displayText(a && a.service_event_id);
+  const bId = displayText(b && b.service_event_id);
+  if (!aId || !bId) {
+    return null;
+  }
+  const aNumber = Number(aId);
+  const bNumber = Number(bId);
+  if (Number.isFinite(aNumber) && Number.isFinite(bNumber) && aNumber !== bNumber) {
+    return aNumber - bNumber;
+  }
+  return aId.localeCompare(bId);
+}
+
+function componentHistorySnapshotValue(service, canonicalKey, legacyKey) {
+  const value = service && service[canonicalKey] !== undefined ? service[canonicalKey] : service && service[legacyKey];
+  if (value === null || value === undefined || value === "") {
+    return null;
+  }
+  const numeric = Number(value);
+  return Number.isFinite(numeric) ? numeric : null;
+}
+
+function getComponentLifecycleBoundaryOrder(services = []) {
+  const boundaries = services.filter(isComponentLifecycleBoundary).map((service, index) => ({ service, index }));
+  boundaries.sort((a, b) => {
+    const dateCompare = displayText(a.service.service_date).localeCompare(displayText(b.service.service_date));
+    if (dateCompare !== 0) {
+      return dateCompare;
+    }
+    const idCompare = componentHistoryEventIdSort(a.service, b.service);
+    return idCompare === null ? a.index - b.index : idCompare;
+  });
+  return boundaries;
+}
+
+function deriveComponentLifespans(services = []) {
+  const boundaries = getComponentLifecycleBoundaryOrder(services);
+
+  const lifespans = new Map();
+  boundaries.slice(0, -1).forEach((entry, index) => {
+    const next = boundaries[index + 1];
+    const earlier = entry.service;
+    const later = next.service;
+    const earlierDate = displayText(earlier.service_date);
+    const laterDate = displayText(later.service_date);
+    const sameDay = earlierDate === laterDate;
+    const idOrderAvailable = componentHistoryEventIdSort(earlier, later) !== null;
+    const days = componentHistoryDayDelta(earlierDate, laterDate);
+    const metricDefinitions = [
+      ["miles", "odometer_miles", "mileage_at_service", "mi", value => formatComponentNumber(value, 1, "0.0")],
+      ["hours", "odometer_hours", "hours_at_service", "hr", value => formatComponentNumber(value, 1, "0.0")],
+      ["rides", "odometer_rides", "rides_at_service", "rides", value => formatComponentInteger(value, "0")],
+    ];
+    const metrics = [];
+    let review = !days || (sameDay && !idOrderAvailable);
+    let availableMetricCount = 0;
+    metricDefinitions.forEach(([key, canonical, legacy, unit, formatter]) => {
+      const start = componentHistorySnapshotValue(earlier, canonical, legacy);
+      const end = componentHistorySnapshotValue(later, canonical, legacy);
+      if (start === null || end === null) {
+        return;
+      }
+      availableMetricCount += 1;
+      const delta = end - start;
+      if (delta < 0) {
+        review = true;
+        return;
+      }
+      metrics.push({ key, value: delta, text: `${formatter(delta)} ${unit}` });
+    });
+
+    const state = review ? "review" : (availableMetricCount < metricDefinitions.length ? "partial" : "valid");
+    lifespans.set(String(earlier.service_event_id), {
+      state,
+      metrics,
+      days,
+      productName: displayText(earlier.product_name),
+      laterEventId: String(later.service_event_id || ""),
+    });
+  });
+  return lifespans;
+}
+
+function formatComponentCurrentMetric(value, formatter, unit, singularUnit = unit) {
+  if (value === null || value === undefined || value === "") {
+    return null;
+  }
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) {
+    return null;
+  }
+  const formatted = formatter(numeric);
+  return `${formatted} ${numeric === 1 ? singularUnit : unit}`;
+}
+
+function renderComponentCurrentUsage(usage, componentName = "Component") {
+  const currentMetrics = [
+    formatComponentCurrentMetric(usage && usage.miles_since_service, value => formatComponentNumber(value, 1, "0.0"), "mi"),
+    formatComponentCurrentMetric(usage && usage.hours_since_service, value => formatComponentNumber(value, 1, "0.0"), "hr"),
+    formatComponentCurrentMetric(usage && usage.rides_since_service, value => formatComponentInteger(value, "0"), "rides", "ride"),
+    formatComponentCurrentMetric(usage && usage.days_since_service, value => formatComponentInteger(value, "0"), "days", "day"),
+  ].filter(Boolean);
+  const value = currentMetrics.length ? currentMetrics.join(" · ") : "Current usage unavailable";
+  return `<aside class="components-history-lifespan components-history-lifespan-current" aria-label="Current usage for ${componentEscapeHtml(componentName)}"><div class="components-history-lifespan-title">CURRENT</div><div class="components-history-lifespan-value">${componentEscapeHtml(value)}</div></aside>`;
+}
+
+function getComponentCurrentLifecycleEventId(services = [], currentBaselineEventId = "") {
+  const boundaryOrder = getComponentLifecycleBoundaryOrder(services);
+  const newestBoundaryId = boundaryOrder.length ? String(boundaryOrder[boundaryOrder.length - 1].service.service_event_id || "") : "";
+  return newestBoundaryId && String(currentBaselineEventId) === newestBoundaryId ? newestBoundaryId : "";
+}
+
+function renderComponentLifespan(lifespan) {
+  if (!lifespan) {
+    return "";
+  }
+  const label = lifespan.productName ? `Completed lifespan for ${lifespan.productName}` : "Completed component lifespan";
+  const metricText = lifespan.metrics.map(metric => metric.text);
+  if (lifespan.state === "review") {
+    return `<aside class="components-history-lifespan components-history-lifespan-review" aria-label="${componentEscapeHtml(label)}"><div class="components-history-lifespan-title">LASTED</div><div class="components-history-lifespan-value">Snapshot needs review</div></aside>`;
+  }
+  if (lifespan.days !== null) {
+    metricText.push(`${lifespan.days} ${lifespan.days === 1 ? "day" : "days"}`);
+  }
+  const note = lifespan.state === "partial" ? `<div class="components-history-lifespan-note">Some snapshot metrics unavailable</div>` : "";
+  return `<aside class="components-history-lifespan" aria-label="${componentEscapeHtml(label)}"><div class="components-history-lifespan-title">LASTED</div><div class="components-history-lifespan-value">${componentEscapeHtml(metricText.join(" · "))}</div>${note}</aside>`;
+}
+
 function ensureComponentHistoryDrawer() {
   let drawer = document.getElementById("componentHistoryDrawer");
   if (drawer) {
@@ -1458,7 +1704,7 @@ function setComponentHistoryMode(mode = "history") {
   }
 }
 
-function renderComponentHistoryList(services = []) {
+function renderComponentHistoryList(services = [], options = {}) {
   const listEl = document.getElementById("componentHistoryList");
   const emptyEl = document.getElementById("componentHistoryEmpty");
   const loadingEl = document.getElementById("componentHistoryLoading");
@@ -1481,6 +1727,11 @@ function renderComponentHistoryList(services = []) {
 
   emptyEl.classList.add("hidden");
 
+  const lifespans = deriveComponentLifespans(services);
+  const currentUsage = options.currentUsage || null;
+  const currentComponentName = options.componentName || "Component";
+  const currentLifecycleEventId = getComponentCurrentLifecycleEventId(services, options.currentBaselineEventId);
+
   const items = services.map(service => {
     const serviceType = componentSafe(service.service_type, "Service");
     const notes = displayText(service.notes);
@@ -1491,6 +1742,10 @@ function renderComponentHistoryList(services = []) {
     const model = displayText(service.model);
     const costText = formatComponentHistoryCost(service.cost);
     const eventId = service.service_event_id;
+    const lifespanMarkup = renderComponentLifespan(lifespans.get(String(eventId)));
+    const currentMarkup = currentLifecycleEventId && String(eventId) === currentLifecycleEventId
+      ? renderComponentCurrentUsage(currentUsage, currentComponentName)
+      : "";
 
     const snapshotParts = [];
     if (service.mileage_at_service != null && service.mileage_at_service !== "") {
@@ -1529,7 +1784,10 @@ function renderComponentHistoryList(services = []) {
           </div>
         </div>
         ${productMarkup.length ? `<div class="components-history-product-group">${productMarkup.join("")}</div>` : ""}
-        ${snapshotParts.length ? `<div class="components-history-field"><span class="components-history-field-label">Bike snapshot at event</span><span>${componentEscapeHtml(snapshotParts.join(" · "))}</span></div>` : ""}
+        <div class="components-history-detail-row">
+          ${snapshotParts.length ? `<div class="components-history-field"><span class="components-history-field-label">Bike snapshot at event</span><span>${componentEscapeHtml(snapshotParts.join(" · "))}</span></div>` : ""}
+          ${currentMarkup || lifespanMarkup}
+        </div>
         <div class="components-history-field"><span class="components-history-field-label">Cost</span><span>${componentEscapeHtml(costText)}</span></div>
         ${notes ? `<div class="components-history-notes"><strong>Notes</strong> ${componentEscapeHtml(notes)}</div>` : ""}
         ${secondaryMeta.length ? `<div class="components-history-meta">${componentEscapeHtml(secondaryMeta.join(" • "))}</div>` : ""}
@@ -1602,7 +1860,14 @@ async function loadComponentHistory(componentId, options = {}) {
       subtitleEl.textContent = formatComponentHistoryHeaderMetadata(component);
     }
 
-    renderComponentHistoryList(services);
+    const currentComponent = Array.isArray(window.AppState.componentsData?.components)
+      ? window.AppState.componentsData.components.find(item => String(item.gear_component_id) === String(componentId))
+      : null;
+    renderComponentHistoryList(services, {
+      componentName: componentName || currentComponent?.component_name || "Component",
+      currentUsage: currentComponent?.usage_since_latest_event || null,
+      currentBaselineEventId: currentComponent?.latest_event?.service_event_id || "",
+    });
     setComponentHistoryStatus(componentArchived ? "Archived component history is read-only." : "Service history loaded.", "info");
   } catch (error) {
     if (String(drawer.dataset.historyRequestId || "") !== String(requestId)) {
