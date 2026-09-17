@@ -93,6 +93,10 @@ CONTEXT = {
         "current_audit_available": True,
         "latest_completed_audit_available": True,
         "missing_sources": [],
+        "daily_checkins_included": False,
+        "daily_checkin_count": 0,
+        "oldest_daily_checkin_date": None,
+        "newest_daily_checkin_date": None,
     },
     "recent_days": [],
     "athlete_narrative": {},
@@ -213,6 +217,22 @@ class ReceiptContractTests(unittest.TestCase):
         self.assertIsNone(coverage["detailed_activity_days"])
         self.assertIsNone(coverage["current_audit_available"])
         self.assertEqual(coverage["missing_sources"], [])
+        self.assertFalse(coverage["daily_checkins_included"])
+        self.assertEqual(coverage["daily_checkin_count"], 0)
+        self.assertIsNone(coverage["oldest_daily_checkin_date"])
+        self.assertIsNone(coverage["newest_daily_checkin_date"])
+
+    def test_historical_v1_receipt_coverage_remains_readable(self):
+        receipt = build_receipt([], route_evidence("Question", [], {}), {}, [], False)
+        receipt["context_coverage"] = {
+            key: value for key, value in receipt["context_coverage"].items()
+            if key in {
+                "data_through_date", "detailed_activity_days", "weekly_rows",
+                "fitness_fatigue_form_days", "recovery_days", "current_audit_available",
+                "completed_audit_available", "missing_sources",
+            }
+        }
+        validate_receipt(receipt)
 
     def test_validation_rejects_unknown_keys_bad_booleans_and_bad_reasons(self):
         receipt = build_receipt([], route_evidence("Question", [], {}), {}, [], False)

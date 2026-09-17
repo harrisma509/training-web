@@ -39,7 +39,12 @@ COVERAGE_KEYS = (
     "current_audit_available",
     "completed_audit_available",
     "missing_sources",
+    "daily_checkins_included",
+    "daily_checkin_count",
+    "oldest_daily_checkin_date",
+    "newest_daily_checkin_date",
 )
+LEGACY_COVERAGE_KEYS = COVERAGE_KEYS[:-4]
 
 
 class ContextReceiptError(Exception):
@@ -96,6 +101,10 @@ def _coverage(context):
         "current_audit_available": source.get("current_audit_available"),
         "completed_audit_available": source.get("latest_completed_audit_available"),
         "missing_sources": source.get("missing_sources", []),
+        "daily_checkins_included": source.get("daily_checkins_included", False),
+        "daily_checkin_count": source.get("daily_checkin_count", 0),
+        "oldest_daily_checkin_date": _strict_date(source.get("oldest_daily_checkin_date")) if source.get("oldest_daily_checkin_date") is not None else None,
+        "newest_daily_checkin_date": _strict_date(source.get("newest_daily_checkin_date")) if source.get("newest_daily_checkin_date") is not None else None,
     }
     for key in ("detailed_activity_days", "weekly_rows", "fitness_fatigue_form_days", "recovery_days"):
         if result[key] is not None and not _nonnegative_int(result[key]):
@@ -103,6 +112,10 @@ def _coverage(context):
     for key in ("current_audit_available", "completed_audit_available"):
         if result[key] is not None and not isinstance(result[key], bool):
             raise ContextReceiptInvalid("Invalid receipt coverage availability.")
+    if not isinstance(result["daily_checkins_included"], bool):
+        raise ContextReceiptInvalid("Invalid receipt Daily Check-in indicator.")
+    if not _nonnegative_int(result["daily_checkin_count"]):
+        raise ContextReceiptInvalid("Invalid receipt Daily Check-in count.")
     missing = result["missing_sources"]
     if not isinstance(missing, list) or len(missing) > MAX_MISSING_SOURCES:
         raise ContextReceiptInvalid("Invalid receipt missing-source list.")
@@ -166,7 +179,7 @@ def validate_receipt(receipt):
     if not isinstance(scopes, list) or scopes != [scope for scope in SCOPES if scope in scopes] or len(set(scopes)) != len(scopes) or "all_training" not in scopes:
         raise ContextReceiptInvalid("Invalid active scopes.")
     coverage = receipt["context_coverage"]
-    if not isinstance(coverage, dict) or set(coverage) != set(COVERAGE_KEYS):
+    if not isinstance(coverage, dict) or set(coverage) not in (set(COVERAGE_KEYS), set(LEGACY_COVERAGE_KEYS)):
         raise ContextReceiptInvalid("Invalid context coverage.")
     _coverage({"week_progress": {"data_through_date": coverage["data_through_date"]}, "coverage": coverage})
     if not _nonnegative_int(receipt["recent_message_count"]):

@@ -118,10 +118,16 @@ CONTEXT = {
     "weekly_load_history": [],
     "weekly_tid_history": [],
     "recent_days": [],
+    "daily_checkins": [],
     "fitness_fatigue_form": {},
     "recovery_history": [],
     "athlete_narrative": {},
-    "coverage": {},
+    "coverage": {
+        "daily_checkins_included": False,
+        "daily_checkin_count": 0,
+        "oldest_daily_checkin_date": None,
+        "newest_daily_checkin_date": None,
+    },
     "missing_subjective_context": [],
 }
 
@@ -232,6 +238,16 @@ class CoachPolicyTests(unittest.TestCase):
             "clinician guidance",
             "urgent safety information",
             "one concise follow-up question",
+        ):
+            self.assertIn(requirement, policy)
+
+    def test_policy_identifies_daily_checkins_as_direct_reports(self):
+        policy = COACH_POLICY.lower()
+        for requirement in (
+            "daily check-ins are direct athlete reports",
+            "missing check-in data means unknown",
+            "do not diagnose from a check-in",
+            "clinician guidance remains higher priority",
         ):
             self.assertIn(requirement, policy)
 
@@ -988,6 +1004,61 @@ class CoachOrchestrationTests(unittest.TestCase):
         self.assertEqual(request.get_header("X-internal-token"), "secret")
         self.assertEqual(request.full_url, "https://training.example/internal/coach/context/current?daily_days=180&weekly_rows=52")
         self.assertNotIn("TRAINING_API_INTERNAL_TOKEN", os.environ)
+
+    def test_context_client_accepts_valid_daily_checkin_context(self):
+        context = {
+            **CONTEXT,
+            "daily_checkins": [{
+                "date": "2026-09-08",
+                "overall_status": "mixed",
+                "note": "Felt okay",
+                "readiness": None,
+                "energy": 3,
+                "soreness": 1,
+                "pain": None,
+                "physical_labor": None,
+                "handling_quality": "normal",
+                "flags": ["sick", "tired"],
+            }],
+            "coverage": {
+                **CONTEXT["coverage"],
+                "daily_checkins_included": True,
+                "daily_checkin_count": 1,
+                "oldest_daily_checkin_date": "2026-09-08",
+                "newest_daily_checkin_date": "2026-09-08",
+            },
+        }
+        with patch.dict(os.environ, {"TRAINING_API_BASE_URL": "https://training.example", "TRAINING_API_TOKEN": "secret"}, clear=True), \
+             patch("context_client.urlopen", return_value=FakeContextResponse(context)):
+            self.assertEqual(fetch_current_context(), context)
+
+    def test_context_client_rejects_bad_daily_checkin_before_provider(self):
+        context = {
+            **CONTEXT,
+            "daily_checkins": [{
+                "date": "not-a-date",
+                "overall_status": "good",
+                "note": "Felt okay",
+                "readiness": None,
+                "energy": None,
+                "soreness": None,
+                "pain": None,
+                "physical_labor": None,
+                "handling_quality": None,
+                "flags": [],
+            }],
+            "coverage": {
+                **CONTEXT["coverage"],
+                "daily_checkins_included": True,
+                "daily_checkin_count": 1,
+                "oldest_daily_checkin_date": "not-a-date",
+                "newest_daily_checkin_date": "not-a-date",
+            },
+        }
+        with patch.dict(os.environ, {"TRAINING_API_BASE_URL": "https://training.example", "TRAINING_API_TOKEN": "secret"}, clear=True), \
+             patch("context_client.urlopen", return_value=FakeContextResponse(context)):
+            with self.assertRaises(ContextInvalidResponseError):
+                fetch_current_context()
 
     def test_context_network_errors_are_classified(self):
         with patch.dict(os.environ, {"TRAINING_API_BASE_URL": "https://training.example", "TRAINING_API_TOKEN": "secret"}, clear=True):
