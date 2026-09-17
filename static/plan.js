@@ -3,6 +3,36 @@
   const PLAN_LOAD_REQUESTS = { current: 0 };
   const PLAN_WEEK_COLLAPSE_STATE = new Map();
   const PLAN_EXPANDED_DAY_KEYS = new Set();
+  const PLAN_CHECKIN_ROWS = new Map();
+  const PLAN_CHECKIN_LOAD_REQUESTS = { current: 0 };
+  const PLAN_CHECKIN_FLAGS = [
+    ["Travel", "is_travel"],
+    ["Sick", "is_sick"],
+    ["Injury", "is_injury"],
+    ["Bike park", "is_bike_park"],
+    ["Recovery", "is_recovery"],
+    ["Goal or event", "is_goal_event"],
+    ["Bad weather", "is_bad_weather"],
+    ["Heavy life stress", "is_high_life_stress"],
+    ["Lost", "is_lost"],
+    ["Gear", "is_gear"],
+    ["Crash", "is_crash"],
+    ["Group ride", "is_group_ride"],
+    ["Sore", "is_sore"],
+    ["Tired", "is_tired"],
+    ["Didn't sleep well", "is_poor_sleep"],
+  ];
+  const PLAN_CHECKIN_OPTIONAL_FIELDS = ["readiness", "energy", "soreness", "pain", "physical_labor", "handling_quality"];
+  let planCheckinState = {
+    selectedDate: null,
+    draft: null,
+    original: null,
+    dirty: false,
+    saving: false,
+    deleting: false,
+    origin: null,
+  };
+  let planCheckinDrawer = null;
   const PLAN_VISIBLE_ACTIVITY_LIMIT = 5;
   const PLAN_LOAD_GAUGE_CONFIG = Object.freeze({
     maxRatio: 1.5,
@@ -451,6 +481,348 @@
     return `<button type="button" class="plan-support-toggle" data-plan-day-toggle="${escapeHtml(dayKey)}" aria-expanded="${isExpanded ? "true" : "false"}" aria-label="${escapeHtml(accessibleLabel)}">${escapeHtml(buttonText)}</button>`;
   }
 
+  function formatPlanCheckinStatus(status) {
+    return status ? status.charAt(0).toUpperCase() + status.slice(1) : "";
+  }
+
+  function getPlanCheckinFlagLabels(checkin) {
+    return PLAN_CHECKIN_FLAGS.filter(([, field]) => checkin && checkin[field] === true).map(([label]) => label);
+  }
+
+  function renderPlanCheckinSummary(dateKey) {
+    const checkin = PLAN_CHECKIN_ROWS.get(dateKey);
+    if (!checkin) {
+      return `<span class="plan-checkin-empty">+ Check-in</span>`;
+    }
+
+    const labels = getPlanCheckinFlagLabels(checkin);
+    const visibleLabels = labels.slice(0, 2);
+    const extraCount = labels.length - visibleLabels.length;
+    const details = visibleLabels.length > 0 ? ` · ${visibleLabels.join(" · ")}` : "";
+    const extra = extraCount > 0 ? ` +${extraCount}` : "";
+    return `${escapeHtml(formatPlanCheckinStatus(checkin.overall_status))}${escapeHtml(details)}${escapeHtml(extra)}`;
+  }
+
+  function renderPlanCheckinControl(dateKey, dateLabel) {
+    const hasCheckin = PLAN_CHECKIN_ROWS.has(dateKey);
+    const accessibleLabel = hasCheckin ? `Edit Daily Check-in for ${dateLabel}` : `Add Daily Check-in for ${dateLabel}`;
+    return `<button type="button" class="plan-checkin-control${hasCheckin ? " has-checkin" : ""}" data-plan-checkin-date="${escapeHtml(dateKey)}" aria-label="${escapeHtml(accessibleLabel)}"><span class="plan-checkin-label">${renderPlanCheckinSummary(dateKey)}</span></button>`;
+  }
+
+  function ensurePlanCheckinStatus() {
+    const shell = document.querySelector("#planPane .plan-shell");
+    if (!shell) {
+      return null;
+    }
+    let status = document.getElementById("planCheckinStatus");
+    if (!status) {
+      status = document.createElement("div");
+      status.id = "planCheckinStatus";
+      status.className = "plan-checkin-status hidden";
+      status.setAttribute("role", "status");
+      status.setAttribute("aria-live", "polite");
+      shell.insertBefore(status, shell.firstChild);
+    }
+    return status;
+  }
+
+  function setPlanCheckinStatus(message, isError = false) {
+    const status = ensurePlanCheckinStatus();
+    if (!status) {
+      return;
+    }
+    status.textContent = message || "";
+    status.classList.toggle("hidden", !message);
+    status.classList.toggle("is-error", Boolean(isError));
+  }
+
+  function getPlanCheckinDateRange() {
+    const start = getWeekDatesOffset(3)[0];
+    const end = getCurrentWeekDates()[6];
+    return { start: toLocalDateKey(start), end: toLocalDateKey(end) };
+  }
+
+  async function loadPlanCheckins() {
+    const requestId = ++PLAN_CHECKIN_LOAD_REQUESTS.current;
+    const range = getPlanCheckinDateRange();
+    if (!window.api || typeof window.api.fetchDailyCheckins !== "function") {
+      setPlanCheckinStatus("Check-ins unavailable.", true);
+      return;
+    }
+
+    setPlanCheckinStatus("");
+    try {
+      const payload = await window.api.fetchDailyCheckins(range.start, range.end);
+      if (requestId !== PLAN_CHECKIN_LOAD_REQUESTS.current) {
+        return;
+      }
+      PLAN_CHECKIN_ROWS.clear();
+      for (const row of Array.isArray(payload) ? payload : []) {
+        const dateKey = typeof row?.checkin_date === "string" ? row.checkin_date : "";
+        if (/^\d{4}-\d{2}-\d{2}$/.test(dateKey)) {
+          PLAN_CHECKIN_ROWS.set(dateKey, row);
+        }
+      }
+      renderPlanStrip();
+    } catch (error) {
+      if (requestId !== PLAN_CHECKIN_LOAD_REQUESTS.current) {
+        return;
+      }
+      console.warn("Plan check-ins unavailable.", error);
+      setPlanCheckinStatus("Check-ins unavailable. Retry", true);
+    }
+  }
+
+  function createPlanCheckinDrawer() {
+    if (planCheckinDrawer) {
+      return planCheckinDrawer;
+    }
+    document.body.insertAdjacentHTML("beforeend", `
+      <div id="planCheckinDrawer" class="plan-checkin-drawer hidden" role="dialog" aria-modal="true" aria-labelledby="planCheckinTitle" aria-describedby="planCheckinError">
+        <div class="plan-checkin-panel">
+          <div class="plan-checkin-header">
+            <div>
+              <div id="planCheckinTitle" class="drawer-title">Daily Check-in</div>
+              <div id="planCheckinDateLabel" class="drawer-subtitle"></div>
+            </div>
+            <button id="planCheckinClose" type="button" class="drawer-close-button" aria-label="Close Daily Check-in">×</button>
+          </div>
+          <form id="planCheckinForm" class="plan-checkin-body">
+            <div id="planCheckinError" class="drawer-error hidden" role="alert" aria-live="assertive"></div>
+            <fieldset class="plan-checkin-section">
+              <legend>How are you Feeling?</legend>
+              <div class="plan-checkin-status-options" role="radiogroup" aria-label="Overall status">
+                <label><input type="radio" name="planCheckinStatus" value="good" required> Good</label>
+                <label><input type="radio" name="planCheckinStatus" value="mixed"> Mixed</label>
+                <label><input type="radio" name="planCheckinStatus" value="poor"> Poor</label>
+              </div>
+              <label class="plan-checkin-field" for="planCheckinNote">Note <span>(required)</span></label>
+              <textarea id="planCheckinNote" rows="5" maxlength="1000" required aria-describedby="planCheckinNoteCount"></textarea>
+              <div id="planCheckinNoteCount" class="plan-checkin-count">0 / 1,000</div>
+            </fieldset>
+            <fieldset class="plan-checkin-section">
+              <legend>How you felt</legend>
+              <div class="plan-checkin-grid">
+                <label for="planCheckinReadiness">Readiness</label><select id="planCheckinReadiness"><option value="">Not answered</option><option>1</option><option>2</option><option>3</option><option>4</option><option>5</option></select>
+                <label for="planCheckinEnergy">Energy</label><select id="planCheckinEnergy"><option value="">Not answered</option><option>1</option><option>2</option><option>3</option><option>4</option><option>5</option></select>
+                <label for="planCheckinSoreness">Soreness</label><select id="planCheckinSoreness"><option value="">Not answered</option><option>0</option><option>1</option><option>2</option><option>3</option><option>4</option></select>
+                <label for="planCheckinPain">Pain</label><select id="planCheckinPain"><option value="">Not answered</option><option>0</option><option>1</option><option>2</option><option>3</option><option>4</option></select>
+              </div>
+            </fieldset>
+            <fieldset class="plan-checkin-section">
+              <legend>Context</legend>
+              <div class="plan-checkin-grid">
+                <label for="planCheckinPhysicalLabor">Physical labor</label><select id="planCheckinPhysicalLabor"><option value="">Not answered</option><option value="none">None</option><option value="light">Light</option><option value="moderate">Moderate</option><option value="heavy">Heavy</option></select>
+                <label for="planCheckinHandlingQuality">Handling quality</label><select id="planCheckinHandlingQuality"><option value="">Not answered</option><option value="sharp">Sharp</option><option value="normal">Normal</option><option value="off">Off</option></select>
+              </div>
+              <div class="plan-checkin-flags">${PLAN_CHECKIN_FLAGS.map(([label, field]) => `<label><input type="checkbox" data-plan-checkin-flag="${field}"> ${escapeHtml(label)}</label>`).join("")}</div>
+            </fieldset>
+            <div class="plan-checkin-actions">
+              <button id="planCheckinDelete" type="button" class="button-danger hidden">Delete Check-in</button>
+              <span></span>
+              <button id="planCheckinCancel" type="button" class="button-secondary">Cancel</button>
+              <button id="planCheckinSave" type="submit" class="button-primary">Save</button>
+            </div>
+          </form>
+        </div>
+      </div>
+    `);
+    planCheckinDrawer = document.getElementById("planCheckinDrawer");
+    document.getElementById("planCheckinClose").addEventListener("click", () => closePlanCheckinDrawer());
+    document.getElementById("planCheckinCancel").addEventListener("click", () => closePlanCheckinDrawer());
+    document.getElementById("planCheckinDelete").addEventListener("click", () => deletePlanCheckin());
+    document.getElementById("planCheckinForm").addEventListener("submit", event => {
+      event.preventDefault();
+      savePlanCheckin();
+    });
+    document.getElementById("planCheckinNote").addEventListener("input", () => {
+      planCheckinState.dirty = true;
+      updatePlanCheckinCount();
+      clearPlanCheckinError();
+    });
+    planCheckinDrawer.addEventListener("keydown", event => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        closePlanCheckinDrawer();
+      }
+    });
+    planCheckinDrawer.addEventListener("click", event => {
+      if (event.target === planCheckinDrawer) {
+        closePlanCheckinDrawer();
+      }
+    });
+    planCheckinDrawer.querySelectorAll("input, select, textarea").forEach(input => {
+      input.addEventListener("change", () => {
+        planCheckinState.dirty = true;
+        clearPlanCheckinError();
+      });
+    });
+    return planCheckinDrawer;
+  }
+
+  function updatePlanCheckinCount() {
+    const note = document.getElementById("planCheckinNote");
+    const count = document.getElementById("planCheckinNoteCount");
+    if (note && count) {
+      count.textContent = `${note.value.length.toLocaleString()} / 1,000`;
+    }
+  }
+
+  function clearPlanCheckinError() {
+    const error = document.getElementById("planCheckinError");
+    if (error) {
+      error.textContent = "";
+      error.classList.add("hidden");
+    }
+  }
+
+  function setPlanCheckinError(message) {
+    const error = document.getElementById("planCheckinError");
+    if (error) {
+      error.textContent = message || "Unable to save Daily Check-in. Please try again.";
+      error.classList.remove("hidden");
+    }
+  }
+
+  function getPlanCheckinErrorMessage(error, fallback = "Unable to save Daily Check-in. Please try again.") {
+    const status = Number(error?.status);
+    if (status >= 400 && status < 500) {
+      return status === 422 ? "Check-in details are invalid. Please review the form." : "The check-in could not be saved. Please review the form.";
+    }
+    if (status >= 500) {
+      return "Check-in storage is unavailable. Please try again.";
+    }
+    return fallback;
+  }
+
+  function getPlanCheckinDraft() {
+    const selected = document.querySelector('input[name="planCheckinStatus"]:checked');
+    const numberValue = id => {
+      const value = document.getElementById(id)?.value || "";
+      return value === "" ? null : Number(value);
+    };
+    const draft = {
+      overall_status: selected ? selected.value : "",
+      note: document.getElementById("planCheckinNote")?.value || "",
+      readiness: numberValue("planCheckinReadiness"),
+      energy: numberValue("planCheckinEnergy"),
+      soreness: numberValue("planCheckinSoreness"),
+      pain: numberValue("planCheckinPain"),
+      physical_labor: document.getElementById("planCheckinPhysicalLabor")?.value || null,
+      handling_quality: document.getElementById("planCheckinHandlingQuality")?.value || null,
+    };
+    PLAN_CHECKIN_FLAGS.forEach(([, field]) => {
+      draft[field] = document.querySelector(`[data-plan-checkin-flag="${field}"]`)?.checked === true;
+    });
+    return draft;
+  }
+
+  function hydratePlanCheckinDraft(checkin) {
+    const values = checkin || { overall_status: "", note: "" };
+    document.querySelectorAll('input[name="planCheckinStatus"]').forEach(input => {
+      input.checked = input.value === values.overall_status;
+    });
+    document.getElementById("planCheckinNote").value = values.note || "";
+    const setSelect = (id, value) => { document.getElementById(id).value = value == null ? "" : String(value); };
+    setSelect("planCheckinReadiness", values.readiness);
+    setSelect("planCheckinEnergy", values.energy);
+    setSelect("planCheckinSoreness", values.soreness);
+    setSelect("planCheckinPain", values.pain);
+    setSelect("planCheckinPhysicalLabor", values.physical_labor);
+    setSelect("planCheckinHandlingQuality", values.handling_quality);
+    PLAN_CHECKIN_FLAGS.forEach(([, field]) => {
+      const input = document.querySelector(`[data-plan-checkin-flag="${field}"]`);
+      if (input) input.checked = values[field] === true;
+    });
+    updatePlanCheckinCount();
+  }
+
+  function openPlanCheckinDrawer(dateKey, origin) {
+    createPlanCheckinDrawer();
+    const date = new Date(`${dateKey}T00:00:00`);
+    const dateLabel = new Intl.DateTimeFormat("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric" }).format(date);
+    const saved = PLAN_CHECKIN_ROWS.get(dateKey) || null;
+    planCheckinState = { selectedDate: dateKey, draft: saved, original: saved, dirty: false, saving: false, deleting: false, origin };
+    setPlanCheckinBusy(false);
+    document.getElementById("planCheckinDateLabel").textContent = dateLabel;
+    hydratePlanCheckinDraft(saved);
+    document.getElementById("planCheckinDelete").classList.toggle("hidden", !saved);
+    clearPlanCheckinError();
+    planCheckinDrawer.classList.remove("hidden");
+    document.getElementById("planCheckinNote").focus();
+  }
+
+  function closePlanCheckinDrawer(force = false) {
+    if (!planCheckinDrawer || planCheckinDrawer.classList.contains("hidden")) return;
+    if (!force && planCheckinState.dirty && !confirm("Discard unsaved Daily Check-in changes?")) return;
+    planCheckinDrawer.classList.add("hidden");
+    const origin = planCheckinState.origin;
+    planCheckinState = { selectedDate: null, draft: null, original: null, dirty: false, saving: false, deleting: false, origin: null };
+    if (origin && typeof origin.focus === "function") origin.focus();
+  }
+
+  function setPlanCheckinBusy(busy, deleting = false) {
+    ["planCheckinSave", "planCheckinCancel", "planCheckinClose", "planCheckinDelete"].forEach(id => {
+      const button = document.getElementById(id);
+      if (button) button.disabled = busy;
+    });
+    const save = document.getElementById("planCheckinSave");
+    if (save) save.textContent = busy ? (deleting ? "Deleting…" : "Saving…") : "Save";
+  }
+
+  async function savePlanCheckin() {
+    if (planCheckinState.saving || planCheckinState.deleting) return;
+    const payload = getPlanCheckinDraft();
+    payload.note = payload.note.trim();
+    if (!payload.overall_status || !payload.note) return setPlanCheckinError("Choose an overall status and enter a note.");
+    if (payload.note.length > 1000) return setPlanCheckinError("Note must be 1,000 characters or fewer.");
+    planCheckinState.saving = true;
+    setPlanCheckinBusy(true);
+    try {
+      const saved = await window.api.saveDailyCheckin(planCheckinState.selectedDate, payload);
+      PLAN_CHECKIN_ROWS.set(planCheckinState.selectedDate, saved);
+      renderPlanStrip();
+      setPlanCheckinBusy(false);
+      closePlanCheckinDrawer(true);
+    } catch (error) {
+      setPlanCheckinError(getPlanCheckinErrorMessage(error));
+    } finally {
+      planCheckinState.saving = false;
+      setPlanCheckinBusy(false);
+    }
+  }
+
+  async function deletePlanCheckin() {
+    if (planCheckinState.saving || planCheckinState.deleting) return;
+    const selectedDate = planCheckinState.selectedDate;
+    if (!selectedDate || !confirm(`Delete Daily Check-in for ${selectedDate}?`)) return;
+    planCheckinState.deleting = true;
+    setPlanCheckinBusy(true, true);
+    try {
+      await window.api.deleteDailyCheckin(selectedDate);
+      PLAN_CHECKIN_ROWS.delete(selectedDate);
+      renderPlanStrip();
+      closePlanCheckinDrawer(true);
+    } catch (error) {
+      setPlanCheckinError(getPlanCheckinErrorMessage(error, "Unable to delete Daily Check-in. Please try again."));
+    } finally {
+      planCheckinState.deleting = false;
+      setPlanCheckinBusy(false);
+    }
+  }
+
+  function setupPlanCheckinHandlers() {
+    const strip = document.getElementById("planStrip");
+    if (!strip || strip.dataset.planCheckinBound === "true") return;
+    strip.addEventListener("click", event => {
+      const button = event.target.closest("[data-plan-checkin-date]");
+      if (!button) return;
+      event.stopPropagation();
+      openPlanCheckinDrawer(button.getAttribute("data-plan-checkin-date"), button);
+    });
+    strip.dataset.planCheckinBound = "true";
+  }
+
   function renderPlanDayCell(date, row, isWeekCollapsed) {
     const label = formatPlanDay(date);
     const dayKey = toLocalDateKey(date);
@@ -518,6 +890,7 @@
         </div>
         <div class="plan-day-body" ${isWeekCollapsed ? "hidden" : ""}>
           ${bodyHtml || '<div class="plan-empty-state">No activity</div>'}
+          ${isWeekCollapsed ? "" : renderPlanCheckinControl(dayKey, formattedDateLabel)}
         </div>
       </div>
     `;
@@ -604,6 +977,7 @@
 
     strip.innerHTML = html;
     setupPlanToggleHandlers();
+    setupPlanCheckinHandlers();
   }
 
   async function ensurePlanWeeklyRows() {
@@ -637,6 +1011,7 @@
       window.AppState.planRows = window.AppState.dailyRows;
       await ensurePlanWeeklyRows();
       renderPlanStrip();
+      await loadPlanCheckins();
       return;
     }
 
@@ -656,6 +1031,7 @@
       window.AppState.planRows = rows;
       await ensurePlanWeeklyRows();
       renderPlanStrip();
+      await loadPlanCheckins();
     } catch (error) {
       console.error(error);
       if (requestId !== PLAN_LOAD_REQUESTS.current) {

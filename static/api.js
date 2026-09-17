@@ -117,6 +117,46 @@
       return payload;
     },
 
+    async fetchDailyCheckins(startDate, endDate) {
+      const params = new URLSearchParams({
+        start_date: String(startDate),
+        end_date: String(endDate),
+      });
+      return fetchJson(`/api/daily-checkins?${params.toString()}`);
+    },
+
+    async saveDailyCheckin(checkinDate, payload = {}) {
+      const response = await fetch(`/api/daily-checkins/${encodeURIComponent(checkinDate)}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json",
+        },
+        body: JSON.stringify(payload),
+      });
+      if (!response.ok) {
+        const detail = await response.json().catch(() => ({}));
+        const error = new Error(detail.detail || `${response.status} ${response.statusText || "Save failed"}`);
+        error.status = response.status;
+        throw error;
+      }
+      return response.json();
+    },
+
+    async deleteDailyCheckin(checkinDate) {
+      const response = await fetch(`/api/daily-checkins/${encodeURIComponent(checkinDate)}`, {
+        method: "DELETE",
+        headers: { Accept: "application/json" },
+      });
+      if (!response.ok) {
+        const detail = await response.json().catch(() => ({}));
+        const error = new Error(detail.detail || `${response.status} ${response.statusText || "Delete failed"}`);
+        error.status = response.status;
+        throw error;
+      }
+      return null;
+    },
+
     async fetchRideSearch(query, limit = 5) {
       const q = typeof query === "string" ? query.trim() : "";
       if (!q || q.length < 2) {
