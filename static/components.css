@@ -23,38 +23,34 @@
   padding-right: 4px;
 }
 
+#componentsTable th:nth-child(1),
+#componentsTable td:nth-child(1) {
+  width: 150px;
+  min-width: 150px;
+}
+
+#componentsTable th:nth-child(2),
+#componentsTable td:nth-child(2),
+#componentsTable th:nth-child(3),
+#componentsTable td:nth-child(3) {
+  width: 90px;
+  min-width: 90px;
+}
+
+#componentsTable th:nth-child(4),
+#componentsTable td:nth-child(4) {
+  width: 105px;
+  min-width: 105px;
+}
+
 #componentsTable th:nth-child(5),
 #componentsTable td:nth-child(5) {
-  width: 326px;
-  min-width: 326px;
-  max-width: 326px;
+  width: 360px;
+  min-width: 300px;
+  max-width: 420px;
   white-space: normal;
   overflow-wrap: anywhere;
   word-break: normal;
-}
-
-#componentsTable th:nth-child(6),
-#componentsTable th:nth-child(7),
-#componentsTable th:nth-child(8),
-#componentsTable th:nth-child(9) {
-  width: 60px;
-  min-width: 60px;
-  max-width: 60px;
-  white-space: normal;
-  overflow-wrap: break-word;
-  word-break: normal;
-  text-align: center;
-}
-
-#componentsTable td:nth-child(6),
-#componentsTable td:nth-child(7),
-#componentsTable td:nth-child(8),
-#componentsTable td:nth-child(9) {
-  width: 60px;
-  min-width: 60px;
-  max-width: 60px;
-  text-align: right;
-  white-space: nowrap;
 }
 
 #componentsTable th {
@@ -64,18 +60,19 @@
   vertical-align: bottom;
 }
 
-#componentsTable th:nth-child(10),
-#componentsTable td:nth-child(10) {
+#componentsTable th:nth-child(6),
+#componentsTable td:nth-child(6) {
   width: 105px;
+  min-width: 105px;
   white-space: normal;
   overflow-wrap: anywhere;
 }
 
-#componentsTable th:nth-child(11),
-#componentsTable td:nth-child(11) {
-  width: 350px;
-  min-width: 350px;
-  max-width: 350px;
+#componentsTable th:nth-child(7),
+#componentsTable td:nth-child(7) {
+  width: 320px;
+  min-width: 260px;
+  max-width: 420px;
   white-space: normal;
   overflow-wrap: anywhere;
   word-break: break-word;
@@ -136,6 +133,60 @@
   white-space: normal;
   overflow-wrap: anywhere;
   word-break: break-word;
+}
+
+.components-clock-summary {
+  display: grid;
+  gap: 2px;
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.35;
+}
+
+.components-clock-line {
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr);
+  gap: 4px;
+}
+
+.components-clock-line span:first-child {
+  color: var(--text);
+  font-weight: 800;
+}
+
+.components-clock-disabled,
+.components-editor-readonly-guidance {
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.components-service-effect {
+  display: grid;
+  gap: 2px;
+  margin-top: 6px;
+  padding: 7px 9px;
+  border-left: 3px solid var(--line);
+  background: rgba(148, 163, 184, 0.06);
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.components-service-effect strong {
+  color: var(--text);
+  font-size: 12px;
+}
+
+.components-service-effect-warning {
+  border-left-color: var(--yellow);
+}
+
+.components-editor-guidance {
+  padding: 7px 9px;
+  border-left: 3px solid var(--blue);
+  background: rgba(96, 165, 250, 0.06);
 }
 
 .components-cell-name {
@@ -334,6 +385,10 @@
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 12px;
+}
+
+.components-service-field-grid>.drawer-field-group {
+  align-self: start;
 }
 
 .components-service-context-grid {
@@ -829,6 +884,12 @@
 
   .components-service-section {
     padding: 10px;
+  }
+
+  .components-service-effect,
+  .components-editor-guidance,
+  .components-editor-readonly-guidance {
+    overflow-wrap: anywhere;
   }
 
   .components-history-editor-context-grid {

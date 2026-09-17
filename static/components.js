@@ -82,6 +82,219 @@ function formatLatestAction(latestEvent) {
   return chunks.length > 0 ? chunks.join(" • ") : "Service logged";
 }
 
+const COMPONENT_CLOCK_LIFECYCLE_ACTIONS = new Set(["new", "installation", "replace", "replacement"]);
+const COMPONENT_CLOCK_MAINTENANCE_ACTIONS = new Set([
+  "inspection", "adjustment", "cleaning", "lubrication", "brake bleed", "bleed",
+  "sealant", "refresh", "suspension service", "rebuild", "lowers",
+]);
+
+const COMPONENT_ACTION_GROUPS = [
+  {
+    label: "Replacement / installation",
+    options: ["New", "Installation", "Replace", "Replacement"],
+  },
+  {
+    label: "Maintenance",
+    options: ["Inspection", "Adjustment", "Cleaning", "Lubrication", "Brake Bleed", "Bleed", "Sealant", "Refresh", "Suspension Service", "Rebuild", "Lowers"],
+  },
+  {
+    label: "Unclassified / other",
+    options: ["Brake Pads", "Tire", "Drivetrain", "Chain", "Rotor", "Bearing", "Wheel", "Warranty", "Other"],
+  },
+];
+
+function renderComponentActionOptions(selectedAction = "", includeLegacy = false) {
+  const storedAction = String(selectedAction || "");
+  const normalizedStoredAction = normalizeComponentAction(storedAction);
+  const standardAction = COMPONENT_ACTION_GROUPS.flatMap(group => group.options)
+    .find(option => normalizeComponentAction(option) === normalizedStoredAction);
+  const selectedValue = standardAction ? storedAction : "";
+  const groups = COMPONENT_ACTION_GROUPS.map(group => `
+    <optgroup label="${componentEscapeHtml(group.label)}">
+      ${group.options.map(option => {
+    const value = standardAction && normalizeComponentAction(option) === normalizedStoredAction ? selectedValue : option;
+    const label = standardAction && normalizeComponentAction(option) === normalizedStoredAction && option !== storedAction ? storedAction : option;
+    return `<option value="${componentEscapeHtml(value)}"${value === storedAction ? " selected" : ""}>${componentEscapeHtml(label)}</option>`;
+  }).join("")}
+    </optgroup>
+  `).join("");
+  const legacy = includeLegacy && storedAction && !standardAction
+    ? `<optgroup label="Legacy / custom"><option value="${componentEscapeHtml(storedAction)}" selected>${componentEscapeHtml(storedAction)}</option></optgroup>`
+    : "";
+  return groups + legacy;
+}
+
+function normalizeComponentAction(value) {
+  return String(value || "").trim().toLowerCase();
+}
+
+function classifyComponentAction(value) {
+  const normalized = normalizeComponentAction(value);
+  if (COMPONENT_CLOCK_LIFECYCLE_ACTIONS.has(normalized)) {
+    return "lifecycle";
+  }
+  if (COMPONENT_CLOCK_MAINTENANCE_ACTIONS.has(normalized)) {
+    return "maintenance";
+  }
+  return normalized ? "unclassified" : "empty";
+}
+
+function componentEffectCategory(classification, life, service) {
+  if (classification === "empty") {
+    return "Select an action";
+  }
+  if (classification === "unclassified") {
+    return "Unclassified";
+  }
+  if (classification === "lifecycle" && life && service) {
+    return "Resets component life and maintenance interval";
+  }
+  if ((classification === "lifecycle" && life) || (classification === "maintenance" && life && !service)) {
+    return classification === "lifecycle" ? "Resets component life" : "Does not reset component life";
+  }
+  if (classification === "lifecycle" || classification === "maintenance") {
+    return "Resets maintenance interval";
+  }
+  return "No tracked reset";
+}
+
+function componentEffectMarkup(action, component, customWarning = false) {
+  const classification = classifyComponentAction(action);
+  const life = Boolean(component && component.track_life);
+  const service = Boolean(component && component.track_service);
+  const category = componentEffectCategory(classification, life, service);
+  const key = `${classification}:${life ? "life" : "no-life"}:${service ? "service" : "no-service"}`;
+  let title = "Select an action to see what it resets.";
+  let detail = "";
+  let kind = "neutral";
+
+  if (classification === "unclassified") {
+    title = "⚠ Reset effect is not classified";
+    detail = customWarning
+      ? "This event remains in history but does not establish a trusted life or maintenance baseline."
+      : "This event will be saved in history but will not establish a trusted life or maintenance baseline.";
+    kind = "warning";
+  } else if (classification === "lifecycle") {
+    if (life && service) {
+      title = "↻ Resets component life and maintenance interval";
+      detail = "Both clocks start from this event snapshot.";
+    } else if (life) {
+      title = "↻ Resets component life";
+      detail = "Usage starts again from this event snapshot.";
+    } else if (service) {
+      title = "🔧 Resets maintenance interval";
+      detail = "This component does not track physical-part life.";
+    }
+  } else if (classification === "maintenance") {
+    if (service) {
+      title = "🔧 Resets maintenance interval";
+      detail = life ? "Component life remains unchanged." : "";
+    } else if (life) {
+      title = "ⓘ Does not reset component life";
+      detail = "This component is not configured to track maintenance.";
+    }
+  }
+
+  return { category, key, kind, title, detail };
+}
+
+function componentClockUsage(clock) {
+  const usage = clock && clock.usage;
+  if (!usage) {
+    return null;
+  }
+  return {
+    miles: usage.miles,
+    hours: usage.hours,
+    rides: usage.rides,
+    days: usage.days,
+  };
+}
+
+function componentClockMetricText(clock) {
+  const usage = componentClockUsage(clock);
+  if (!usage) {
+    return "";
+  }
+  return [
+    usage.miles == null ? null : `${formatComponentNumber(usage.miles, 1)} mi`,
+    usage.hours == null ? null : `${formatComponentNumber(usage.hours, 1)} hr`,
+    usage.rides == null ? null : `${formatComponentInteger(usage.rides)} rides`,
+    usage.days == null ? null : `${formatComponentInteger(usage.days)} days`,
+  ].filter(Boolean).join(" · ");
+}
+
+function getComponentTableClocks(row) {
+  const clocks = row && row.component_clocks;
+  if (!clocks) {
+    const legacy = row && row.usage_since_latest_event || {};
+    return {
+      primary: {
+        label: "Since",
+        state: row && row.latest_event ? "ready" : "no_baseline",
+        baseline: row && row.latest_event,
+        usage: {
+          miles: legacy.miles_since_service,
+          hours: legacy.hours_since_service,
+          rides: legacy.rides_since_service,
+          days: legacy.days_since_service,
+        },
+      },
+      life: null,
+      service: null,
+      fallback: true,
+    };
+  }
+
+  const life = clocks.life || { state: "disabled" };
+  const service = clocks.service || { state: "disabled" };
+  const serviceEnabled = service.enabled === true;
+  const primary = serviceEnabled ? service : life;
+  return {
+    primary: { ...primary, label: serviceEnabled ? "Service" : "Life" },
+    life,
+    service,
+    fallback: false,
+  };
+}
+
+function componentClockStateLabel(clock, label) {
+  if (!clock || clock.state === "disabled") {
+    return `${label} tracking disabled`;
+  }
+  if (clock.state === "no_baseline") {
+    return `No ${label.toLowerCase()} baseline`;
+  }
+  if (clock.state === "partial") {
+    return "Partial snapshot";
+  }
+  if (clock.state === "review") {
+    return "Review snapshot";
+  }
+  return "";
+}
+
+function renderComponentClockSummary(clocks) {
+  if (clocks.fallback) {
+    return "";
+  }
+  const rows = [["Life", clocks.life], ["Service", clocks.service]]
+    .filter(([, clock]) => clock && clock.enabled === true)
+    .map(([label, clock]) => {
+      const state = componentClockStateLabel(clock, label);
+      const metrics = componentClockMetricText(clock);
+      const detail = state || metrics || `No ${label.toLowerCase()} baseline`;
+      const title = state ? `${label}: ${state}` : `${label}: ${detail}`;
+      return `<div class="components-clock-line" title="${componentEscapeHtml(title)}"><span>${label}</span><span>${componentEscapeHtml(detail || "-")}</span></div>`;
+    });
+  return rows.length ? `<div class="components-clock-summary" aria-label="Component life and maintenance clocks">${rows.join("")}</div>` : `<span class="components-clock-disabled">Tracking disabled</span>`;
+}
+
+function componentTableValue(clock, key, formatter) {
+  const usage = componentClockUsage(clock);
+  return formatter(usage && usage[key]);
+}
+
 function renderComponentsSummary() {
   const summaryEl = document.getElementById("componentsSummary");
   if (!summaryEl) {
@@ -305,19 +518,15 @@ function renderComponentsTable() {
           <th>Component</th>
           <th>Group</th>
           <th>Position</th>
-          <th>Last Service</th>
-          <th>Action</th>
-          <th>Miles Since</th>
-          <th>Hours Since</th>
-          <th>Rides Since</th>
-          <th>Days Since</th>
+          <th>Last Event</th>
+          <th>Usage / Status</th>
           <th>Interval</th>
           <th>Notes</th>
         </tr>
       </thead>
       <tbody>
         <tr>
-          <td colspan="11" class="components-empty">No active components for this bike.</td>
+          <td colspan="7" class="components-empty">No active components for this bike.</td>
         </tr>
       </tbody>
     `;
@@ -325,22 +534,22 @@ function renderComponentsTable() {
   }
 
   const bodyRows = rows.map(row => {
-    const usage = row.usage_since_latest_event || {};
+    const clocks = getComponentTableClocks(row);
+    const primaryClock = clocks.primary || {};
+    const baseline = primaryClock.baseline_event || primaryClock.baseline || null;
     const latestEvent = row.latest_event;
+    const actionContext = clocks.fallback ? formatLatestAction(latestEvent) : (baseline ? formatLatestAction(baseline) : componentClockStateLabel(primaryClock, primaryClock.label || "Life"));
+    const clockSummary = renderComponentClockSummary(clocks);
     const rowId = row.gear_component_id;
     const rowHtml = `
       <tr data-component-id="${componentEscapeHtml(String(rowId || ""))}">
         <td class="components-cell-name"><span>${componentEscapeHtml(componentSafe(row.component_name, ""))}</span><button type="button" class="components-overflow-trigger" data-component-id="${componentEscapeHtml(String(rowId || ""))}" data-component-name="${componentEscapeHtml(componentSafe(row.component_name, ""))}" data-archived="false" aria-label="Actions for ${componentEscapeHtml(componentSafe(row.component_name, ""))}" title="Component actions" aria-haspopup="menu" aria-expanded="false" aria-controls="componentsOverflowMenu">⋯</button></td>
         <td>${componentEscapeHtml(componentSafe(row.component_group, "-"))}</td>
         <td>${componentEscapeHtml(componentSafe(row.position, "-"))}</td>
-        <td>${componentEscapeHtml(componentSafe(latestEvent ? latestEvent.service_date : null, "-"))}</td>
-        <td><div class="components-action-stack"><span>${componentEscapeHtml(formatLatestAction(latestEvent))}</span></div></td>
-        <td>${formatComponentNumber(usage.miles_since_service, 1)}</td>
-        <td>${formatComponentNumber(usage.hours_since_service, 1)}</td>
-        <td>${formatComponentInteger(usage.rides_since_service)}</td>
-        <td>${formatComponentInteger(usage.days_since_service)}</td>
+        <td>${componentEscapeHtml(componentSafe(baseline ? baseline.service_date : null, "-"))}</td>
+        <td><div class="components-action-stack"><span>${componentEscapeHtml(actionContext)}</span>${clockSummary}</div></td>
         <td>${componentEscapeHtml(formatServiceInterval(row))}</td>
-        <td>${componentEscapeHtml(componentSafe(latestEvent ? latestEvent.notes : "", "-"))}</td>
+        <td>${componentEscapeHtml(componentSafe(baseline ? baseline.notes : latestEvent ? latestEvent.notes : "", "-"))}</td>
       </tr>
     `;
     return rowHtml;
@@ -353,12 +562,7 @@ function renderComponentsTable() {
         <td class="components-cell-name"><span>${componentEscapeHtml(componentSafe(row.component_name, ""))}</span> <span class="components-archived-tag">Archived</span><button type="button" class="components-overflow-trigger" data-component-id="${componentEscapeHtml(String(rowId || ""))}" data-component-name="${componentEscapeHtml(componentSafe(row.component_name, ""))}" data-archived="true" aria-label="Actions for ${componentEscapeHtml(componentSafe(row.component_name, ""))}" title="Component actions" aria-haspopup="menu" aria-expanded="false" aria-controls="componentsOverflowMenu">⋯</button></td>
         <td>${componentEscapeHtml(componentSafe(row.component_group, "-"))}</td>
         <td>${componentEscapeHtml(componentSafe(row.position, "-"))}</td>
-        <td>-</td>
-        <td>-</td>
-        <td>-</td>
-        <td>-</td>
-        <td>-</td>
-        <td>-</td>
+        <td><div class="components-action-stack"><span>Archived component</span><span class="components-clock-disabled">Tracking unavailable</span></div></td>
         <td>${componentEscapeHtml(formatServiceInterval(row))}</td>
         <td>${componentEscapeHtml(componentSafe(row.notes, "-"))}</td>
       </tr>
@@ -371,12 +575,8 @@ function renderComponentsTable() {
         <th>Component</th>
         <th>Group</th>
         <th>Position</th>
-        <th>Last Service</th>
-        <th>Action</th>
-        <th>Miles Since</th>
-        <th>Hours Since</th>
-        <th>Rides Since</th>
-        <th>Days Since</th>
+        <th>Last Event</th>
+        <th>Usage / Status</th>
         <th>Interval</th>
         <th>Notes</th>
       </tr>
@@ -529,6 +729,7 @@ function syncBrakePadIdentityFromPosition() {
   document.getElementById("componentEditorHours").value = "";
   document.getElementById("componentEditorDays").value = "";
   document.getElementById("componentEditorRides").value = "";
+  updateComponentEditorTrackingGuidance();
 }
 
 function setComponentEditorAdvancedVisibility(visible) {
@@ -554,6 +755,52 @@ function setComponentEditorBaselineMode(mode) {
   if (currentBlock) {
     currentBlock.classList.toggle("hidden", mode !== "custom");
   }
+  const hint = document.getElementById("componentEditorBaselineHint");
+  if (hint) {
+    hint.textContent = mode === "custom"
+      ? "Enter the installation date and known bike totals from that time."
+      : "Starts usage from the bike's current totals when saved.";
+  }
+}
+
+function updateComponentEditorTrackingGuidance() {
+  const lifeInput = document.getElementById("componentEditorTrackLife");
+  const serviceInput = document.getElementById("componentEditorTrackService");
+  const guidance = document.getElementById("componentEditorTrackingGuidance");
+  if (!lifeInput || !serviceInput || !guidance) {
+    return;
+  }
+  if (lifeInput.checked && serviceInput.checked) {
+    guidance.textContent = "Two clocks are tracked independently. Replacement resets both; ordinary maintenance resets only the maintenance clock.";
+  } else if (lifeInput.checked) {
+    guidance.textContent = "Use this for parts that wear out and are replaced, such as tires, chains, brake pads, rotors, handlebars, and batteries.";
+  } else if (serviceInput.checked) {
+    guidance.textContent = "Use this for recurring work on an existing system, such as suspension service, brake bleeds, or sealant refresh.";
+  } else {
+    guidance.textContent = "No usage clock will be shown for this component.";
+  }
+}
+
+function setComponentEditorMode(mode) {
+  const isAdd = mode === "add";
+  const templateGroup = document.getElementById("componentEditorTemplateGroup");
+  const baselineGroup = document.getElementById("componentEditorBaselineGroup");
+  const editHint = document.getElementById("componentEditorEditHistoryHint");
+  [templateGroup, baselineGroup].forEach(element => {
+    if (!element) {
+      return;
+    }
+    element.classList.toggle("hidden", !isAdd);
+    element.setAttribute("aria-hidden", isAdd ? "false" : "true");
+    element.querySelectorAll("input, select, button, textarea").forEach(control => {
+      control.tabIndex = isAdd ? 0 : -1;
+    });
+  });
+  if (editHint) {
+    editHint.classList.toggle("hidden", isAdd);
+    editHint.setAttribute("aria-hidden", isAdd ? "true" : "false");
+  }
+  updateComponentEditorTrackingGuidance();
 }
 
 function ensureComponentEditorDrawer() {
@@ -581,7 +828,7 @@ function ensureComponentEditorDrawer() {
           <div class="components-editor-grid">
             <section class="components-editor-section">
               <div class="drawer-section-title">Identity</div>
-              <div class="drawer-field-group">
+              <div id="componentEditorTemplateGroup" class="drawer-field-group">
                 <label for="componentEditorTemplate">Template</label>
                 <select id="componentEditorTemplate" name="component_template">
                   <option value="custom">Custom</option>
@@ -589,6 +836,7 @@ function ensureComponentEditorDrawer() {
                   <option value="chain">Chain</option>
                   <option value="tires">Tires</option>
                 </select>
+                <div class="field-hint">Templates prefill common settings. Review the tracking choices and targets before saving.</div>
               </div>
               <div class="drawer-field-group">
                 <label for="componentEditorGroup">Component group</label>
@@ -613,15 +861,18 @@ function ensureComponentEditorDrawer() {
               <div class="drawer-field-group drawer-toggle-group">
                 <label class="drawer-check-label" for="componentEditorTrackLife">
                   <input id="componentEditorTrackLife" name="track_life" type="checkbox">
-                  <span>Track life</span>
+                  <span>Track component life</span>
                 </label>
+                <div class="field-hint">Measures usage since this physical part was installed or replaced.</div>
               </div>
               <div class="drawer-field-group drawer-toggle-group">
                 <label class="drawer-check-label" for="componentEditorTrackService">
                   <input id="componentEditorTrackService" name="track_service" type="checkbox" checked>
-                  <span>Track service</span>
+                  <span>Track maintenance</span>
                 </label>
+                <div class="field-hint">Measures usage since qualifying service was performed.</div>
               </div>
+              <div id="componentEditorTrackingGuidance" class="components-editor-guidance field-hint" aria-live="polite"></div>
               <div class="drawer-field-group">
                 <label for="componentEditorMetric">Preferred metric</label>
                 <select id="componentEditorMetric" name="preferred_metric">
@@ -632,12 +883,13 @@ function ensureComponentEditorDrawer() {
                   <option value="rides">rides</option>
                   <option value="inspection">inspection</option>
                 </select>
+                <div class="field-hint">Chooses the main metric used for maintenance targets and future alerts. It does not decide whether an event resets life or maintenance.</div>
               </div>
-              <div class="drawer-field-group">
-                <label>Lifecycle baseline</label>
+              <div id="componentEditorBaselineGroup" class="drawer-field-group">
+                <label>Component starting point</label>
                 <div class="component-baseline-toggle" role="tablist" aria-label="Lifecycle baseline mode">
-                  <button type="button" class="component-baseline-mode active" data-mode="current_snapshot" aria-pressed="true">Current bike snapshot</button>
-                  <button type="button" class="component-baseline-mode" data-mode="custom" aria-pressed="false">Custom start</button>
+                  <button type="button" class="component-baseline-mode active" data-mode="current_snapshot" aria-pressed="true">Installed now</button>
+                  <button type="button" class="component-baseline-mode" data-mode="custom" aria-pressed="false">Installed previously</button>
                 </div>
                 <div id="componentEditorBaselineCustom" class="component-baseline-custom hidden">
                   <div class="drawer-inline-grid">
@@ -661,12 +913,14 @@ function ensureComponentEditorDrawer() {
                     </div>
                   </div>
                 </div>
-                <div class="field-hint">Use the live total bike mileage at save time for a fresh installation; set a custom value to establish an original component at a known bike mileage.</div>
+                <div id="componentEditorBaselineHint" class="field-hint">Starts usage from the bike's current totals when saved.</div>
               </div>
+              <div id="componentEditorEditHistoryHint" class="components-editor-readonly-guidance field-hint hidden" aria-hidden="true">Starting point comes from Service History. To correct historical usage, edit the service event and use Recalculate from Strava.</div>
             </section>
 
             <section class="components-editor-section">
-              <div class="drawer-section-title">Service defaults</div>
+              <div class="drawer-section-title">Maintenance targets</div>
+              <div class="field-hint">Optional targets for miles, hours, days, or rides. Leave blank when no fixed interval is useful.</div>
               <div class="drawer-field-group drawer-inline-grid">
                 <div>
                   <label for="componentEditorMiles">Service miles</label>
@@ -695,7 +949,7 @@ function ensureComponentEditorDrawer() {
               <div id="componentEditorAdvancedFields" class="drawer-advanced-fields hidden">
                 <div class="drawer-field-group drawer-inline-grid">
                   <div>
-                    <label for="componentEditorWarning">Warning %</label>
+                    <label for="componentEditorWarning">Approaching-due threshold</label>
                     <input id="componentEditorWarning" name="warning_percent" type="number" min="0.01" max="100" step="0.01" value="80">
                   </div>
                   <div>
@@ -703,6 +957,7 @@ function ensureComponentEditorDrawer() {
                     <input id="componentEditorOrder" name="display_order" type="number" min="0" step="1" value="100">
                   </div>
                 </div>
+                <div class="field-hint">When alerts are added, this percentage will mark a target as approaching due. Example: 80% of a 40-hour target is 32 hours.</div>
                 <div class="drawer-field-group">
                   <label for="componentEditorNotes">Notes</label>
                   <textarea id="componentEditorNotes" name="notes" rows="4" placeholder="Optional notes"></textarea>
@@ -723,6 +978,9 @@ function ensureComponentEditorDrawer() {
   const componentTemplate = form.querySelector("#componentEditorTemplate");
   const advancedToggle = form.querySelector("#componentEditorAdvancedToggle");
   const baselineButtons = form.querySelectorAll(".component-baseline-mode");
+  form.querySelectorAll("#componentEditorTrackLife, #componentEditorTrackService").forEach(input => {
+    input.addEventListener("change", updateComponentEditorTrackingGuidance);
+  });
 
   componentTemplate.addEventListener("change", event => {
     const template = event.target.value || "custom";
@@ -730,6 +988,7 @@ function ensureComponentEditorDrawer() {
     if (template === "brake_pads") {
       syncBrakePadIdentityFromPosition();
     }
+    updateComponentEditorTrackingGuidance();
   });
 
   const positionInput = form.querySelector("#componentEditorPosition");
@@ -873,6 +1132,7 @@ async function openComponentEditor(componentId) {
 
   drawer.dataset.componentId = String(componentId);
   form.reset();
+  setComponentEditorMode("edit");
   setComponentEditorBaselineMode("current_snapshot");
   setComponentEditorAdvancedVisibility(false);
   statusEl.textContent = "";
@@ -932,6 +1192,7 @@ function ensureComponentAddControls() {
 
     drawer.dataset.componentId = "new";
     form.reset();
+    setComponentEditorMode("add");
     setComponentEditorBaselineMode("current_snapshot");
     setComponentEditorAdvancedVisibility(false);
     statusEl.textContent = "";
@@ -941,6 +1202,7 @@ function ensureComponentAddControls() {
     document.getElementById("componentEditorWarning").value = 80;
     document.getElementById("componentEditorOrder").value = 100;
     document.getElementById("componentEditorBaselineDate").value = new Date().toISOString().slice(0, 10);
+    updateComponentEditorTrackingGuidance();
 
     titleEl.textContent = "Add Component";
     subtitleEl.textContent = "Create a new tracked component for the selected bike.";
@@ -988,25 +1250,11 @@ function ensureComponentServiceDrawer() {
               </div>
               <div class="drawer-field-group">
                 <label for="componentServiceAction">Action <span aria-hidden="true">*</span></label>
-                <select id="componentServiceAction" name="action" required>
+                <select id="componentServiceAction" name="action" required aria-describedby="componentServiceEffect">
                   <option value="">Select an action</option>
-              <option value="Inspection">Inspection</option>
-              <option value="Adjustment">Adjustment</option>
-              <option value="Cleaning">Cleaning</option>
-              <option value="Lubrication">Lubrication</option>
-              <option value="Brake Bleed">Brake Bleed</option>
-              <option value="Brake Pads">Brake Pads</option>
-              <option value="Rotor">Rotor</option>
-              <option value="Tire">Tire</option>
-              <option value="Sealant">Sealant</option>
-              <option value="Suspension Service">Suspension Service</option>
-              <option value="Drivetrain">Drivetrain</option>
-              <option value="Chain">Chain</option>
-              <option value="Bearing">Bearing</option>
-              <option value="Wheel">Wheel</option>
-              <option value="Replacement">Replacement</option>
-              <option value="Other">Other</option>
+                  ${renderComponentActionOptions()}
                 </select>
+                <div id="componentServiceEffect" class="components-service-effect components-service-effect-neutral" role="status" aria-live="polite"><strong>Select an action to see what it resets.</strong></div>
               </div>
               <div class="drawer-field-group">
                 <label for="componentServiceProvider">Provider / Performed by</label>
@@ -1130,6 +1378,7 @@ function ensureComponentServiceDrawer() {
   drawer.querySelector("#componentServiceDate").addEventListener("change", () => {
     requestComponentServiceSnapshot(drawer, drawer.querySelector("#componentServiceDate").value);
   });
+  drawer.querySelector("#componentServiceAction").addEventListener("change", () => renderComponentServiceEffect(drawer));
   drawer.querySelector("#componentServiceForm").addEventListener("input", () => updateComponentServiceSaveState(drawer));
   document.addEventListener("keydown", event => {
     if (event.key === "Escape" && !drawer.classList.contains("hidden")) {
@@ -1222,6 +1471,22 @@ function updateComponentServiceSaveState(drawer) {
   if (saveBtn) {
     saveBtn.disabled = !canSaveComponentService(drawer);
   }
+}
+
+function renderComponentServiceEffect(drawer) {
+  const badge = drawer.querySelector("#componentServiceEffect");
+  const actionInput = drawer.querySelector("#componentServiceAction");
+  if (!badge || !actionInput) {
+    return;
+  }
+  const action = actionInput.value;
+  const classification = classifyComponentAction(action);
+  const component = window.AppState.componentsData && Array.isArray(window.AppState.componentsData.components)
+    ? window.AppState.componentsData.components.find(item => String(item.gear_component_id) === String(drawer.dataset.componentId))
+    : null;
+  const effect = componentEffectMarkup(actionInput.value, component);
+  badge.className = `components-service-effect components-service-effect-${effect.kind}`;
+  badge.innerHTML = `<strong>${componentEscapeHtml(effect.title)}</strong>${effect.detail ? `<span>${componentEscapeHtml(effect.detail)}</span>` : ""}`;
 }
 
 async function requestComponentServiceSnapshot(drawer, serviceDate) {
@@ -1323,6 +1588,7 @@ async function openComponentServiceDrawer(componentId, componentName = "") {
       <div><dt>Position</dt><dd>${componentEscapeHtml(component && component.position || "-")}</dd></div>
     </dl>
   `;
+  renderComponentServiceEffect(drawer);
 
   drawer.classList.remove("hidden");
   drawer.setAttribute("aria-hidden", "false");
@@ -1948,6 +2214,8 @@ function closeComponentHistoryEditor() {
   if (editorEl) {
     editorEl.innerHTML = "";
   }
+  delete drawer.dataset.historyEditorInitialEffect;
+  delete drawer.dataset.historyEditorInitialEffectLabel;
   const eventId = String(drawer.dataset.historyEditorReturnEventId || "").trim();
   const focusTarget = eventId
     ? drawer.querySelector(`.components-history-edit-button[data-service-event-id="${CSS.escape(eventId)}"]`)
@@ -2181,7 +2449,12 @@ async function openComponentHistoryEventEditor(componentId, serviceEventId, even
             </div>
             <div class="drawer-field-group">
               <label for="historyEditorAction">Action <span aria-hidden="true">*</span></label>
-              <input id="historyEditorAction" name="action" type="text" value="${componentEscapeHtml(formatHistoryInputValue(normalizedHistoryData.service_type))}" required>
+              <select id="historyEditorAction" name="action" required aria-describedby="historyEditorActionEffect historyEditorActionImpact">
+                <option value="">Select an action</option>
+                ${renderComponentActionOptions(normalizedHistoryData.service_type, true)}
+              </select>
+              <div id="historyEditorActionEffect" class="components-service-effect components-service-effect-neutral" role="status" aria-live="polite"></div>
+              <div id="historyEditorActionImpact" class="components-service-effect components-service-effect-warning hidden" role="status" aria-live="polite"></div>
             </div>
             <div class="drawer-field-group">
               <label for="historyEditorProvider">Provider / Performed by</label>
@@ -2264,6 +2537,27 @@ async function openComponentHistoryEventEditor(componentId, serviceEventId, even
     statusEl.classList.remove("hidden", "status-error", "status-success", "status-info");
     statusEl.classList.add(kind === "error" ? "status-error" : kind === "success" ? "status-success" : "status-info");
   };
+
+  const historyActionInput = editorEl.querySelector("#historyEditorAction");
+  const historyActionEffect = editorEl.querySelector("#historyEditorActionEffect");
+  const historyActionImpact = editorEl.querySelector("#historyEditorActionImpact");
+  const initialActionEffect = componentEffectMarkup(normalizedHistoryData.service_type, component, true);
+  drawer.dataset.historyEditorInitialEffect = initialActionEffect.key;
+  drawer.dataset.historyEditorInitialEffectLabel = initialActionEffect.category;
+
+  const updateHistoryActionEffect = () => {
+    const effect = componentEffectMarkup(historyActionInput.value, component, true);
+    historyActionEffect.className = `components-service-effect components-service-effect-${effect.kind}`;
+    historyActionEffect.innerHTML = `<strong>${componentEscapeHtml(effect.title)}</strong>${effect.detail ? `<span>${componentEscapeHtml(effect.detail)}</span>` : ""}`;
+    const changed = effect.key !== drawer.dataset.historyEditorInitialEffect;
+    historyActionImpact.classList.toggle("hidden", !changed);
+    historyActionImpact.innerHTML = changed
+      ? `<strong>Changing this Action changes which usage clock this event resets.</strong><span>Previous effect: ${componentEscapeHtml(drawer.dataset.historyEditorInitialEffectLabel)}</span><span>New effect: ${componentEscapeHtml(effect.category)}</span>`
+      : "";
+  };
+
+  historyActionInput.addEventListener("change", updateHistoryActionEffect);
+  updateHistoryActionEffect();
 
   const finish = () => {
     if (saveBtn) {

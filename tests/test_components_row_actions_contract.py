@@ -17,7 +17,7 @@ class ComponentsRowActionsContractTests(unittest.TestCase):
         self.assertNotIn('class="components-edit-button"', COMPONENTS_JS)
         self.assertNotIn('class="components-archive-button"', COMPONENTS_JS)
         self.assertNotIn('class="components-restore-button"', COMPONENTS_JS)
-        self.assertIn('<td><div class="components-action-stack"><span>${componentEscapeHtml(formatLatestAction(latestEvent))}</span></div></td>', COMPONENTS_JS)
+        self.assertIn('<td><div class="components-action-stack"><span>${componentEscapeHtml(actionContext)}</span>${clockSummary}</div></td>', COMPONENTS_JS)
 
     def test_active_and_archived_menu_labels_and_separator_are_explicit(self):
         self.assertIn('Record Service', COMPONENTS_JS)
@@ -53,7 +53,7 @@ class ComponentsRowActionsContractTests(unittest.TestCase):
         self.assertIn('restoreComponentFromRow(state.componentId, state.componentName)', COMPONENTS_JS)
         self.assertIn('window.api.archiveComponent(componentId)', COMPONENTS_JS)
         self.assertIn('window.api.restoreComponent(componentId)', COMPONENTS_JS)
-        self.assertIn('colspan="11"', COMPONENTS_JS)
+        self.assertIn('colspan="7"', COMPONENTS_JS)
 
     def test_menu_styles_are_owned_by_components_css(self):
         self.assertIn('.components-overflow-trigger', COMPONENTS_CSS)

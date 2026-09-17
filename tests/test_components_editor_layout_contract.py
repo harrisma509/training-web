@@ -47,7 +47,24 @@ class ComponentsEditorLayoutContractTests(unittest.TestCase):
         self.assertIn('name="odometer_hours" type="number" min="0" step="0.01"', COMPONENTS_JS)
         self.assertIn('name="odometer_rides" type="number" min="0" step="1"', COMPONENTS_JS)
         self.assertIn('name="odometer_elevation_ft" type="number" min="0" step="1"', COMPONENTS_JS)
-        self.assertIn('components.js?v=20260915-components-service-form-v14', INDEX_HTML)
+        self.assertIn('components.js?v=20260916-components-ui-v17', INDEX_HTML)
+
+    def test_service_field_groups_top_align_without_control_stretch(self):
+        self.assertIn(".components-service-field-grid>.drawer-field-group {", COMPONENTS_CSS)
+        alignment_start = COMPONENTS_CSS.index(".components-service-field-grid>.drawer-field-group {")
+        alignment_end = COMPONENTS_CSS.index("}", alignment_start)
+        self.assertIn("align-self: start;", COMPONENTS_CSS[alignment_start:alignment_end])
+        self.assertNotIn("height: 100%;", COMPONENTS_CSS[alignment_start:alignment_end])
+        self.assertNotIn("!important", COMPONENTS_CSS[alignment_start:alignment_end])
+        self.assertNotIn("position: absolute", COMPONENTS_CSS[alignment_start:alignment_end])
+        self.assertNotIn("position: fixed", COMPONENTS_CSS[alignment_start:alignment_end])
+        self.assertNotIn("position: sticky", COMPONENTS_CSS[alignment_start:alignment_end])
+
+    def test_record_and_edit_keep_text_provider_and_action_effect_association(self):
+        self.assertIn('id="componentServiceProvider" name="performed_by" type="text"', COMPONENTS_JS)
+        self.assertIn('id="historyEditorProvider" name="service_provider" type="text"', COMPONENTS_JS)
+        self.assertIn('aria-describedby="componentServiceEffect"', COMPONENTS_JS)
+        self.assertIn('aria-describedby="historyEditorActionEffect historyEditorActionImpact"', COMPONENTS_JS)
 
     def test_advanced_settings_disclosure_contract(self):
         self.assertEqual(COMPONENTS_JS.count('id="componentEditorAdvancedToggle"'), 1)

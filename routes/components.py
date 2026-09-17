@@ -12,6 +12,7 @@ Owns a read-only endpoint that combines:
 import re
 from datetime import date
 from decimal import Decimal, InvalidOperation
+from functools import cmp_to_key
 from typing import Optional
 
 from fastapi import APIRouter, Body, HTTPException
@@ -133,6 +134,184 @@ LEGACY_SNAPSHOT_FIELDS = (
     "rides_at_service",
     "elevation_at_service",
 )
+
+
+COMPONENT_LIFECYCLE_ACTIONS = frozenset({
+    "new",
+    "installation",
+    "replace",
+    "replacement",
+})
+
+COMPONENT_MAINTENANCE_ACTIONS = frozenset({
+    "inspection",
+    "adjustment",
+    "cleaning",
+    "lubrication",
+    "brake bleed",
+    "bleed",
+    "sealant",
+    "refresh",
+    "suspension service",
+    "rebuild",
+    "lowers",
+})
+
+
+def normalize_component_event_action(action):
+    return str(action or "").strip().lower()
+
+
+def is_lifecycle_boundary_action(action):
+    return normalize_component_event_action(action) in COMPONENT_LIFECYCLE_ACTIONS
+
+
+def is_service_reset_action(action):
+    normalized = normalize_component_event_action(action)
+    return normalized in COMPONENT_LIFECYCLE_ACTIONS or normalized in COMPONENT_MAINTENANCE_ACTIONS
+
+
+def event_resets_life(action):
+    return is_lifecycle_boundary_action(action)
+
+
+def event_resets_service(action):
+    return is_service_reset_action(action)
+
+
+def _compare_component_events(left, right):
+    for field in ("service_date", "created_at", "service_event_id"):
+        left_value = left.get(field)
+        right_value = right.get(field)
+        if left_value is None and right_value is None:
+            continue
+        if left_value is None:
+            return 1
+        if right_value is None:
+            return -1
+        if left_value != right_value:
+            return -1 if left_value > right_value else 1
+    return 0
+
+
+def order_component_events(events):
+    return sorted(events or [], key=cmp_to_key(_compare_component_events))
+
+
+def _clock_event_payload(event):
+    if event is None:
+        return None
+    return {
+        "service_event_id": event.get("service_event_id"),
+        "gear_component_id": event.get("gear_component_id"),
+        "gear_id": event.get("gear_id"),
+        "service_date": json_safe(event.get("service_date")),
+        "action": event.get("action"),
+        "product_name": event.get("product_name"),
+        "manufacturer": event.get("manufacturer"),
+        "model": event.get("model"),
+        "notes": event.get("notes"),
+        "cost": json_safe(event.get("cost")),
+        "odometer_miles": json_safe(event.get("odometer_miles")),
+        "odometer_hours": json_safe(event.get("odometer_hours")),
+        "odometer_rides": json_safe(event.get("odometer_rides")),
+        "odometer_elevation_ft": json_safe(event.get("odometer_elevation_ft")),
+        "performed_by": event.get("performed_by"),
+        "service_location": event.get("service_location"),
+        "source": event.get("source"),
+        "source_reference": event.get("source_reference"),
+        "created_at": json_safe(event.get("created_at")),
+        "updated_at": json_safe(event.get("updated_at")),
+    }
+
+
+def _derive_component_clock(component, events, totals, today=None, clock="life"):
+    enabled = bool(component.get("track_life" if clock == "life" else "track_service"))
+    disabled = {
+        "enabled": False,
+        "state": "disabled",
+        "baseline_event": None,
+        "baseline_event_id": None,
+        "baseline_action": None,
+        "baseline_service_date": None,
+        "usage": {"miles": None, "hours": None, "rides": None, "elevation_ft": None, "days": None},
+        "metric_availability": {"miles": False, "hours": False, "rides": False, "elevation_ft": False, "days": False},
+        "snapshot_source": {"miles": "unavailable", "hours": "unavailable", "rides": "unavailable", "elevation_ft": "unavailable", "days": "unavailable"},
+        "review_reasons": [],
+    }
+    if not enabled:
+        return disabled
+
+    predicate = event_resets_life if clock == "life" else event_resets_service
+    candidates = [event for event in events if event.get("service_date") is not None and predicate(event.get("action"))]
+    ordered = order_component_events(candidates)
+    baseline = ordered[0] if ordered else None
+    if baseline is None:
+        disabled.update({"enabled": True, "state": "no_baseline", "review_reasons": [f"no_qualifying_{clock}_baseline"]})
+        return disabled
+
+    current = {
+        "miles": totals.get("total_miles"),
+        "hours": totals.get("total_hours"),
+        "rides": totals.get("total_rides"),
+        "elevation_ft": totals.get("total_elevation_ft"),
+    }
+    baseline_values = {
+        "miles": baseline.get("odometer_miles"),
+        "hours": baseline.get("odometer_hours"),
+        "rides": baseline.get("odometer_rides"),
+        "elevation_ft": baseline.get("odometer_elevation_ft"),
+    }
+    usage = {key: None for key in ("miles", "hours", "rides", "elevation_ft", "days")}
+    availability = {key: False for key in usage}
+    source = {key: "unavailable" for key in usage}
+    review_reasons = []
+
+    for metric, baseline_value in baseline_values.items():
+        if baseline_value is None or current[metric] is None:
+            continue
+        delta = current[metric] - baseline_value
+        if delta < 0:
+            review_reasons.append("newer_current_total_below_baseline_snapshot")
+            continue
+        usage[metric] = delta
+        availability[metric] = True
+        source[metric] = "event_snapshot"
+
+    current_date = today or date.today()
+    baseline_date = baseline.get("service_date")
+    if baseline_date is not None and current_date >= baseline_date:
+        usage["days"] = (current_date - baseline_date).days
+        availability["days"] = True
+        source["days"] = "event_date"
+
+    if review_reasons:
+        state = "review"
+    elif any(availability.values()):
+        state = "ready" if all(availability.values()) else "partial"
+    else:
+        state = "review"
+        review_reasons.append("no_trustworthy_metrics")
+
+    return {
+        "enabled": True,
+        "state": state,
+        "baseline_event": _clock_event_payload(baseline),
+        "baseline_event_id": baseline.get("service_event_id"),
+        "baseline_action": baseline.get("action"),
+        "baseline_service_date": json_safe(baseline.get("service_date")),
+        "usage": {key: json_safe(value) for key, value in usage.items()},
+        "metric_availability": availability,
+        "snapshot_source": source,
+        "review_reasons": sorted(set(review_reasons)),
+    }
+
+
+def derive_component_clocks(component, events, totals, today=None):
+    return {
+        "life": _derive_component_clock(component, events, totals, today=today, clock="life"),
+        "service": _derive_component_clock(component, events, totals, today=today, clock="service"),
+    }
 
 
 def _parse_service_date(value, *, required=True):
@@ -566,6 +745,36 @@ def api_gear_components(gear_id: Optional[str] = None):
             )
             component_rows = cur.fetchall()
 
+            cur.execute(
+                """
+                    select
+                        service_event_id,
+                        gear_component_id,
+                        gear_id,
+                        service_date,
+                        action,
+                        product_name,
+                        manufacturer,
+                        model,
+                        notes,
+                        cost,
+                        odometer_miles,
+                        odometer_hours,
+                        odometer_rides,
+                        odometer_elevation_ft,
+                        performed_by,
+                        service_location,
+                        source,
+                        source_reference,
+                        created_at,
+                        updated_at
+                    from public.gear_service_event
+                    where gear_id = %s
+                """,
+                (selected_gear_id,),
+            )
+            event_rows = cur.fetchall()
+
     selected_bike = {
         "gear_id": selected_bike_row["gear_id"],
         "gear_name": selected_bike_row["gear_name"],
@@ -579,6 +788,10 @@ def api_gear_components(gear_id: Optional[str] = None):
         "elevation_ft": json_safe(selected_bike_row["elevation_ft"]),
         "last_activity_date": json_safe(selected_bike_row["last_activity_date"]),
     }
+
+    events_by_component = {}
+    for event in event_rows:
+        events_by_component.setdefault(event["gear_component_id"], []).append(event)
 
     components = []
     today = date.today()
@@ -661,6 +874,18 @@ def api_gear_components(gear_id: Optional[str] = None):
                 "elevation_basis": elevation_basis,
             },
         }
+
+        component_payload["component_clocks"] = derive_component_clocks(
+            row,
+            events_by_component.get(row["gear_component_id"], []),
+            {
+                "total_miles": row["total_miles"],
+                "total_hours": row["total_hours"],
+                "total_rides": row["total_rides"],
+                "total_elevation_ft": row["total_elevation_ft"],
+            },
+            today=today,
+        )
 
         if has_event:
             component_payload["latest_event"] = {
