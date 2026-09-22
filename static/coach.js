@@ -25,7 +25,7 @@
     }
 
     if (typeof document === "undefined" && typeof module !== "undefined") {
-        module.exports = { chooseSessionMenuPlacement, hasNewPersistedUserMessage };
+        module.exports = { chooseSessionMenuPlacement, hasNewPersistedUserMessage, formatContextCoverage };
         return;
     }
 
@@ -757,6 +757,15 @@
         list.appendChild(makeElement("dd", "", value));
     }
 
+    function formatContextCoverage(coverage) {
+        const summary = `${coverage.detailed_activity_days || 0} activity days, ${coverage.weekly_rows || 0} weekly rows, ${coverage.recovery_days || 0} recovery days`;
+        const count = coverage.daily_checkin_count;
+        if (!Number.isInteger(count) || count < 0) {
+            return summary;
+        }
+        return `${summary}, ${count} daily check-in${count === 1 ? "" : "s"}`;
+    }
+
     function renderContextReceipt(receipt) {
         const root = makeElement("div", "coach-context-panel");
         const data = receipt?.receipt_json || {};
@@ -769,7 +778,7 @@
         appendContextRow(details, "Custom Instructions", data.custom_instructions_included ? "Included" : "Not included");
         const coverage = data.context_coverage || {};
         appendContextRow(details, "Data through", coverage.data_through_date || "Not reported");
-        appendContextRow(details, "Coverage", `${coverage.detailed_activity_days || 0} activity days, ${coverage.weekly_rows || 0} weekly rows, ${coverage.recovery_days || 0} recovery days`);
+        appendContextRow(details, "Coverage", formatContextCoverage(coverage));
         appendContextRow(details, "Additional data", Array.isArray(data.additional_data_requested) && data.additional_data_requested.length
             ? data.additional_data_requested.join(", ") : "None");
         root.appendChild(details);
