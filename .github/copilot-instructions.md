@@ -1,3 +1,15 @@
+## Required Engineering Grounding
+
+Before planning, investigating, or changing code, read:
+
+1. `docs/ENGINEERING_CONSTITUTION.md`
+2. The relevant architecture or feature document
+3. `docs/TESTING_GUIDE.md`
+
+The Engineering Constitution defines cross-repository principles.
+This file defines repository-specific mandatory instructions.
+Feature documents define detailed contracts and current behavior.
+
 # GitHub Copilot Instructions for training-web
 
 ## Project
