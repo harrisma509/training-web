@@ -1,0 +1,156 @@
+.coach-composer-wrap {
+    grid-row: 5;
+    position: relative;
+    z-index: 2;
+    min-height: 0;
+    padding: 12px clamp(14px, 7vw, 96px) 18px;
+    background: linear-gradient(transparent, var(--panel) 18%);
+}
+
+.coach-composer {
+    max-width: 780px;
+    margin: 0 auto;
+    padding: 9px 11px 8px 15px;
+    border: 1px solid var(--input-border);
+    border-radius: 15px;
+    background: var(--input-bg);
+    box-shadow: 0 10px 28px rgba(0, 0, 0, 0.16);
+}
+
+.coach-composer:focus-within {
+    border-color: var(--input-focus-border);
+    box-shadow: 0 0 0 3px var(--input-focus-shadow);
+}
+
+.coach-composer textarea {
+    display: block;
+    width: 100%;
+    min-height: 28px;
+    max-height: 150px;
+    padding: 5px 0;
+    border: 0;
+    outline: 0;
+    resize: none;
+    overflow-y: auto;
+    background: transparent;
+    color: var(--text);
+    font: inherit;
+    line-height: 1.45;
+}
+
+.coach-composer textarea::placeholder {
+    color: var(--muted);
+}
+
+.coach-composer-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.coach-composer-label {
+    display: block;
+    margin: 0;
+    color: var(--muted);
+    font-size: 11px;
+    font-weight: 700;
+}
+
+.coach-mode-control {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    color: var(--muted);
+    font-size: 11px;
+    font-weight: 700;
+}
+
+.coach-mode-control select {
+    min-height: 28px;
+    padding: 3px 24px 3px 8px;
+    border: 1px solid var(--input-border);
+    border-radius: 7px;
+    background: var(--button-secondary-bg);
+    color: var(--text);
+    font: inherit;
+    font-weight: 700;
+}
+
+.coach-mode-control select:focus-visible {
+    outline: 2px solid var(--blue);
+    outline-offset: 2px;
+}
+
+.coach-mode-control select:disabled {
+    cursor: wait;
+    opacity: 0.6;
+}
+
+.coach-mode-status {
+    min-height: 16px;
+    color: var(--muted);
+    font-size: 10px;
+    text-align: right;
+}
+
+.coach-composer-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    min-height: 36px;
+}
+
+.coach-character-count {
+    color: var(--muted);
+    font-size: 11px;
+}
+
+.coach-send-button {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    min-height: 36px;
+    padding: 0 13px;
+    border: 0;
+    border-radius: 9px;
+    background: var(--blue);
+    color: var(--button-active-text);
+    font-weight: 800;
+    cursor: pointer;
+}
+
+.coach-send-button:disabled,
+.coach-new-chat:disabled,
+.coach-prompt-button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.coach-loading-status,
+.coach-error {
+    max-width: 780px;
+    margin: 0 auto 8px;
+    font-size: 12px;
+}
+
+.coach-loading-status {
+    color: var(--blue);
+}
+
+.coach-error {
+    padding: 10px 12px;
+    border: 1px solid rgba(248, 113, 113, 0.38);
+    border-radius: 9px;
+    background: rgba(248, 113, 113, 0.08);
+    color: var(--red);
+}
+
+.coach-pending {
+    color: var(--muted);
+    font-style: italic;
+}
+
+.coach-mobile-only {
+    display: none;
+}

@@ -1,0 +1,365 @@
+.coach-session-rail {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    border-right: 1px solid var(--line);
+    background: color-mix(in srgb, var(--panel) 88%, transparent);
+}
+
+.coach-workspace.is-history-collapsed .coach-session-rail {
+    overflow: hidden;
+    visibility: hidden;
+    border-right: 0;
+}
+
+.coach-rail-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 22px 10px 16px 18px;
+}
+
+.coach-rail-header h2,
+.coach-session-heading h2 {
+    margin: 0;
+    font-size: 18px;
+    letter-spacing: 0;
+}
+
+.coach-eyebrow {
+    margin: 0 0 5px;
+    color: var(--blue);
+    font-size: 10px;
+    font-weight: 800;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+}
+
+.coach-new-chat {
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 9px;
+    width: auto;
+    min-height: 44px;
+    margin: 0 14px 14px;
+    padding: 0 6px;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    color: var(--text);
+    font-weight: 750;
+    cursor: pointer;
+}
+
+.coach-new-chat:hover,
+.coach-new-chat:focus-visible {
+    background: var(--button-secondary-bg);
+}
+
+.coach-new-chat-icon {
+    width: 20px;
+    height: 20px;
+    flex: 0 0 auto;
+    color: var(--blue);
+}
+
+.coach-new-chat-icon circle,
+.coach-new-chat-icon path {
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.5;
+}
+
+.coach-new-chat-icon path {
+    stroke-linecap: round;
+}
+
+.coach-inline-status {
+    min-height: 20px;
+    padding: 0 18px 8px;
+    color: var(--muted);
+    font-size: 12px;
+}
+
+.coach-sessions {
+    min-height: 0;
+    overflow-y: auto;
+    padding: 0 8px 16px;
+}
+
+.coach-session-group {
+    margin: 12px 8px 6px;
+    color: var(--muted);
+    font-size: 10px;
+    font-weight: 800;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+}
+
+.coach-session-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 5px;
+    width: 100%;
+    min-height: 58px;
+    padding: 10px 11px;
+    border: 1px solid transparent;
+    border-radius: 10px;
+    background: transparent;
+    color: var(--text);
+    text-align: left;
+}
+
+.coach-session-row:hover,
+.coach-session-row:focus-visible {
+    border-color: var(--input-border);
+    background: var(--button-secondary-bg);
+}
+
+.coach-session-row.is-active {
+    border-color: rgba(96, 165, 250, 0.45);
+    background: rgba(96, 165, 250, 0.12);
+}
+
+.coach-session-row.is-active .coach-session-title {
+    color: var(--text);
+    font-weight: 750;
+}
+
+.coach-session-select {
+    display: grid;
+    min-width: 0;
+    gap: 5px;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+
+.coach-session-select:focus-visible,
+.coach-session-edit:focus-visible,
+.coach-session-edit-input:focus-visible {
+    outline: 2px solid var(--blue);
+    outline-offset: 2px;
+}
+
+.coach-session-edit {
+    align-self: center;
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    border: 1px solid transparent;
+    border-radius: 7px;
+    background: transparent;
+    color: var(--muted);
+    cursor: pointer;
+    opacity: 0;
+}
+
+.coach-session-actions {
+    position: relative;
+    align-self: center;
+}
+
+.coach-session-actions-button {
+    align-items: center;
+    display: inline-flex;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    border: 1px solid transparent;
+    border-radius: 7px;
+    background: transparent;
+    color: var(--muted);
+    cursor: pointer;
+    opacity: 0;
+    font-size: 18px;
+    line-height: 1;
+}
+
+.coach-session-row:hover .coach-session-actions-button,
+.coach-session-row:focus-within .coach-session-actions-button,
+.coach-session-row.is-active .coach-session-actions-button,
+.coach-session-actions-button[aria-expanded="true"] {
+    opacity: 1;
+}
+
+.coach-session-actions-button:hover,
+.coach-session-actions-button:focus-visible {
+    border-color: var(--input-border);
+    background: var(--button-secondary-bg);
+    color: var(--text);
+}
+
+.coach-session-menu {
+    position: absolute;
+    z-index: 5;
+    top: calc(100% + 4px);
+    right: 0;
+    display: grid;
+    min-width: 132px;
+    padding: 4px;
+    border: 1px solid var(--input-border);
+    border-radius: 8px;
+    background: var(--panel);
+    box-shadow: 0 12px 28px rgba(0, 0, 0, 0.26);
+}
+
+.coach-session-menu.is-upward {
+    top: auto;
+    bottom: calc(100% + 4px);
+}
+
+.coach-session-menu button {
+    padding: 8px 10px;
+    border: 0;
+    border-radius: 5px;
+    background: transparent;
+    color: var(--text);
+    text-align: left;
+    cursor: pointer;
+    font: inherit;
+    font-size: 12px;
+}
+
+.coach-session-menu button:hover,
+.coach-session-menu button:focus-visible {
+    background: var(--button-secondary-bg);
+    outline: none;
+}
+
+.coach-session-menu .is-destructive,
+.coach-delete-dialog-actions .button-danger {
+    color: var(--red);
+}
+
+.coach-session-menu button:disabled,
+.coach-delete-dialog-actions button:disabled {
+    cursor: not-allowed;
+    opacity: 0.5;
+}
+
+.coach-session-row:hover .coach-session-edit,
+.coach-session-row:focus-within .coach-session-edit {
+    opacity: 1;
+}
+
+.coach-session-edit:hover,
+.coach-session-edit:focus-visible {
+    border-color: var(--input-border);
+    background: var(--button-secondary-bg);
+    color: var(--text);
+}
+
+.coach-session-edit-form {
+    grid-column: 1 / -1;
+    min-width: 0;
+}
+
+.coach-session-edit-input {
+    width: 100%;
+    min-height: 32px;
+    padding: 5px 8px;
+    border: 1px solid var(--input-focus-border);
+    border-radius: 7px;
+    background: var(--input-bg);
+    color: var(--text);
+    font: inherit;
+    font-size: 13px;
+}
+
+.coach-session-rename-error {
+    display: block;
+    margin-top: 4px;
+    color: var(--red);
+    font-size: 11px;
+}
+
+.coach-delete-dialog {
+    position: fixed;
+    z-index: 30;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    padding: 20px;
+}
+
+.coach-delete-dialog-backdrop {
+    position: absolute;
+    inset: 0;
+    background: rgba(3, 7, 18, 0.72);
+}
+
+.coach-delete-dialog-panel {
+    position: relative;
+    width: min(100%, 430px);
+    padding: 22px;
+    border: 1px solid var(--input-border);
+    border-radius: 12px;
+    background: var(--panel);
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.35);
+}
+
+.coach-delete-dialog-panel h2 {
+    margin: 0;
+    font-size: 19px;
+}
+
+.coach-delete-dialog-panel p {
+    margin: 10px 0 0;
+    color: var(--muted);
+    line-height: 1.5;
+}
+
+.coach-delete-dialog-error {
+    min-height: 18px;
+    margin-top: 12px;
+    color: var(--red);
+    font-size: 12px;
+}
+
+.coach-delete-dialog-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    margin-top: 18px;
+}
+
+.coach-delete-dialog-actions button {
+    min-height: 36px;
+    padding: 0 12px;
+    border-radius: 8px;
+    cursor: pointer;
+    font: inherit;
+    font-size: 12px;
+    font-weight: 750;
+}
+
+.coach-delete-dialog-actions .button-secondary {
+    border: 1px solid var(--input-border);
+    background: var(--button-secondary-bg);
+    color: var(--text);
+}
+
+.coach-delete-dialog-actions .button-danger {
+    border: 1px solid rgba(248, 113, 113, 0.5);
+    background: rgba(248, 113, 113, 0.12);
+}
+
+.coach-session-title {
+    min-width: 0;
+    overflow: hidden;
+    font-size: 13px;
+    font-weight: 650;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.coach-session-time {
+    color: var(--muted);
+    font-size: 11px;
+}

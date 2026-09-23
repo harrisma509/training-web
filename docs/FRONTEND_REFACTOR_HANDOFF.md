@@ -36,6 +36,18 @@ Important boundaries:
 - [static/sync.js](../static/sync.js): sync pill and sync request flow
 - [static/app.js](../static/app.js): tab switching and app-level shell wiring
 
+### Coach stylesheet ownership
+
+Coach CSS is split into responsibility-based files loaded by `index.html` in
+this order: `coach-layout.css`, `coach-sessions.css`,
+`coach-conversation.css`, `coach-composer.css`, `coach-context.css`, and
+`coach-responsive.css`. The responsive file loads last and owns the complete
+mobile and reduced-motion overrides. Future Coach CSS changes should target the
+owning file rather than recreate a monolithic `coach.css`.
+
+JavaScript modularization and chat-feed incremental refresh remain separate
+future work.
+
 ## What is already in good shape
 
 - State is centralized in AppState rather than duplicated across feature files.

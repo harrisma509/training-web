@@ -1,0 +1,146 @@
+@media (max-width: 760px) {
+    .coach-workspace {
+        display: block;
+        height: calc(100dvh - 102px);
+        min-height: 0;
+        border-radius: 10px;
+    }
+
+    .coach-session-rail {
+        position: absolute;
+        z-index: 4;
+        top: 0;
+        bottom: 0;
+        left: 0;
+        width: min(86vw, 320px);
+        transform: translateX(-105%);
+        transition: transform 180ms ease;
+        box-shadow: 14px 0 32px rgba(0, 0, 0, 0.28);
+        overflow: visible;
+        visibility: visible;
+        border-right: 1px solid var(--line);
+    }
+
+    .coach-workspace.is-history-collapsed {
+        display: block;
+    }
+
+    .coach-workspace.is-history-collapsed .coach-session-rail {
+        overflow: visible;
+        visibility: visible;
+        border-right: 1px solid var(--line);
+    }
+
+    .coach-session-rail.is-open {
+        transform: translateX(0);
+    }
+
+    .coach-drawer-backdrop {
+        position: absolute;
+        inset: 0;
+        z-index: 3;
+        background: var(--drawer-overlay);
+    }
+
+    .coach-drawer-backdrop:not(.hidden) {
+        display: block;
+    }
+
+    .coach-mobile-only {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 42px;
+        padding: 0;
+    }
+
+    .coach-main-header {
+        height: 42px;
+        min-height: 42px;
+        padding: 4px 14px;
+    }
+
+    .coach-header-actions {
+        height: 40px;
+    }
+
+    .coach-overflow-wrap {
+        height: 40px;
+    }
+
+    .coach-overflow-toggle {
+        height: 40px;
+        min-height: 0;
+    }
+
+    .coach-main-header .coach-mobile-only {
+        margin-right: 2px;
+    }
+
+    .coach-history-rail-toggle,
+    .coach-history-restore {
+        display: none;
+    }
+
+    .coach-usage-panel {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        padding: 12px 14px;
+    }
+
+    .coach-usage-items {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .coach-conversation {
+        padding: 24px 14px 18px;
+    }
+
+    .coach-message-bubble {
+        max-width: 88%;
+    }
+
+    .coach-composer-wrap {
+        padding: 10px 10px 12px;
+    }
+
+    .coach-composer-header {
+        align-items: flex-start;
+        flex-wrap: wrap;
+    }
+
+    .coach-mode-control {
+        margin-left: auto;
+    }
+
+    .coach-prompts {
+        grid-template-columns: 1fr;
+    }
+
+    .coach-session-actions-button {
+        opacity: 1;
+    }
+
+    .coach-delete-dialog {
+        align-items: end;
+        padding: 12px;
+    }
+
+    .coach-delete-dialog-panel {
+        width: 100%;
+    }
+
+    .coach-delete-dialog-actions {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .coach-session-rail {
+        transition: none;
+    }
+
+    .coach-conversation {
+        scroll-behavior: auto;
+    }
+}
