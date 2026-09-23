@@ -237,46 +237,84 @@ Deterministic routing evidence, relevance rules, and ranking weights select
 Durable Memories, but the final request does not assign percentage weights to
 every context section.
 
-The packet contains seven components:
+The packet contains eight components:
 
 1. **Product Coach policy**
 
-    Defines non-editable safety, authority, missing-data, privacy, and response
-    rules.
+    Defines non-editable safety, authority, missing-data, privacy, temporal,
+    provider, and context rules shared by every Coach mode.
 
 2. **Custom Instructions**
 
     Defines Mike's stable coaching priorities, progression guardrails, planning
     preferences, and communication style.
 
-3. **Selected Durable Memories**
+3. **Selected mode response strategy**
+
+    The immutable `coach_turn.coach_mode` snapshot selects either the concise
+    Training Coach decision-support lens or the Conversational Coach reflection
+    lens. It changes response framing only; it does not change truth, safety,
+    context, memories, provider settings, budgets, or conversation history.
+
+4. **Selected Durable Memories**
 
     Supplies relevant stable personal facts that Mike should not have to repeat
     in every question. Deterministic routing uses the current ask first, then
     user-authored history for ambiguous follow-ups. Memory limits are ceilings,
     not a target number of selected memories.
 
-4. **Temporal reference**
+5. **Temporal reference**
 
     Grounds today, yesterday, tomorrow, the local timezone, and the context
     generation time.
 
-5. **Fresh Training Intelligence**
+6. **Fresh Training Intelligence**
 
     Provides authoritative current measurements, calculated metrics, audits,
     activities, recovery, weight, and risk context.
 
-6. **Bounded recent conversation**
+7. **Bounded recent conversation**
 
     Gives the provider both prior user and assistant messages for conversational
     continuity. Only user-authored history influences Durable Memory routing;
     assistant text remains available to the provider but does not create memory
     candidates.
 
-7. **Current question**
+8. **Current question**
 
     Defines the immediate task and receives the strongest ordinary-memory
     routing influence.
+
+The exact provider-instruction order is: universal policy, Custom Instructions
+wrapper and compiled instructions, selected mode strategy, Durable Memory
+wrapper and selected memories, then the temporal reference and authoritative
+context, bounded recent conversation, and current question. The mode strategy
+is included exactly once and is selected from the started turn, never reread
+from the session after the turn begins.
+
+Training Coach answers simple factual questions directly while using structured
+actions for substantive training decisions. Conversational Coach supports
+reflection, perspective, accountability, celebration, and rationalization
+challenges without imposing a training-report outline. Both modes retain the
+same authority, clinician-priority, privacy, temporal, missing-data, and safety
+rules. No provider, model, reasoning, output, budget, context retrieval, memory
+routing, or receipt contract differs by mode.
+
+### Coach Modes V1 frontend contract
+
+The Coach composer provides a compact accessible selector with exactly these options:
+
+- `training`: **Training Coach**
+- `conversational`: **Conversational Coach**
+
+The selected mode is persisted with `PATCH /api/coach/sessions/{session_id}` using a mode-only JSON body. The server session's `current_mode` is the source of truth after load, refresh, and session switching; the mode is not stored as a browser preference. Training uses the placeholder `Training, recovery, or what to do next...`; Conversational uses `What's on your mind?`.
+
+Changing mode does not create a turn or call a provider. Send remains disabled
+until the mode PATCH settles. A failed PATCH restores the last confirmed server
+mode and its placeholder while preserving the draft. Completed assistant
+responses display the immutable `coach_turn.coach_mode` label, defaulting
+missing historical mode values to Training Coach. Whole-chat re-generation or
+rewriting of prior responses is deferred.
 
 ### Conflict order
 

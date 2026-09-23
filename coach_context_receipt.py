@@ -15,9 +15,10 @@ from coach_memory_router import (
     selection_reasons,
 )
 from db import db_conn, json_safe
+from coach_modes import validate_coach_mode
 
 
-RECEIPT_VERSION = 1
+RECEIPT_VERSION = 2
 MAX_RECEIPT_CHARACTERS = 16_000
 MAX_SELECTED_MEMORIES = 12
 MAX_MISSING_SOURCES = 20
@@ -30,6 +31,7 @@ RECEIPT_KEYS = (
     "custom_instructions_included",
     "additional_data_requested",
 )
+RECEIPT_V2_KEYS = RECEIPT_KEYS + ("coach_mode",)
 COVERAGE_KEYS = (
     "data_through_date",
     "detailed_activity_days",
@@ -125,7 +127,9 @@ def _coverage(context):
     return result
 
 
-def build_receipt(selected_memories, evidence, context, history, custom_instructions_included):
+def build_receipt(selected_memories, evidence, context, history, custom_instructions_included, coach_mode=None):
+    if coach_mode is not None:
+        coach_mode = validate_coach_mode(coach_mode)
     if not isinstance(selected_memories, list) or len(selected_memories) > MAX_SELECTED_MEMORIES:
         raise ContextReceiptInvalid("Invalid selected memory count.")
     if not isinstance(history, list):
@@ -153,12 +157,17 @@ def build_receipt(selected_memories, evidence, context, history, custom_instruct
         "custom_instructions_included": custom_instructions_included,
         "additional_data_requested": [],
     }
-    validate_receipt(receipt)
+    if coach_mode is not None:
+        receipt["coach_mode"] = coach_mode
+    validate_receipt(receipt, 2 if coach_mode is not None else 1)
     return receipt
 
 
-def validate_receipt(receipt):
-    if not isinstance(receipt, dict) or set(receipt) != set(RECEIPT_KEYS):
+def validate_receipt(receipt, receipt_version=None):
+    if receipt_version is None:
+        receipt_version = 2 if isinstance(receipt, dict) and "coach_mode" in receipt else 1
+    expected_keys = RECEIPT_V2_KEYS if receipt_version == 2 else RECEIPT_KEYS
+    if not isinstance(receipt, dict) or set(receipt) != set(expected_keys):
         raise ContextReceiptInvalid("Invalid receipt shape.")
     memories = receipt["selected_memories"]
     if not isinstance(memories, list) or len(memories) > MAX_SELECTED_MEMORIES:
@@ -188,6 +197,11 @@ def validate_receipt(receipt):
         raise ContextReceiptInvalid("Invalid Custom Instructions indicator.")
     if receipt["additional_data_requested"] != []:
         raise ContextReceiptInvalid("Invalid additional-data receipt value.")
+    if receipt_version == 2:
+        try:
+            validate_coach_mode(receipt["coach_mode"])
+        except ValueError:
+            raise ContextReceiptInvalid("Invalid Coach mode.") from None
     serialized = json.dumps(receipt, ensure_ascii=True, separators=(",", ":"))
     if len(serialized) > MAX_RECEIPT_CHARACTERS:
         raise ContextReceiptInvalid("Context receipt exceeds its size limit.")
@@ -195,7 +209,8 @@ def validate_receipt(receipt):
 
 
 def persist_receipt(coach_turn_id, receipt):
-    validate_receipt(receipt)
+    receipt_version = 2 if "coach_mode" in receipt else 1
+    validate_receipt(receipt, receipt_version)
     try:
         with db_conn() as conn:
             with conn.cursor() as cur:
@@ -205,7 +220,7 @@ def persist_receipt(coach_turn_id, receipt):
                         (coach_turn_id, receipt_version, receipt_json)
                     VALUES (%s, %s, %s)
                     """,
-                    (coach_turn_id, RECEIPT_VERSION, Jsonb(receipt)),
+                    (coach_turn_id, receipt_version, Jsonb(receipt)),
                 )
             conn.commit()
     except UniqueViolation:
@@ -217,16 +232,18 @@ def persist_receipt(coach_turn_id, receipt):
 
 
 def receipt_response(row):
-    if row is None or row.get("receipt_version") != RECEIPT_VERSION:
+    if row is None or row.get("receipt_version") not in (1, 2):
         raise ContextReceiptUnavailable("Stored context receipt is unsupported.")
     try:
-        validate_receipt(row["receipt_json"])
+        version = row["receipt_version"]
+        receipt = row["receipt_json"]
+        validate_receipt(receipt)
     except ContextReceiptInvalid:
         raise ContextReceiptUnavailable("Stored context receipt is invalid.") from None
     return {
         "coach_turn_id": row["coach_turn_id"],
         "receipt_version": row["receipt_version"],
-        "receipt_json": row["receipt_json"],
+        "receipt_json": receipt,
         "created_at": json_safe(row["created_at"]),
     }
 

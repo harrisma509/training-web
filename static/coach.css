@@ -882,12 +882,56 @@
     color: var(--muted);
 }
 
+.coach-composer-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+}
+
 .coach-composer-label {
     display: block;
-    margin: 0 0 2px;
+    margin: 0;
     color: var(--muted);
     font-size: 11px;
     font-weight: 700;
+}
+
+.coach-mode-control {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    color: var(--muted);
+    font-size: 11px;
+    font-weight: 700;
+}
+
+.coach-mode-control select {
+    min-height: 28px;
+    padding: 3px 24px 3px 8px;
+    border: 1px solid var(--input-border);
+    border-radius: 7px;
+    background: var(--button-secondary-bg);
+    color: var(--text);
+    font: inherit;
+    font-weight: 700;
+}
+
+.coach-mode-control select:focus-visible {
+    outline: 2px solid var(--blue);
+    outline-offset: 2px;
+}
+
+.coach-mode-control select:disabled {
+    cursor: wait;
+    opacity: 0.6;
+}
+
+.coach-mode-status {
+    min-height: 16px;
+    color: var(--muted);
+    font-size: 10px;
+    text-align: right;
 }
 
 .coach-composer-footer {
@@ -1056,6 +1100,15 @@
         padding: 10px 10px 12px;
     }
 
+    .coach-composer-header {
+        align-items: flex-start;
+        flex-wrap: wrap;
+    }
+
+    .coach-mode-control {
+        margin-left: auto;
+    }
+
     .coach-prompts {
         grid-template-columns: 1fr;
     }
@@ -1136,4 +1189,9 @@
 
 .coach-context-memory-list strong {
     color: var(--text);
+}
+
+.coach-response-mode {
+    color: var(--text);
+    font-weight: 700;
 }

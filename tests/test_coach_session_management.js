@@ -25,6 +25,12 @@ require("../static/api.js");
     assert.equal(requests[0].url, "/api/coach/sessions/42%2Funsafe");
     assert.equal(requests[0].options.method, "DELETE");
 
+    await window.api.updateCoachSession("42", { mode: "conversational" });
+    assert.equal(requests.length, 2);
+    assert.equal(requests[1].url, "/api/coach/sessions/42");
+    assert.equal(requests[1].options.method, "PATCH");
+    assert.deepEqual(JSON.parse(requests[1].options.body), { mode: "conversational" });
+
     const coachSource = fs.readFileSync("static/coach.js", "utf8");
     const indexSource = fs.readFileSync("index.html", "utf8");
     assert.match(coachSource, /Chat actions for \$\{title\}/);
@@ -32,11 +38,19 @@ require("../static/api.js");
     assert.match(coachSource, /input\.addEventListener\("blur", \(\) => saveRename/);
     assert.match(coachSource, /event\.key === "Escape"/);
     assert.match(coachSource, /state\.deletePending/);
+    assert.match(coachSource, /coachModeSelect/);
+    assert.match(coachSource, /What's on your mind\?/);
+    assert.match(coachSource, /coach_mode/);
+    assert.match(coachSource, /state\.modePending/);
     assert.match(coachSource, /placeSessionMenu\(id\)/);
     assert.match(coachSource, /is-upward/);
     assert.match(indexSource, /Permanently delete this chat\?/);
     assert.match(indexSource, /There is no trash or restore option/);
     assert.match(indexSource, /Delete permanently/);
+    assert.match(indexSource, /Training Coach/);
+    assert.match(indexSource, /Conversational Coach/);
+    assert.match(indexSource, /coachModeSelect/);
+    assert.match(indexSource, /Coach mode/);
     assert.doesNotMatch(coachSource, /Undo/);
 
     const rail = { top: 100, bottom: 500 };

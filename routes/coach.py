@@ -30,6 +30,7 @@ from fastapi.responses import JSONResponse
 from psycopg.types.json import Jsonb
 
 from db import db_conn, json_safe
+from coach_modes import DEFAULT_COACH_MODE, compatibility_coach_mode, validate_coach_mode
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -56,7 +57,14 @@ class CoachActiveTurn(RuntimeError):
 
 
 def _json_row(row):
-    return None if row is None else {key: json_safe(value) for key, value in row.items()}
+    if row is None:
+        return None
+    result = {key: json_safe(value) for key, value in row.items()}
+    if {"coach_session_id", "title", "status", "coaching_policy_version"}.issubset(result) and "current_mode" not in result:
+        result["current_mode"] = DEFAULT_COACH_MODE
+    if {"coach_turn_id", "coaching_policy_version"}.issubset(result) and "coach_mode" not in result:
+        result["coach_mode"] = DEFAULT_COACH_MODE
+    return result
 
 
 def _parse_positive_id(value):
@@ -183,13 +191,14 @@ def _start_coach_turn(session_id, message_text, request_id):
             cur.execute(
                 """
                 INSERT INTO public.coach_turn
-                    (coach_session_id, user_message_id, request_id, coaching_policy_version, status)
-                VALUES (%s, %s, %s, %s, 'started')
+                    (coach_session_id, user_message_id, request_id, coaching_policy_version, coach_mode, status)
+                VALUES (%s, %s, %s, %s, %s, 'started')
                 RETURNING coach_turn_id, coach_session_id, user_message_id, assistant_message_id,
-                          request_id, provider, model, coaching_policy_version, status,
+                          request_id, provider, model, coaching_policy_version, coach_mode, status,
                           started_at, completed_at, created_at
                 """,
-                (parsed_id, user_message["coach_message_id"], request_id, COACHING_POLICY_VERSION),
+                (parsed_id, user_message["coach_message_id"], request_id, COACHING_POLICY_VERSION,
+                 compatibility_coach_mode(session.get("current_mode"))),
             )
             turn = cur.fetchone()
             cur.execute(
@@ -237,7 +246,7 @@ def _sanitize_error_category(value):
 def _session_select_sql():
     return """
         SELECT coach_session_id, title, status, provider, default_model,
-               coaching_policy_version, summary, summary_through_message_id,
+             coaching_policy_version, current_mode, summary, summary_through_message_id,
                compacted_at, compaction_count, last_provider_response_id,
                last_activity_at, created_at, updated_at
         FROM public.coach_session
@@ -314,6 +323,10 @@ async def create_coach_session(request: Request):
         payload = {}
     if not isinstance(payload, dict):
         return JSONResponse({"detail": "Request body must be an object."}, status_code=400)
+    if "mode" in payload:
+        return JSONResponse({"detail": "mode is not supported when creating a Coach session."}, status_code=400)
+    if set(payload) - {"title"}:
+        return JSONResponse({"detail": "Request body contains unsupported fields."}, status_code=400)
     title = payload.get("title", DEFAULT_SESSION_TITLE)
     if title is None or (isinstance(title, str) and not title.strip()):
         title = DEFAULT_SESSION_TITLE
@@ -326,12 +339,12 @@ async def create_coach_session(request: Request):
             with conn.cursor() as cur:
                 cur.execute(
                     """
-                    INSERT INTO public.coach_session (title, status, coaching_policy_version)
-                    VALUES (%s, 'active', %s)
+                    INSERT INTO public.coach_session (title, status, coaching_policy_version, current_mode)
+                    VALUES (%s, 'active', %s, %s)
                     RETURNING coach_session_id, title, status, provider, default_model,
-                              coaching_policy_version, last_activity_at, created_at, updated_at
+                              coaching_policy_version, current_mode, last_activity_at, created_at, updated_at
                     """,
-                    (title, COACHING_POLICY_VERSION),
+                    (title, COACHING_POLICY_VERSION, DEFAULT_COACH_MODE),
                 )
                 session = cur.fetchone()
             conn.commit()
@@ -364,7 +377,7 @@ def list_coach_sessions(limit: str | None = None):
                         GROUP BY coach_session_id
                     )
                     SELECT s.coach_session_id, s.title, s.status, s.provider, s.default_model,
-                           s.coaching_policy_version, s.last_activity_at, s.created_at, s.updated_at,
+                              s.coaching_policy_version, s.current_mode, s.last_activity_at, s.created_at, s.updated_at,
                            COALESCE(ma.message_count, 0) AS message_count,
                            COALESCE(ta.turn_count, 0) AS turn_count,
                            COALESCE(ta.total_tokens, 0) AS total_tokens,
@@ -417,7 +430,7 @@ def get_coach_session(session_id: str):
                         ORDER BY created_at, coach_message_id
                         LIMIT %s
                     )
-                    SELECT t.coach_turn_id, t.assistant_message_id, t.provider, t.model, t.status,
+                    SELECT t.coach_turn_id, t.assistant_message_id, t.provider, t.model, t.coach_mode, t.status,
                            t.elapsed_ms, t.total_tokens, t.estimated_cost_usd
                     FROM public.coach_turn t
                     JOIN public.coach_message assistant
@@ -454,23 +467,56 @@ async def update_coach_session(session_id: str, request: Request):
         return JSONResponse({"detail": "Invalid request body."}, status_code=400)
     if not isinstance(payload, dict):
         return JSONResponse({"detail": "Request body must be an object."}, status_code=400)
-    title, error = _text_value(payload.get("title"), "title", MAX_SESSION_TITLE_LENGTH)
-    if error:
-        return JSONResponse({"detail": error}, status_code=400)
+    unsupported_fields = set(payload) - {"title", "mode"}
+    if unsupported_fields:
+        return JSONResponse({"detail": "Request body contains unsupported fields."}, status_code=400)
+    has_title = "title" in payload
+    has_mode = "mode" in payload
+    if not has_title and not has_mode:
+        return JSONResponse({"detail": "Request body must include title or mode."}, status_code=400)
+    title = None
+    if has_title:
+        title, error = _text_value(payload.get("title"), "title", MAX_SESSION_TITLE_LENGTH)
+        if error:
+            return JSONResponse({"detail": error}, status_code=400)
+    mode = None
+    if has_mode:
+        try:
+            mode = validate_coach_mode(payload.get("mode"))
+        except ValueError as exc:
+            return JSONResponse({"detail": str(exc)}, status_code=400)
 
     try:
         with db_conn() as conn:
             with conn.cursor() as cur:
-                cur.execute(
+                if has_title and has_mode:
+                    query = """
+                        UPDATE public.coach_session
+                        SET title = %s, current_mode = %s, updated_at = now()
+                        WHERE coach_session_id = %s
+                        RETURNING coach_session_id, title, status, provider, default_model,
+                                  coaching_policy_version, current_mode, last_activity_at, created_at, updated_at
                     """
-                    UPDATE public.coach_session
-                    SET title = %s, updated_at = now()
-                    WHERE coach_session_id = %s
-                    RETURNING coach_session_id, title, status, provider, default_model,
-                              coaching_policy_version, last_activity_at, created_at, updated_at
-                    """,
-                    (title, parsed_id),
-                )
+                    params = (title, mode, parsed_id)
+                elif has_mode:
+                    query = """
+                        UPDATE public.coach_session
+                        SET current_mode = %s, updated_at = now()
+                        WHERE coach_session_id = %s
+                        RETURNING coach_session_id, title, status, provider, default_model,
+                                  coaching_policy_version, current_mode, last_activity_at, created_at, updated_at
+                    """
+                    params = (mode, parsed_id)
+                else:
+                    query = """
+                        UPDATE public.coach_session
+                        SET title = %s, updated_at = now()
+                        WHERE coach_session_id = %s
+                        RETURNING coach_session_id, title, status, provider, default_model,
+                                  coaching_policy_version, current_mode, last_activity_at, created_at, updated_at
+                    """
+                    params = (title, parsed_id)
+                cur.execute(query, params)
                 session = cur.fetchone()
             if session is None:
                 conn.rollback()
@@ -670,7 +716,7 @@ def _complete_coach_turn(
                 WHERE coach_turn_id = %s AND status = 'started'
                 RETURNING coach_turn_id, coach_session_id, user_message_id,
                           assistant_message_id, request_id, provider, model,
-                          coaching_policy_version, status, started_at, completed_at,
+                          coaching_policy_version, coach_mode, status, started_at, completed_at,
                           elapsed_ms, input_tokens, cached_input_tokens, output_tokens,
                           reasoning_tokens, total_tokens, estimated_cost_usd,
                           tool_call_count, provider_response_id
@@ -714,7 +760,7 @@ def _fail_coach_turn(turn_id, status="failed", error_category="unknown_error", e
                 UPDATE public.coach_turn
                 SET status = %s, error_category = %s, completed_at = now(), elapsed_ms = %s
                 WHERE coach_turn_id = %s AND status = 'started'
-                RETURNING coach_turn_id, coach_session_id, status, completed_at, elapsed_ms, error_category
+                RETURNING coach_turn_id, coach_session_id, coach_mode, status, completed_at, elapsed_ms, error_category
                 """,
                 (status, category, elapsed_ms, parsed_turn_id),
             )

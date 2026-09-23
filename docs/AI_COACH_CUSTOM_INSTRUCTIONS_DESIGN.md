@@ -86,10 +86,15 @@ The request assembly order is:
 1. Stable non-editable product Coach policy
 2. Server-controlled wrapper stating that Custom Instructions cannot override safety, clinician guidance, authoritative data, privacy, or missing-data semantics
 3. Compiled Custom Instructions
-4. Relevant Durable Memories after that feature exists
-5. Fresh authoritative Training Intelligence context
-6. Bounded recent conversation
-7. Current user question
+4. Selected response strategy from the immutable `coach_turn.coach_mode`
+5. Relevant Durable Memories after that feature exists
+6. Fresh authoritative Training Intelligence context
+7. Bounded recent conversation
+8. Current user question
+
+The selected strategy is a concise Training Coach or Conversational Coach
+response lens. It does not change the Custom Instructions wrapper, which keeps
+the same server-controlled precedence in both modes.
 
 Provider calls are stateless and use `store=False`, so compiled Custom
 Instructions must be sent on every real paid Coach turn. They are not sent by

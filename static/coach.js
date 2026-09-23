@@ -30,6 +30,15 @@
     }
 
     const MAX_MESSAGE_LENGTH = 12000;
+    const DEFAULT_COACH_MODE = "training";
+    const COACH_MODE_LABELS = {
+        training: "Training Coach",
+        conversational: "Conversational Coach",
+    };
+    const COACH_MODE_PLACEHOLDERS = {
+        training: "Training, recovery, or what to do next...",
+        conversational: "What's on your mind?",
+    };
     const SELECTED_SESSION_KEY = "coachSessionId";
     const HISTORY_RAIL_KEY = "trainingWeb.coach.historyRailCollapsed";
     const STAGES = [
@@ -47,6 +56,7 @@
         conversationLoading: false,
         creating: false,
         responsePending: false,
+        modePending: false,
         pendingMessage: "",
         error: "",
         sessionsError: "",
@@ -96,6 +106,8 @@
         composer: document.getElementById("coachComposer"),
         input: document.getElementById("coachMessageInput"),
         send: document.getElementById("coachSend"),
+        modeSelect: document.getElementById("coachModeSelect"),
+        modeStatus: document.getElementById("coachModeStatus"),
         characterCount: document.getElementById("coachCharacterCount"),
         deleteDialog: document.getElementById("coachDeleteDialog"),
         deleteCancel: document.getElementById("coachDeleteCancel"),
@@ -154,6 +166,58 @@
 
     function validSessionId(value) {
         return /^\d+$/.test(text(value).trim()) && Number(value) > 0;
+    }
+
+    function coachMode(value) {
+        return Object.prototype.hasOwnProperty.call(COACH_MODE_LABELS, value) ? value : DEFAULT_COACH_MODE;
+    }
+
+    function coachModeLabel(value) {
+        return COACH_MODE_LABELS[coachMode(value)];
+    }
+
+    function confirmedCoachMode() {
+        return coachMode(state.session && state.session.session && state.session.session.current_mode);
+    }
+
+    function renderCoachMode() {
+        const mode = confirmedCoachMode();
+        refs.modeSelect.value = mode;
+        refs.input.placeholder = COACH_MODE_PLACEHOLDERS[mode];
+        refs.modeSelect.disabled = state.responsePending || state.conversationLoading || state.modePending || !state.selectedSessionId;
+        refs.send.disabled = state.responsePending || state.modePending;
+        refs.modeSelect.setAttribute("aria-busy", String(state.modePending));
+        refs.modeStatus.textContent = state.modePending ? "Saving Coach mode..." : "";
+    }
+
+    async function updateCoachMode(event) {
+        event.preventDefault();
+        const activeId = state.selectedSessionId;
+        const nextMode = coachMode(refs.modeSelect.value);
+        if (!activeId || state.modePending || state.responsePending || nextMode === confirmedCoachMode()) {
+            renderCoachMode();
+            return;
+        }
+        state.modePending = true;
+        showError("");
+        renderCoachMode();
+        try {
+            const payload = await window.api.updateCoachSession(activeId, { mode: nextMode });
+            const updated = payload && payload.session;
+            const persistedMode = coachMode(updated && updated.current_mode);
+            state.sessions = state.sessions.map(session => sessionId(session) === activeId
+                ? { ...session, ...(updated || {}), current_mode: persistedMode }
+                : session);
+            if (state.session && sessionId(state.session.session) === activeId) {
+                state.session.session = { ...state.session.session, ...(updated || {}), current_mode: persistedMode };
+            }
+        } catch (error) {
+            showError(safeServerDetail(error && error.detail) || "Could not change Coach mode.");
+        } finally {
+            state.modePending = false;
+            renderCoachMode();
+            renderSessions();
+        }
     }
 
     function sessionId(session) {
@@ -577,6 +641,7 @@
             if (next) await selectSession(sessionId(next), true);
             else {
                 renderSessions();
+                renderCoachMode();
                 renderConversation();
                 renderUsage();
             }
@@ -851,6 +916,7 @@
                 actions.appendChild(copy);
                 const turn = findTurnForMessage(message);
                 if (turn && turn.status === "completed") {
+                    actions.appendChild(makeElement("span", "coach-response-mode", coachModeLabel(turn.coach_mode)));
                     const context = makeElement("button", "coach-context-button", "Context");
                     context.type = "button";
                     context.addEventListener("click", () => toggleContextReceipt(context, turn, item));
@@ -942,6 +1008,7 @@
         refs.input.disabled = value;
         refs.send.disabled = value;
         refs.newChat.disabled = value || state.creating;
+        renderCoachMode();
         renderSessions();
     }
 
@@ -975,6 +1042,7 @@
                 state.selectedSessionId = "";
                 state.session = null;
                 state.usage = null;
+                renderCoachMode();
                 renderSessions();
                 renderConversation();
             }
@@ -995,6 +1063,9 @@
         closeOverflowMenu();
         closeDrawer();
         state.conversationLoading = true;
+        state.session = null;
+        state.usage = null;
+        renderCoachMode();
         if (!silent) showError("");
         renderSessions();
         renderConversation();
@@ -1006,6 +1077,7 @@
             if (requestToken !== state.loadToken || state.selectedSessionId !== text(id)) return;
             state.session = session;
             state.usage = usage;
+            renderCoachMode();
             renderConversation();
             renderUsage();
         } catch (error) {
@@ -1017,6 +1089,7 @@
         } finally {
             if (requestToken === state.loadToken) {
                 state.conversationLoading = false;
+                renderCoachMode();
                 renderConversation();
             }
         }
@@ -1045,7 +1118,7 @@
     async function submitMessage(event) {
         event.preventDefault();
         const message = refs.input.value.trim();
-        if (!message || message.length > MAX_MESSAGE_LENGTH || state.responsePending || !state.selectedSessionId) return;
+        if (!message || message.length > MAX_MESSAGE_LENGTH || state.responsePending || state.modePending || !state.selectedSessionId) return;
         refs.input.value = "";
         state.pendingMessage = message;
         resizeComposer();
@@ -1117,6 +1190,7 @@
 
     refs.newChat.addEventListener("click", createSession);
     refs.composer.addEventListener("submit", submitMessage);
+    refs.modeSelect.addEventListener("change", updateCoachMode);
     refs.input.addEventListener("input", resizeComposer);
     refs.input.addEventListener("keydown", event => {
         if (event.key === "Enter" && !event.shiftKey) {

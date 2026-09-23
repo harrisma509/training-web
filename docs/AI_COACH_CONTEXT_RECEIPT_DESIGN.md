@@ -35,8 +35,8 @@ Table: `public.ai_coach_turn_context_receipts`
 
 - `coach_turn_id bigint NOT NULL`: both primary key and foreign key to
   `public.coach_turn(coach_turn_id)`, enforcing zero or one receipt per turn.
-- `receipt_version smallint NOT NULL DEFAULT 1`: V1 application writes exactly
-  version 1 and the database requires a value of at least 1.
+- `receipt_version smallint NOT NULL DEFAULT 1`: receipt documents are
+  immutable and the database requires a value of at least 1.
 - `receipt_json jsonb NOT NULL`: one required JSONB document with a database
   check that its top-level value is an object.
 - `created_at timestamptz NOT NULL DEFAULT now()`.
@@ -98,6 +98,12 @@ additional data was requested; it is not a future callback-event container.
 `context_coverage` is a compact allowlist, not a copied `context.coverage`
 object or full authoritative context. `custom_instructions_included` is only a
 boolean. No character counts are stored.
+
+Coach Modes V1 adds `coach_mode` as the only new top-level receipt key. Because
+V1 is explicitly an exact immutable shape, new mode-bearing receipts use
+`receipt_version = 2`. Version 1 receipts remain readable and missing mode is
+interpreted as `training` at compatibility boundaries; old receipt rows are
+never rewritten.
 
 ## Controlled selection reasons
 

@@ -148,9 +148,12 @@ scope, and date context where useful. The model-facing block excludes
 and internal ranking scores.
 
 The request order is: stable product Coach policy; Custom Instructions
-wrapper and compiled Custom Instructions; Durable Memories wrapper and selected
+wrapper and compiled Custom Instructions; selected response strategy from the
+immutable `coach_turn.coach_mode`; Durable Memories wrapper and selected
 memories; temporal reference and authoritative Training Intelligence context;
-bounded recent conversation; current question.
+bounded recent conversation; current question. The response strategy changes
+only the response lens and does not alter memory routing, selection, or
+precedence.
 
 Conflict precedence is: current direct statement from Mike; current clinician
 guidance; current authoritative Training Intelligence; newer active dated

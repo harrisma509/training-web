@@ -152,6 +152,14 @@ class FakeProvider:
 
 
 class ReceiptContractTests(unittest.TestCase):
+    def test_mode_receipt_uses_v2_and_rejects_invalid_modes(self):
+        receipt = build_receipt([], route_evidence("Question", [], {}), {}, [], False, "conversational")
+        self.assertEqual(receipt["coach_mode"], "conversational")
+        validate_receipt(receipt, 2)
+        receipt["coach_mode"] = "unsupported"
+        with self.assertRaises(ContextReceiptInvalid):
+            validate_receipt(receipt, 2)
+
     def test_builds_exact_v1_shape_and_excludes_memory_details(self):
         evidence = route_evidence("How is recovery?", [], CONTEXT)
         receipt = build_receipt([selected_memory()], evidence, CONTEXT, [], True)

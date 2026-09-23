@@ -970,9 +970,19 @@
           <div id="coachComposerWrap" class="coach-composer-wrap">
             <div id="coachLoadingStatus" class="coach-loading-status hidden" aria-live="polite"></div>
             <form id="coachComposer" class="coach-composer">
-              <label class="coach-composer-label" for="coachMessageInput">Ask your Coach</label>
+              <div class="coach-composer-header">
+                <label class="coach-composer-label" for="coachMessageInput">Ask your Coach</label>
+                <label class="coach-mode-control">
+                  <span>Coach mode</span>
+                  <select id="coachModeSelect" aria-describedby="coachModeStatus">
+                    <option value="training">Training Coach</option>
+                    <option value="conversational">Conversational Coach</option>
+                  </select>
+                </label>
+              </div>
               <textarea id="coachMessageInput" rows="1" maxlength="12000"
                 placeholder="Training, recovery, or what to do next..."></textarea>
+              <div id="coachModeStatus" class="coach-mode-status" role="status" aria-live="polite"></div>
               <div class="coach-composer-footer">
                 <span id="coachCharacterCount" class="coach-character-count"></span>
                 <button id="coachSend" type="submit" class="coach-send-button" aria-label="Send message"><span

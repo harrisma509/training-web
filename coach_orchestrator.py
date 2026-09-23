@@ -26,6 +26,7 @@ from coach_cost import (
     preflight_cost,
 )
 from coach_guards import ProviderCapacityError, provider_capacity
+from coach_modes import response_strategy_for_mode
 from coach_policy import COACH_POLICY
 from routes.coach_custom_instructions import (
     CustomInstructionsUnavailableError,
@@ -212,6 +213,7 @@ def respond_to_coach(
             if not compiled_custom_instructions
             else COACH_POLICY + "\n\n" + compiled_custom_instructions
         )
+        provider_instructions += "\n\n" + response_strategy_for_mode(started_turn.get("coach_mode"))
         if compiled_memories:
             provider_instructions += "\n\n" + compiled_memories
         provider = provider_factory()
@@ -237,6 +239,7 @@ def respond_to_coach(
             context,
             history,
             bool(compiled_custom_instructions),
+            started_turn.get("coach_mode"),
         )
         with provider_capacity():
             (receipt_persistor or persist_receipt)(turn_id, receipt)

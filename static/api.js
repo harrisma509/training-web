@@ -35,13 +35,20 @@
     },
 
     async updateCoachSession(sessionId, payload = {}) {
+      const requestPayload = {};
+      if (payload && Object.prototype.hasOwnProperty.call(payload, "title")) {
+        requestPayload.title = payload.title;
+      }
+      if (payload && Object.prototype.hasOwnProperty.call(payload, "mode")) {
+        requestPayload.mode = payload.mode;
+      }
       const response = await fetch(`/api/coach/sessions/${encodeURIComponent(sessionId)}`, {
         method: "PATCH",
         headers: {
           "Content-Type": "application/json",
           Accept: "application/json",
         },
-        body: JSON.stringify({ title: payload && payload.title }),
+        body: JSON.stringify(requestPayload),
       });
       if (!response.ok) {
         const detail = await response.json().catch(() => ({}));

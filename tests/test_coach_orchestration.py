@@ -87,6 +87,11 @@ from coach_cost import (
 )
 from coach_orchestrator import _build_input, respond_to_coach, validate_reasoning_effort
 from coach_policy import COACH_POLICY
+from coach_modes import (
+    CONVERSATIONAL_COACH_STRATEGY,
+    TRAINING_COACH_STRATEGY,
+    response_strategy_for_mode,
+)
 from routes.coach_settings import CoachSettings, CoachSettingsUnavailableError, validate_coach_settings
 from routes.coach_settings import get_ai_coach_settings, update_ai_coach_settings
 from routes.coach_custom_instructions import CustomInstructions, CustomInstructionsUnavailableError
@@ -105,6 +110,7 @@ from routes.coach import (
     DEFAULT_SESSION_TITLE,
     _auto_title_session,
     _derive_session_title,
+    create_coach_session,
     get_coach_session,
     update_coach_session,
 )
@@ -250,6 +256,22 @@ class CoachPolicyTests(unittest.TestCase):
             "clinician guidance remains higher priority",
         ):
             self.assertIn(requirement, policy)
+
+    def test_policy_keeps_response_strategy_out_of_universal_invariants(self):
+        policy = COACH_POLICY.lower()
+        self.assertIn("authoritative factual input", policy)
+        self.assertIn("clinician guidance", policy)
+        self.assertNotIn("summary;", policy)
+        self.assertNotIn("central tension", policy)
+
+    def test_mode_strategies_change_lens_without_changing_shared_safety(self):
+        training = response_strategy_for_mode("training")
+        conversational = response_strategy_for_mode("conversational")
+        self.assertNotEqual(training, conversational)
+        self.assertIn("decision or direct answer first", training)
+        self.assertIn("central tension", conversational)
+        self.assertIn("never omit a material risk or clinician guidance", conversational)
+        self.assertIn("clinician guidance", COACH_POLICY.lower())
 
     def test_temporal_reference_derives_dates_and_preserves_context(self):
         input_text, context_characters, _ = _build_input(TEMPORAL_CONTEXT, [], "What happened yesterday?")
@@ -598,6 +620,78 @@ class CoachOrchestrationTests(unittest.TestCase):
         self.assertIn("Keep it direct.", request.instructions)
         self.assertEqual(preflight.call_args.args[1], len(request.input_text) + len(request.instructions))
 
+    def test_training_mode_selects_training_strategy_once_after_custom_instructions(self):
+        self.started["coach_mode"] = "training"
+        instructions = CustomInstructions("Safety first.", "", "", "", "Keep it direct.", "", "", "now")
+        with patch("coach_orchestrator.load_custom_instructions", return_value=instructions), \
+             patch("coach_orchestrator._start_coach_turn", return_value=({}, self.user_message, self.started)), \
+             patch("coach_orchestrator._recent_coach_messages", return_value=[]), \
+             patch("coach_orchestrator._complete_coach_turn", return_value=({"coach_message_id": 11}, self.completed)), \
+             patch("coach_orchestrator._coach_session_snapshot", return_value={}), \
+             patch("coach_orchestrator.enforce_monthly_budget"), \
+             patch("coach_orchestrator._fail_coach_turn"):
+            respond_to_coach(3, "Should I ride hard tomorrow?", context_loader=lambda daily_days, weekly_rows: CONTEXT, provider_factory=lambda: self.provider)
+
+        request = self.provider.requests[0]
+        self.assertEqual(request.instructions.count(TRAINING_COACH_STRATEGY), 1)
+        self.assertNotIn(CONVERSATIONAL_COACH_STRATEGY, request.instructions)
+        self.assertLess(request.instructions.index("Coaching priorities:"), request.instructions.index(TRAINING_COACH_STRATEGY))
+
+    def test_conversational_mode_selects_conversational_strategy_and_preserves_provider_settings(self):
+        self.started["coach_mode"] = "conversational"
+        with patch("coach_orchestrator._start_coach_turn", return_value=({}, self.user_message, self.started)), \
+             patch("coach_orchestrator._recent_coach_messages", return_value=[]), \
+             patch("coach_orchestrator._complete_coach_turn", return_value=({"coach_message_id": 11}, self.completed)), \
+             patch("coach_orchestrator._coach_session_snapshot", return_value={}), \
+             patch("coach_orchestrator.enforce_monthly_budget"), \
+             patch("coach_orchestrator._fail_coach_turn"):
+            respond_to_coach(3, "What do I need to hear today?", context_loader=lambda daily_days, weekly_rows: CONTEXT, provider_factory=lambda: self.provider)
+
+        request = self.provider.requests[0]
+        self.assertEqual(request.instructions.count(CONVERSATIONAL_COACH_STRATEGY), 1)
+        self.assertNotIn(TRAINING_COACH_STRATEGY, request.instructions)
+        self.assertEqual(request.model, "gpt-5.6-luna")
+        self.assertEqual(request.max_output_tokens, 1200)
+        self.assertEqual(request.reasoning_effort, "low")
+
+    def test_missing_mode_uses_training_strategy_and_invalid_mode_reconciles_before_provider(self):
+        with patch("coach_orchestrator._start_coach_turn", return_value=({}, self.user_message, {"coach_turn_id": 9})), \
+             patch("coach_orchestrator._recent_coach_messages", return_value=[]), \
+             patch("coach_orchestrator._complete_coach_turn", return_value=({"coach_message_id": 11}, self.completed)), \
+             patch("coach_orchestrator._coach_session_snapshot", return_value={}), \
+             patch("coach_orchestrator.enforce_monthly_budget"), \
+             patch("coach_orchestrator._fail_coach_turn"):
+            respond_to_coach(3, "Question", context_loader=lambda daily_days, weekly_rows: CONTEXT, provider_factory=lambda: self.provider)
+        self.assertIn(TRAINING_COACH_STRATEGY, self.provider.requests[-1].instructions)
+
+        self.provider.requests.clear()
+        with patch("coach_orchestrator._start_coach_turn", return_value=({}, self.user_message, {"coach_turn_id": 9, "coach_mode": "unsupported"})), \
+             patch("coach_orchestrator._fail_coach_turn") as fail:
+            with self.assertRaises(Exception) as raised:
+                respond_to_coach(3, "Question", context_loader=lambda daily_days, weekly_rows: CONTEXT, provider_factory=lambda: self.provider)
+        self.assertEqual(raised.exception.status_code, 500)
+        self.assertEqual(fail.call_args.kwargs["error_category"], "internal_error")
+        self.assertEqual(self.provider.requests, [])
+
+    def test_turn_snapshot_selects_strategy_independently_across_mode_changes(self):
+        started_turns = [
+            ({"coach_turn_id": 9, "coach_mode": "training"}),
+            ({"coach_turn_id": 10, "coach_mode": "conversational"}),
+        ]
+        with patch("coach_orchestrator._start_coach_turn", side_effect=[({}, self.user_message, started_turns[0]), ({}, self.user_message, started_turns[1])]), \
+             patch("coach_orchestrator._recent_coach_messages", return_value=[]), \
+             patch("coach_orchestrator._complete_coach_turn", return_value=({"coach_message_id": 11}, self.completed)), \
+             patch("coach_orchestrator._coach_session_snapshot", return_value={}), \
+             patch("coach_orchestrator.enforce_monthly_budget"), \
+             patch("coach_orchestrator._fail_coach_turn"):
+            respond_to_coach(3, "Same question", context_loader=lambda daily_days, weekly_rows: CONTEXT, provider_factory=lambda: self.provider)
+            respond_to_coach(3, "Same question", context_loader=lambda daily_days, weekly_rows: CONTEXT, provider_factory=lambda: self.provider)
+
+        self.assertIn(TRAINING_COACH_STRATEGY, self.provider.requests[0].instructions)
+        self.assertNotIn(CONVERSATIONAL_COACH_STRATEGY, self.provider.requests[0].instructions)
+        self.assertIn(CONVERSATIONAL_COACH_STRATEGY, self.provider.requests[1].instructions)
+        self.assertNotIn(TRAINING_COACH_STRATEGY, self.provider.requests[1].instructions)
+
     def test_custom_instructions_failure_reconciles_turn_before_provider(self):
         with patch("coach_orchestrator._start_coach_turn", return_value=({}, self.user_message, self.started)), \
              patch("coach_orchestrator._recent_coach_messages", return_value=[]), \
@@ -779,6 +873,108 @@ class CoachOrchestrationTests(unittest.TestCase):
         self.assertEqual(params, ("Calf recovery plan", 3))
         self.assertIn("SET title = %s, updated_at = now()", query)
         self.assertNotIn("last_activity_at =", query)
+
+    def test_patch_session_mode_only_updates_mode_without_message_or_turn(self):
+        class FakeRequest:
+            async def json(self):
+                return {"mode": "conversational"}
+
+        session = {
+            "coach_session_id": 3,
+            "title": "Existing title",
+            "status": "active",
+            "provider": None,
+            "default_model": None,
+            "coaching_policy_version": "coach-v1",
+            "current_mode": "conversational",
+            "last_activity_at": None,
+            "created_at": None,
+            "updated_at": None,
+        }
+
+        class FakeCursor:
+            def __init__(self):
+                self.queries = []
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, exc_type, exc_value, traceback):
+                return False
+
+            def execute(self, query, params):
+                self.queries.append((query, params))
+
+            def fetchone(self):
+                return session
+
+        class FakeConnection:
+            def __init__(self):
+                self.cursor_instance = FakeCursor()
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, exc_type, exc_value, traceback):
+                return False
+
+            def cursor(self):
+                return self.cursor_instance
+
+            def commit(self):
+                pass
+
+        connection = FakeConnection()
+        with patch("routes.coach.db_conn", return_value=connection):
+            result = asyncio.run(update_coach_session("3", FakeRequest()))
+        self.assertEqual(result["session"]["current_mode"], "conversational")
+        self.assertEqual(len(connection.cursor_instance.queries), 1)
+        query, params = connection.cursor_instance.queries[0]
+        self.assertEqual(params, ("conversational", 3))
+        self.assertIn("SET current_mode = %s, updated_at = now()", query)
+
+    def test_patch_session_rejects_explicit_invalid_mode_without_database_mutation(self):
+        class FakeRequest:
+            def __init__(self, mode):
+                self.mode = mode
+
+            async def json(self):
+                return {"mode": self.mode}
+
+        with patch("routes.coach.db_conn") as db_conn:
+            for mode in (None, "", "Training", "unsupported", 4):
+                result = asyncio.run(update_coach_session("3", FakeRequest(mode)))
+                self.assertEqual(result.status_code, 400)
+            db_conn.assert_not_called()
+
+    def test_patch_session_rejects_any_unknown_key_even_with_valid_title_or_mode(self):
+        class FakeRequest:
+            def __init__(self, payload):
+                self.payload = payload
+
+            async def json(self):
+                return self.payload
+
+        with patch("routes.coach.db_conn") as db_conn:
+            for payload in (
+                {"title": "Valid title", "extra": "nope"},
+                {"mode": "conversational", "extra": "nope"},
+                {"title": "Valid title", "mode": "conversational", "extra": "nope"},
+                {"title": "Valid title", "mode": "conversational", "unexpected": 1},
+            ):
+                result = asyncio.run(update_coach_session("3", FakeRequest(payload)))
+                self.assertEqual(result.status_code, 400)
+            db_conn.assert_not_called()
+
+    def test_create_session_rejects_mode_field_without_database_mutation(self):
+        class FakeRequest:
+            async def json(self):
+                return {"title": "My session", "mode": "conversational"}
+
+        with patch("routes.coach.db_conn") as db_conn:
+            result = asyncio.run(create_coach_session(FakeRequest()))
+            self.assertEqual(result.status_code, 400)
+        db_conn.assert_not_called()
 
     def test_patch_session_title_rejects_invalid_and_unknown_requests(self):
         class FakeRequest:
