@@ -89,12 +89,209 @@ function renderRideLinkFromFields(name, rideId) {
   return escapedName;
 }
 
+function renderNarrativeToggle(activityId, locationClass) {
+  const drawerId = `daily-narrative-drawer-${activityId}`;
+  return `<button type="button" class="daily-narrative-toggle ${locationClass}" data-activity-id="${activityId}" aria-label="Show activity notes" aria-expanded="false" aria-controls="${drawerId}"><svg class="daily-narrative-icon" viewBox="0 0 20 20" aria-hidden="true" focusable="false"><path d="M5 3.5h7l3 3V16.5H5zM12 3.5v3h3M7.5 10h5M7.5 13h5"></path></svg></button>`;
+}
+
+function hasNarrativeForRow(row) {
+  const activityId = row.main_ride_id == null ? "" : String(row.main_ride_id).trim();
+  return Boolean(
+    (row.main_ride_has_description || row.main_ride_has_private_note)
+    && /^[0-9]+$/.test(activityId),
+  );
+}
+
 function renderMainRideCell(row) {
   if (!hasMainRide(row)) {
     return "";
   }
 
-  return renderRideLinkFromFields(row.main_ride_name, row.main_ride_id);
+  const rideLink = renderRideLinkFromFields(row.main_ride_name, row.main_ride_id);
+  const activityId = row.main_ride_id == null ? "" : String(row.main_ride_id).trim();
+  if (!hasNarrativeForRow(row)) {
+    return rideLink;
+  }
+
+  return `${rideLink}${renderNarrativeToggle(activityId, "daily-narrative-main-ride-toggle")}`;
+}
+
+function renderMobileNarrativeCell(row, value) {
+  if (!hasNarrativeForRow(row)) {
+    return value;
+  }
+
+  const activityId = String(row.main_ride_id).trim();
+  return `<span class="daily-load-cell"><span>${value}</span>${renderNarrativeToggle(activityId, "daily-narrative-mobile-toggle")}</span>`;
+}
+
+let dailyNarrativeActiveId = "";
+let dailyNarrativeRequestId = 0;
+const dailyNarrativeCache = new Map();
+
+function dailyNarrativeTable() {
+  return document.getElementById("dailyTable");
+}
+
+function findDailyNarrativeRow(activityId) {
+  const table = dailyNarrativeTable();
+  if (!table) {
+    return null;
+  }
+  return Array.from(table.querySelectorAll("tbody > tr")).find(
+    row => row.dataset.dailyActivityId === String(activityId),
+  ) || null;
+}
+
+function updateDailyNarrativeButtons() {
+  const table = dailyNarrativeTable();
+  if (!table) {
+    return;
+  }
+  table.querySelectorAll(".daily-narrative-toggle").forEach(button => {
+    const isActive = button.dataset.activityId === dailyNarrativeActiveId;
+    button.setAttribute("aria-expanded", String(isActive));
+    button.setAttribute("aria-label", isActive ? "Hide activity notes" : "Show activity notes");
+  });
+}
+
+function removeDailyNarrativeDrawer() {
+  dailyNarrativeTable()?.querySelector(".daily-narrative-drawer-row")?.remove();
+}
+
+function appendNarrativeSection(parent, label, value, privateNote = false) {
+  if (value === null || value === undefined || String(value).trim() === "") {
+    return;
+  }
+  const section = document.createElement("section");
+  section.className = privateNote ? "daily-narrative-section daily-narrative-private" : "daily-narrative-section";
+  const heading = document.createElement("h4");
+  heading.textContent = label;
+  const content = document.createElement("div");
+  content.className = "daily-narrative-text";
+  content.textContent = String(value);
+  section.append(heading, content);
+  parent.appendChild(section);
+}
+
+function renderDailyNarrativeDrawer(activityId, row, state, errorMessage = "") {
+  const table = dailyNarrativeTable();
+  const sourceRow = row || findDailyNarrativeRow(activityId);
+  if (!table || !sourceRow) {
+    return;
+  }
+
+  removeDailyNarrativeDrawer();
+  const drawerRow = document.createElement("tr");
+  drawerRow.className = "daily-narrative-drawer-row";
+  drawerRow.id = `daily-narrative-drawer-${activityId}`;
+  const drawerCell = document.createElement("td");
+  drawerCell.colSpan = 16;
+  const drawer = document.createElement("div");
+  drawer.className = "daily-narrative-drawer";
+
+  const header = document.createElement("div");
+  header.className = "daily-narrative-header";
+  const title = document.createElement("strong");
+  title.textContent = sourceRow.querySelector("td:nth-child(1)")?.textContent || "Activity notes";
+  const name = document.createElement("span");
+  name.textContent = sourceRow.querySelector(".activity-link")?.textContent || "Main Ride";
+  header.append(title, name);
+  drawer.appendChild(header);
+
+  if (state === "loading") {
+    const loading = document.createElement("div");
+    loading.className = "daily-narrative-status";
+    loading.textContent = "Loading activity notes...";
+    drawer.appendChild(loading);
+  } else if (state === "error") {
+    const error = document.createElement("div");
+    error.className = "daily-narrative-error";
+    error.textContent = errorMessage || "Activity notes could not be loaded.";
+    const retry = document.createElement("button");
+    retry.type = "button";
+    retry.className = "daily-narrative-retry";
+    retry.textContent = "Retry";
+    retry.addEventListener("click", () => openDailyNarrative(activityId, sourceRow, true));
+    drawer.append(error, retry);
+  } else {
+    appendNarrativeSection(drawer, "Description", state.description);
+    appendNarrativeSection(drawer, "Private Note", state.private_note, true);
+    if (!state.description && !state.private_note) {
+      const empty = document.createElement("div");
+      empty.className = "daily-narrative-status";
+      empty.textContent = "No activity notes available.";
+      drawer.appendChild(empty);
+    }
+  }
+
+  drawerCell.appendChild(drawer);
+  drawerRow.appendChild(drawerCell);
+  sourceRow.after(drawerRow);
+  updateDailyNarrativeButtons();
+}
+
+function closeDailyNarrative() {
+  dailyNarrativeActiveId = "";
+  dailyNarrativeRequestId += 1;
+  removeDailyNarrativeDrawer();
+  updateDailyNarrativeButtons();
+}
+
+async function openDailyNarrative(activityId, row, retry = false) {
+  const normalizedId = String(activityId);
+  if (!retry && dailyNarrativeActiveId === normalizedId) {
+    closeDailyNarrative();
+    return;
+  }
+
+  dailyNarrativeActiveId = normalizedId;
+  const requestId = ++dailyNarrativeRequestId;
+  removeDailyNarrativeDrawer();
+  updateDailyNarrativeButtons();
+
+  if (!retry && dailyNarrativeCache.has(normalizedId)) {
+    renderDailyNarrativeDrawer(normalizedId, row, dailyNarrativeCache.get(normalizedId));
+    return;
+  }
+
+  renderDailyNarrativeDrawer(normalizedId, row, "loading");
+  try {
+    const payload = await window.api.fetchActivityNarrative(normalizedId);
+    if (requestId !== dailyNarrativeRequestId || dailyNarrativeActiveId !== normalizedId) {
+      return;
+    }
+    dailyNarrativeCache.set(normalizedId, payload || {});
+    renderDailyNarrativeDrawer(normalizedId, row, payload || {});
+  } catch (error) {
+    if (requestId !== dailyNarrativeRequestId || dailyNarrativeActiveId !== normalizedId) {
+      return;
+    }
+    renderDailyNarrativeDrawer(normalizedId, row, "error", "Activity notes could not be loaded.");
+  }
+}
+
+function attachDailyNarrativeEvents() {
+  const table = dailyNarrativeTable();
+  if (!table || table.dataset.narrativeEventsAttached === "true") {
+    return;
+  }
+  table.addEventListener("click", event => {
+    const button = event.target.closest(".daily-narrative-toggle");
+    if (!button) {
+      return;
+    }
+    event.preventDefault();
+    event.stopPropagation();
+    const row = button.closest("tr");
+    openDailyNarrative(button.dataset.activityId, row);
+  });
+  table.dataset.narrativeEventsAttached = "true";
+}
+
+function resetDailyNarrativeForTableRefresh() {
+  dailyNarrativeActiveId = "";
+  dailyNarrativeRequestId += 1;
 }
 
 function renderStructuredOtherActivities(row) {
@@ -149,19 +346,20 @@ function formatHrZones(value) {
 }
 
 function renderDailyTable() {
+  resetDailyNarrativeForTableRefresh();
   const rows = (window.AppState.dailyRows || []).map(row => {
     const hasRide = hasMainRide(row);
     const hasOther = hasOtherActivity(row);
     const mainRideLoad = hasRide ? (row.main_ride_load_text || (row.main_ride_load == null ? "" : Number(row.main_ride_load).toFixed(0))) : "";
     return `
-      <tr>
+      <tr data-daily-activity-id="${hasRide && row.main_ride_id != null ? escapeHtml(String(row.main_ride_id)) : ""}">
         <td>${safe(row.date)}</td>
         <td>${row.weight_lb == null ? "" : Number(row.weight_lb).toFixed(1)}</td>
         <td>${formatSleepCell(row.sleep_score, row.total_sleep_hr)}</td>
         <td>${formatCommaInt(row.steps)}</td>
         <td>${safe(row.rhr_bpm)}</td>
         <td>${formatHrvMs(row.hrv_sdnn_ms)}</td>
-        <td>${row.total_load == null ? "" : Number(row.total_load).toFixed(0)}</td>
+        <td>${renderMobileNarrativeCell(row, row.total_load == null ? "" : Number(row.total_load).toFixed(0))}</td>
         <td>${hasRide ? safe(row.main_ride_time) : ""}</td>
         <td>${hasRide && row.main_ride_miles != null ? Number(row.main_ride_miles).toFixed(1) : ""}</td>
         <td>${hasRide ? formatCommaInt(row.main_ride_elevation_ft) : ""}</td>
@@ -200,6 +398,7 @@ function renderDailyTable() {
       ${rows}
     </tbody>
   `;
+  attachDailyNarrativeEvents();
 }
 
 let dailySearchRequestId = 0;

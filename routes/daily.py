@@ -96,6 +96,10 @@ def api_daily(limit: int = 365, q: str = ""):
                 daily_training.main_ride_load_text,
                 daily_training.main_ride_band,
                 daily_training.main_ride_hr_zones,
+                (coalesce(nullif(trim(narrative_activity.description), ''), '') <> '')
+                    AS main_ride_has_description,
+                (coalesce(nullif(trim(narrative_activity.private_note), ''), '') <> '')
+                    AS main_ride_has_private_note,
                 daily_training.other_activities,
                 daily_training.other_activity_names,
                 daily_training.other_load,
@@ -117,6 +121,8 @@ def api_daily(limit: int = 365, q: str = ""):
                 on health_steps.date = daily_training.date
             left join health_weight
                 on health_weight.date = daily_training.date
+            left join strava_activities AS narrative_activity
+                on narrative_activity.activity_id = daily_training.main_ride_id
             where
                 daily_training.main_ride_name is not null
                 and trim(daily_training.main_ride_name) <> ''
@@ -181,6 +187,10 @@ def api_daily(limit: int = 365, q: str = ""):
             daily_training.main_ride_load_text,
             daily_training.main_ride_band,
             daily_training.main_ride_hr_zones,
+            (coalesce(nullif(trim(narrative_activity.description), ''), '') <> '')
+                AS main_ride_has_description,
+            (coalesce(nullif(trim(narrative_activity.private_note), ''), '') <> '')
+                AS main_ride_has_private_note,
             daily_training.other_activities,
             daily_training.other_activity_names,
             daily_training.other_load,
@@ -204,6 +214,8 @@ def api_daily(limit: int = 365, q: str = ""):
             on health_steps.date = dates.date
         left join health_weight
             on health_weight.date = dates.date
+        left join strava_activities AS narrative_activity
+            on narrative_activity.activity_id = daily_training.main_ride_id
         order by dates.date desc
         limit %s
     """
@@ -214,3 +226,48 @@ def api_daily(limit: int = 365, q: str = ""):
             rows = cur.fetchall()
 
     return JSONResponse(rows_to_json(rows))
+
+
+@router.get("/api/activities/{activity_id}/narrative")
+def api_activity_narrative(activity_id: int):
+    try:
+        with db_conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    select
+                        activity_id,
+                        description,
+                        private_note,
+                        narrative_observed_at
+                    from strava_activities
+                    where activity_id = %s
+                    limit 1
+                    """,
+                    (str(activity_id),),
+                )
+                row = cur.fetchone()
+    except Exception:
+        return JSONResponse(
+            {"detail": "Activity narrative is temporarily unavailable."},
+            status_code=503,
+        )
+
+    if not row:
+        return JSONResponse({"detail": "Activity not found."}, status_code=404)
+
+    description = row.get("description")
+    private_note = row.get("private_note")
+    if description is not None and not str(description).strip():
+        description = None
+    if private_note is not None and not str(private_note).strip():
+        private_note = None
+    observed_at = row.get("narrative_observed_at")
+    return JSONResponse({
+        "activity_id": row["activity_id"],
+        "description": description,
+        "private_note": private_note,
+        "has_description": bool(description and str(description).strip()),
+        "has_private_note": bool(private_note and str(private_note).strip()),
+        "narrative_observed_at": observed_at.isoformat() if observed_at else None,
+    })

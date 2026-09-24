@@ -124,6 +124,10 @@
       return payload;
     },
 
+    async fetchActivityNarrative(activityId) {
+      return fetchJson(`/api/activities/${encodeURIComponent(activityId)}/narrative`);
+    },
+
     async fetchDailyCheckins(startDate, endDate) {
       const params = new URLSearchParams({
         start_date: String(startDate),

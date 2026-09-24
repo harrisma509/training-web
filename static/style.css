@@ -999,3 +999,139 @@ tr:hover td {
   color: var(--text);
   border-color: var(--blue);
 }
+
+.daily-narrative-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: auto;
+  min-height: 0;
+  margin-left: 4px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  line-height: normal;
+  vertical-align: middle;
+  flex-shrink: 0;
+}
+
+.daily-load-cell {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.daily-narrative-mobile-toggle {
+  display: none;
+}
+
+.daily-narrative-toggle:hover,
+.daily-narrative-toggle:focus-visible {
+  color: var(--blue);
+  border: 1px solid var(--blue);
+  outline: none;
+}
+
+.daily-narrative-icon {
+  width: 15px;
+  height: 15px;
+  margin: 0;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.5;
+  stroke-linejoin: round;
+}
+
+@media (max-width: 1050px) {
+  .daily-narrative-main-ride-toggle {
+    display: none;
+  }
+
+  .daily-narrative-mobile-toggle {
+    display: inline-flex;
+    width: 32px;
+    height: 32px;
+    min-height: 32px;
+    margin-left: 2px;
+    padding: 0;
+  }
+}
+
+.daily-narrative-drawer-row>td {
+  padding: 0;
+  border-top: 0;
+}
+
+.daily-narrative-drawer {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 14px 18px 16px;
+  border-left: 3px solid var(--blue);
+  background: var(--panel2);
+  text-align: left;
+}
+
+.daily-narrative-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px 14px;
+  margin-bottom: 12px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.daily-narrative-header strong {
+  color: var(--text);
+}
+
+.daily-narrative-section {
+  max-width: 980px;
+  margin-top: 10px;
+}
+
+.daily-narrative-section h4 {
+  margin: 0 0 4px;
+  color: var(--text);
+  font-size: 12px;
+}
+
+.daily-narrative-private {
+  padding-left: 10px;
+  border-left: 2px solid var(--muted);
+}
+
+.daily-narrative-text {
+  color: var(--text);
+  line-height: 1.5;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.daily-narrative-status,
+.daily-narrative-error {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.daily-narrative-error {
+  color: var(--red);
+  display: inline-block;
+  margin-right: 10px;
+}
+
+.daily-narrative-retry {
+  padding: 4px 8px;
+}
+
+@media (max-width: 700px) {
+  .daily-narrative-drawer {
+    padding: 12px 10px 14px;
+  }
+
+  .daily-narrative-text {
+    max-width: 100%;
+  }
+}
