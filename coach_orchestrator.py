@@ -51,6 +51,7 @@ from coach_memory_router import (
 )
 from routes.coach_memories import DurableMemoriesUnavailableError, load_memories
 from context_client import ContextError, MAX_CONTEXT_CHARS, fetch_current_context
+from coach_narrative import hydrate_context_with_narratives
 from routes.coach import (
     MAX_MESSAGE_LENGTH,
     _complete_coach_turn,
@@ -173,6 +174,7 @@ def respond_to_coach(
     settings_loader=None,
     custom_instructions_loader=None,
     receipt_persistor=None,
+    narrative_loader=hydrate_context_with_narratives,
 ):
     request_id = f"coach-{uuid.uuid4().hex}"
     _, user_message, started_turn = _start_coach_turn(session_id, message, request_id)
@@ -181,6 +183,16 @@ def respond_to_coach(
     try:
         settings = (settings_loader or load_coach_settings)()
         context = context_loader(settings.detailed_daily_history_days, settings.weekly_history_rows)
+        context = narrative_loader(context)
+        narrative_coverage = context.get("narrative_coverage", {}) if isinstance(context, dict) else {}
+        if isinstance(context, dict) and isinstance(context.get("coverage"), dict):
+            context = dict(context)
+            context["coverage"] = {
+                **context["coverage"],
+                "narrative_activity_count": narrative_coverage.get("activity_count", 0),
+                "narrative_character_count": narrative_coverage.get("character_count", 0),
+                "narrative_truncated_activity_count": narrative_coverage.get("truncated_activity_count", 0),
+            }
         history = _recent_coach_messages(session_id, user_message["coach_message_id"], MAX_HISTORY_MESSAGES, MAX_HISTORY_CHARS)
         input_text, context_characters, history_characters = _build_input(context, history, message)
         custom_instructions = (custom_instructions_loader or load_custom_instructions)()

@@ -45,8 +45,11 @@ COVERAGE_KEYS = (
     "daily_checkin_count",
     "oldest_daily_checkin_date",
     "newest_daily_checkin_date",
+    "narrative_activity_count",
+    "narrative_character_count",
+    "narrative_truncated_activity_count",
 )
-LEGACY_COVERAGE_KEYS = COVERAGE_KEYS[:-4]
+LEGACY_COVERAGE_KEYS = COVERAGE_KEYS[:-7]
 
 
 class ContextReceiptError(Exception):
@@ -107,8 +110,14 @@ def _coverage(context):
         "daily_checkin_count": source.get("daily_checkin_count", 0),
         "oldest_daily_checkin_date": _strict_date(source.get("oldest_daily_checkin_date")) if source.get("oldest_daily_checkin_date") is not None else None,
         "newest_daily_checkin_date": _strict_date(source.get("newest_daily_checkin_date")) if source.get("newest_daily_checkin_date") is not None else None,
+        "narrative_activity_count": source.get("narrative_activity_count", 0),
+        "narrative_character_count": source.get("narrative_character_count", 0),
+        "narrative_truncated_activity_count": source.get("narrative_truncated_activity_count", 0),
     }
-    for key in ("detailed_activity_days", "weekly_rows", "fitness_fatigue_form_days", "recovery_days"):
+    for key in (
+        "detailed_activity_days", "weekly_rows", "fitness_fatigue_form_days", "recovery_days",
+        "narrative_activity_count", "narrative_character_count", "narrative_truncated_activity_count",
+    ):
         if result[key] is not None and not _nonnegative_int(result[key]):
             raise ContextReceiptInvalid("Invalid receipt coverage count.")
     for key in ("current_audit_available", "completed_audit_available"):

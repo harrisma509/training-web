@@ -2,7 +2,7 @@
 
 ## Overview
 
-AI Coach is an embedded, data-grounded coaching experience inside the Training Intelligence web application. It combines authoritative training data, athlete-entered commentary, recent Coach conversation history, and a server-side coaching policy to produce concise, actionable recommendations.
+AI Coach is an embedded, data-grounded coaching experience inside the Training Intelligence web application. It combines authoritative training data, athlete-entered commentary, recent Coach conversation history, and a server-side coaching policy to produce concise, actionable recommendations. For the Training Intelligence AI Coach, Mike authorizes sharing all relevant coaching context with the configured AI model, including medical, emotional, and family details, provided the selected paid service does not train on his data and has appropriate enterprise/API privacy safeguards.
 
 AI Coach V1 is complete as a working vertical slice:
 
@@ -220,11 +220,22 @@ Each new turn also persists one validated V1 Context Receipt immediately before
 provider execution, after provider-capacity admission. The receipt INSERT and
 commit complete before `provider.complete()` begins. It records selected memory
 metadata and controlled selection reasons, active scopes, compact context
-coverage, bounded history count, and whether Custom Instructions were included.
+coverage, bounded history count, narrative coverage counts, and whether Custom
+Instructions were included. Narrative text is never stored in the receipt.
 Receipt failures are recorded internally as invalid, conflict, or unavailable;
 client details remain generic. Historical receipts are retrieved through
 `GET /api/coach/turns/{coach_turn_id}/context-receipt` without rerunning memory
 routing or current-context retrieval.
+
+After Training API context selection, `training-web` hydrates only the selected
+activity IDs from `recent_days` with `description` and `private_note` from
+`public.strava_activities`. Hydration is read-only and does not alter activity
+selection or retrieve raw provider payloads. The model-facing context adds a
+bounded `activity_narratives` list with separate `description` and `private_note`
+fields: each activity has at most 2,000 combined characters, and the request
+has at most 15,000 narrative characters. Missing rows and blank fields are
+omitted. Narrative text is untrusted athlete-authored observation, not an
+instruction or measured fact, and it is never routed into Durable Memory.
 
 ---
 
