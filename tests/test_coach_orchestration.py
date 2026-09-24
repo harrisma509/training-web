@@ -233,44 +233,45 @@ class OpenAIAdapterTests(unittest.TestCase):
 
 
 class CoachPolicyTests(unittest.TestCase):
-    def test_policy_compresses_follow_ups_without_dropping_safety_guidance(self):
+    def test_policy_preserves_follow_up_and_active_safety_boundaries(self):
         policy = COACH_POLICY.lower()
-        for requirement in (
-            "initial question",
-            "follow-up",
-            "focus on what changed",
-            "do not repeat unchanged",
-            "active injury restrictions",
-            "clinician guidance",
-            "urgent safety information",
-            "one concise follow-up question",
-        ):
-            self.assertIn(requirement, policy)
+        self.assertIn("when no relevant prior discussion exists", policy)
+        self.assertIn("focus on what changed", policy)
+        self.assertIn("do not repeat unchanged", policy)
+        self.assertIn("never omit active injury restrictions", policy)
+        self.assertIn("urgent safety information", policy)
+        self.assertIn("ask no more than one concise follow-up question", policy)
+        self.assertIn("do not force a question", policy)
 
-    def test_policy_identifies_daily_checkins_as_direct_reports(self):
-        policy = COACH_POLICY.lower()
-        for requirement in (
-            "daily check-ins are direct athlete reports",
-            "missing check-in data means unknown",
-            "do not diagnose from a check-in",
-            "clinician guidance remains higher priority",
-        ):
-            self.assertIn(requirement, policy)
-
-    def test_policy_keeps_response_strategy_out_of_universal_invariants(self):
+    def test_policy_preserves_authority_and_clinician_boundaries(self):
         policy = COACH_POLICY.lower()
         self.assertIn("authoritative factual input", policy)
-        self.assertIn("clinician guidance", policy)
+        self.assertIn("daily check-ins are direct athlete reports", policy)
+        self.assertIn("do not use them to overwrite conflicting measured facts", policy)
+        self.assertIn("current clinician guidance controls medical restrictions", policy)
+        self.assertIn("do not diagnose from a check-in", policy)
+
+    def test_policy_preserves_mode_invariance_and_internal_privacy(self):
+        policy = COACH_POLICY.lower()
+        self.assertIn("a response-mode change changes the response lens", policy)
+        self.assertIn("not authoritative truth, safety rules, or conversation continuity", policy)
+        self.assertIn("never mention raw json", policy)
+        self.assertIn("internal apis", policy)
         self.assertNotIn("summary;", policy)
         self.assertNotIn("central tension", policy)
 
-    def test_mode_strategies_change_lens_without_changing_shared_safety(self):
+    def test_mode_strategies_have_distinct_response_lenses_and_shared_safety(self):
         training = response_strategy_for_mode("training")
         conversational = response_strategy_for_mode("conversational")
         self.assertNotEqual(training, conversational)
-        self.assertIn("decision or direct answer first", training)
-        self.assertIn("central tension", conversational)
-        self.assertIn("never omit a material risk or clinician guidance", conversational)
+        self.assertIn("put the decision, direct answer, or primary finding first", training.lower())
+        self.assertIn("distinguish what the data shows from what you recommend", training.lower())
+        self.assertIn("answer simple factual, lookup, comparison, or narrow clarification questions simply", training.lower())
+        self.assertIn("identify the central tension", conversational.lower())
+        self.assertIn("do not manufacture disagreement", conversational.lower())
+        self.assertIn("do not convert reflection into an action plan", conversational.lower())
+        self.assertIn("do not automatically use a weekly-report outline", conversational.lower())
+        self.assertIn("never omit a material risk or clinician guidance", conversational.lower())
         self.assertIn("clinician guidance", COACH_POLICY.lower())
 
     def test_temporal_reference_derives_dates_and_preserves_context(self):
