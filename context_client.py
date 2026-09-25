@@ -37,7 +37,7 @@ DAILY_CHECKIN_PHYSICAL_LABOR = {"none", "light", "moderate", "heavy"}
 DAILY_CHECKIN_HANDLING = {"sharp", "normal", "off"}
 CONTEXT_TIMEOUT_SECONDS = 15.0
 CONTEXT_PATH = "/internal/coach/context/current"
-MAX_CONTEXT_CHARS = 240000 #max characters for context payload 240,000 supports 100 days of day details.  this is mostly for cost control so some coding or issue doesn't send way too much data to the costly AI API
+MAX_CONTEXT_CHARS = 500000 # Maximum serialized authoritative-context size; prevents runaway payloads, excessive cost/latency, and provider-window pressure before the paid API call.
 
 
 class ContextError(Exception):
