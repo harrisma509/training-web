@@ -491,10 +491,21 @@
   text-transform: uppercase;
 }
 
-.settings-memory-status-active { color: var(--success); }
-.settings-memory-status-inactive { color: var(--muted); }
-.settings-memory-status-expired { color: var(--warning); }
-.settings-memory-status-future { color: var(--accent); }
+.settings-memory-status-active {
+  color: var(--success);
+}
+
+.settings-memory-status-inactive {
+  color: var(--muted);
+}
+
+.settings-memory-status-expired {
+  color: var(--warning);
+}
+
+.settings-memory-status-future {
+  color: var(--accent);
+}
 
 .settings-memory-form {
   display: grid;
@@ -531,8 +542,22 @@
 
 .settings-memory-scope-grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 8px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px 24px;
+}
+
+.settings-memory-scope-option {
+  min-width: 0;
+  justify-content: flex-start;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.settings-memory-scope-option input[type="checkbox"] {
+  width: auto;
+  flex: 0 0 auto;
+  flex-shrink: 0;
+  margin: 0;
 }
 
 .settings-memory-active {
@@ -540,8 +565,15 @@
 }
 
 @media (max-width: 700px) {
+
   .settings-memory-fields,
   .settings-memory-scope-grid {
     grid-template-columns: 1fr;
+  }
+}
+
+@media (min-width: 701px) and (max-width: 950px) {
+  .settings-memory-scope-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }

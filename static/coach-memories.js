@@ -204,7 +204,7 @@
     PRIORITIES.forEach(value => option(refs.priority, value, label(value)));
     SCOPES.forEach(value => {
       const labelElement = document.createElement("label");
-      labelElement.className = "settings-choice";
+      labelElement.className = "settings-choice settings-memory-scope-option";
       const checkbox = document.createElement("input");
       checkbox.type = "checkbox";
       checkbox.value = value;
