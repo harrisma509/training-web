@@ -128,6 +128,303 @@ function renderMobileNarrativeCell(row, value) {
 let dailyNarrativeActiveId = "";
 let dailyNarrativeRequestId = 0;
 const dailyNarrativeCache = new Map();
+let dailyDayMenu = null;
+let dailyDayMenuButton = null;
+let dailyDayOperation = null;
+const DAILY_DAY_SUCCESS_DISMISS_DELAY_MS = 10000;
+let dailyDayStatusDismissTimer = null;
+let dailyDayStatusGeneration = 0;
+
+function dailyDateText(value) {
+  const text = value == null ? "" : String(value).slice(0, 10);
+  return /^\d{4}-\d{2}-\d{2}$/.test(text) ? text : "";
+}
+
+function formatDailyLongDate(dateText) {
+  const parsed = new Date(`${dateText}T00:00:00`);
+  return Number.isNaN(parsed.getTime())
+    ? dateText
+    : parsed.toLocaleDateString(undefined, { year: "numeric", month: "long", day: "numeric" });
+}
+
+function closeDailyDayMenu(restoreFocus = false) {
+  const button = dailyDayMenuButton;
+  button?.setAttribute("aria-expanded", "false");
+  dailyDayMenu?.remove();
+  dailyDayMenu = null;
+  dailyDayMenuButton = null;
+  if (restoreFocus) {
+    button?.focus();
+  }
+}
+
+function clearDailyDayStatusTimer() {
+  if (dailyDayStatusDismissTimer !== null) {
+    window.clearTimeout(dailyDayStatusDismissTimer);
+    dailyDayStatusDismissTimer = null;
+  }
+}
+
+function dismissDailyDayStatus(restoreFocus = false) {
+  clearDailyDayStatusTimer();
+  dailyDayStatusGeneration += 1;
+  const status = document.getElementById("dailyDayResyncStatus");
+  const dateText = status?.dataset.date || "";
+  status?.remove();
+  if (restoreFocus && dateText) {
+    document.querySelector(`.daily-day-actions-toggle[data-date="${CSS.escape(dateText)}"]`)?.focus();
+  }
+}
+
+function showDailyDayStatus(message, state = "", dateText = "") {
+  clearDailyDayStatusTimer();
+  const generation = ++dailyDayStatusGeneration;
+  let status = document.getElementById("dailyDayResyncStatus");
+  if (!status) {
+    status = document.createElement("div");
+    status.id = "dailyDayResyncStatus";
+    status.className = "daily-day-resync-status";
+    status.setAttribute("role", "status");
+    status.setAttribute("aria-live", "polite");
+    document.getElementById("dailyPane")?.prepend(status);
+  }
+  status.className = `daily-day-resync-status ${state}`.trim();
+  status.dataset.date = dateText;
+  status.replaceChildren();
+
+  const text = document.createElement("span");
+  text.className = "daily-day-resync-status-text";
+  text.textContent = message;
+  status.appendChild(text);
+
+  if (state !== "busy") {
+    const dismiss = document.createElement("button");
+    dismiss.type = "button";
+    dismiss.className = "daily-day-resync-status-dismiss";
+    dismiss.setAttribute(
+      "aria-label",
+      dateText
+        ? `Dismiss resync status for ${formatDailyLongDate(dateText)}`
+        : "Dismiss resync status",
+    );
+    dismiss.textContent = "×";
+    dismiss.addEventListener("click", event => dismissDailyDayStatus(event.detail === 0));
+    status.appendChild(dismiss);
+  }
+
+  if (state === "success") {
+    dailyDayStatusDismissTimer = window.setTimeout(() => {
+      if (generation === dailyDayStatusGeneration) {
+        dismissDailyDayStatus();
+      }
+    }, DAILY_DAY_SUCCESS_DISMISS_DELAY_MS);
+  }
+}
+
+function removeDailyDayStatus() {
+  dismissDailyDayStatus();
+}
+
+window.addEventListener("beforeunload", clearDailyDayStatusTimer);
+
+function clearDailyNarrativeCache() {
+  dailyNarrativeCache.clear();
+  closeDailyNarrative();
+}
+
+function closeDailyDayDialog() {
+  document.getElementById("dailyDayResyncDialog")?.remove();
+}
+
+function showDailyDayDialog(dateText, activityCount) {
+  closeDailyDayDialog();
+  const dialog = document.createElement("div");
+  dialog.id = "dailyDayResyncDialog";
+  dialog.className = "daily-day-resync-dialog-backdrop";
+  dialog.innerHTML = `
+    <section class="daily-day-resync-dialog" role="dialog" aria-modal="true" aria-labelledby="dailyDayResyncTitle">
+      <h2 id="dailyDayResyncTitle">Resync ${escapeHtml(formatDailyLongDate(dateText))} from Strava?</h2>
+      <p>This will refresh ${activityCount} ${activityCount === 1 ? "activity" : "activities"} recorded on this date.</p>
+      <div class="daily-day-resync-dialog-actions">
+        <button type="button" class="button-secondary" data-daily-day-cancel>Cancel</button>
+        <button type="button" class="button-primary" data-daily-day-confirm>Resync ${activityCount} ${activityCount === 1 ? "activity" : "activities"}</button>
+      </div>
+    </section>
+  `;
+  document.body.appendChild(dialog);
+  const cancel = dialog.querySelector("[data-daily-day-cancel]");
+  const confirm = dialog.querySelector("[data-daily-day-confirm]");
+  cancel.focus();
+  cancel.addEventListener("click", closeDailyDayDialog);
+  dialog.addEventListener("keydown", event => {
+    if (event.key === "Escape") {
+      event.preventDefault();
+      closeDailyDayDialog();
+    }
+  });
+  dialog.addEventListener("click", event => {
+    if (event.target === dialog) {
+      closeDailyDayDialog();
+    }
+  });
+  confirm.addEventListener("click", async () => {
+    confirm.disabled = true;
+    try {
+      const result = await window.api.resyncDay(dateText);
+      closeDailyDayDialog();
+      startDailyDayPolling(dateText, result);
+    } catch (error) {
+      confirm.disabled = false;
+      showDailyDayStatus("This day could not be queued. Try again.", "error");
+    }
+  });
+}
+
+async function startDailyDayPolling(dateText, enqueueResult) {
+  const requestIds = Array.isArray(enqueueResult?.request_ids) ? enqueueResult.request_ids : [];
+  if (!requestIds.length) {
+    showDailyDayStatus(`No Strava activities found for ${formatDailyLongDate(dateText)}.`, "empty", dateText);
+    return;
+  }
+
+  dailyDayOperation = { dateText, requestIds };
+  const button = document.querySelector(`.daily-day-actions-toggle[data-date="${CSS.escape(dateText)}"]`);
+  if (button) {
+    button.disabled = true;
+    button.setAttribute("aria-busy", "true");
+    button.setAttribute("aria-label", `Resyncing ${formatDailyLongDate(dateText)}`);
+    button.closest(".daily-date-cell")?.classList.add("is-resyncing");
+  }
+  showDailyDayStatus(`Refreshing ${formatDailyLongDate(dateText)}...`, "busy", dateText);
+
+  const deadline = Date.now() + 10 * 60 * 1000;
+  let terminal = null;
+  while (Date.now() < deadline && dailyDayOperation?.requestIds === requestIds) {
+    try {
+      const statuses = await Promise.all(requestIds.map(requestId => window.api.fetchSyncRequestStatus(requestId)));
+      if (statuses.every(item => ["completed", "failed"].includes(item.status))) {
+        terminal = statuses;
+        break;
+      }
+    } catch (error) {
+      terminal = null;
+      break;
+    }
+    await new Promise(resolve => window.setTimeout(resolve, 1500));
+  }
+
+  if (dailyDayOperation?.requestIds !== requestIds) {
+    return;
+  }
+  dailyDayOperation = null;
+  if (!terminal) {
+    showDailyDayStatus(`${formatDailyLongDate(dateText)} could not be refreshed. Try again.`, "error", dateText);
+    restoreDailyDayAction(dateText);
+    return;
+  }
+
+  const completedCount = terminal.filter(item => item.status === "completed").length;
+  const failedCount = terminal.length - completedCount;
+  clearDailyNarrativeCache();
+  const tableWrap = document.querySelector("#dailyPane .table-wrap");
+  const scrollLeft = tableWrap?.scrollLeft || 0;
+  await loadDaily();
+  if (tableWrap) {
+    tableWrap.scrollLeft = scrollLeft;
+  }
+  restoreDailyDayAction(dateText);
+  if (failedCount === 0) {
+    showDailyDayStatus(`${formatDailyLongDate(dateText)} refreshed from Strava. ${completedCount} ${completedCount === 1 ? "activity" : "activities"} completed.`, "success", dateText);
+  } else if (completedCount > 0) {
+    showDailyDayStatus(`${formatDailyLongDate(dateText)} partially refreshed. ${completedCount} completed, ${failedCount} failed.`, "error", dateText);
+  } else {
+    showDailyDayStatus(`${formatDailyLongDate(dateText)} could not be refreshed. Try again.`, "error", dateText);
+  }
+}
+
+function restoreDailyDayAction(dateText) {
+  const button = document.querySelector(`.daily-day-actions-toggle[data-date="${CSS.escape(dateText)}"]`);
+  if (!button) {
+    return;
+  }
+  button.disabled = false;
+  button.removeAttribute("aria-busy");
+  button.setAttribute("aria-label", `Open actions for ${formatDailyLongDate(dateText)}`);
+  button.closest(".daily-date-cell")?.classList.remove("is-resyncing");
+}
+
+async function handleDailyDayResync(dateText) {
+  closeDailyDayMenu();
+  removeDailyDayStatus();
+  try {
+    const preview = await window.api.previewDayResync(dateText);
+    const count = Number(preview?.activity_count);
+    if (!Number.isInteger(count) || count < 0) {
+      throw new Error("Invalid preview");
+    }
+    if (count === 0) {
+      showDailyDayStatus(`No Strava activities found for ${formatDailyLongDate(dateText)}.`, "empty", dateText);
+      return;
+    }
+    showDailyDayDialog(dateText, count);
+  } catch (error) {
+    showDailyDayStatus("Day resync preview is unavailable. Try again.", "error", dateText);
+  }
+}
+
+function openDailyDayMenu(button) {
+  if (dailyDayMenuButton === button) {
+    closeDailyDayMenu(true);
+    return;
+  }
+  closeDailyDayMenu();
+  dailyDayMenuButton = button;
+  button.setAttribute("aria-expanded", "true");
+  const menu = document.createElement("div");
+  menu.className = "daily-day-actions-menu";
+  menu.setAttribute("role", "menu");
+  const item = document.createElement("button");
+  item.type = "button";
+  item.className = "daily-day-actions-item";
+  item.setAttribute("role", "menuitem");
+  item.textContent = "Resync day from Strava";
+  item.addEventListener("click", () => handleDailyDayResync(button.dataset.date));
+  menu.appendChild(item);
+  document.body.appendChild(menu);
+  const bounds = button.getBoundingClientRect();
+  menu.style.left = `${Math.min(bounds.left, window.innerWidth - menu.offsetWidth - 8)}px`;
+  menu.style.top = `${bounds.bottom + 4}px`;
+  dailyDayMenu = menu;
+  item.focus();
+}
+
+function attachDailyDayActions() {
+  const table = dailyNarrativeTable();
+  if (!table || table.dataset.dayActionsAttached === "true") {
+    return;
+  }
+  table.addEventListener("click", event => {
+    const button = event.target.closest(".daily-day-actions-toggle");
+    if (!button) {
+      return;
+    }
+    event.preventDefault();
+    event.stopPropagation();
+    openDailyDayMenu(button);
+  });
+  document.addEventListener("click", event => {
+    if (!event.target.closest(".daily-day-actions-menu, .daily-day-actions-toggle")) {
+      closeDailyDayMenu();
+    }
+  });
+  document.addEventListener("keydown", event => {
+    if (event.key === "Escape" && dailyDayMenu) {
+      event.preventDefault();
+      closeDailyDayMenu(true);
+    }
+  });
+  table.dataset.dayActionsAttached = "true";
+}
 
 function dailyNarrativeTable() {
   return document.getElementById("dailyTable");
@@ -353,7 +650,7 @@ function renderDailyTable() {
     const mainRideLoad = hasRide ? (row.main_ride_load_text || (row.main_ride_load == null ? "" : Number(row.main_ride_load).toFixed(0))) : "";
     return `
       <tr data-daily-activity-id="${hasRide && row.main_ride_id != null ? escapeHtml(String(row.main_ride_id)) : ""}">
-        <td>${safe(row.date)}</td>
+        <td><span class="daily-date-cell"><span class="daily-date-value">${safe(row.date)}</span><button type="button" class="daily-day-actions-toggle" data-date="${escapeHtml(dailyDateText(row.date))}" aria-label="Open actions for ${escapeHtml(formatDailyLongDate(dailyDateText(row.date)))}" aria-haspopup="menu" aria-expanded="false"><span aria-hidden="true">⋮</span></button></span></td>
         <td>${row.weight_lb == null ? "" : Number(row.weight_lb).toFixed(1)}</td>
         <td>${formatSleepCell(row.sleep_score, row.total_sleep_hr)}</td>
         <td>${formatCommaInt(row.steps)}</td>
@@ -399,6 +696,7 @@ function renderDailyTable() {
     </tbody>
   `;
   attachDailyNarrativeEvents();
+  attachDailyDayActions();
 }
 
 let dailySearchRequestId = 0;

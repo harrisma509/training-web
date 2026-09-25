@@ -121,6 +121,7 @@ def api_system_status():
                     completed_at_utc,
                     status
                 FROM sync_request
+                WHERE request_type = 'full_sync'
                 ORDER BY requested_at_utc DESC
                 LIMIT 1
                 """

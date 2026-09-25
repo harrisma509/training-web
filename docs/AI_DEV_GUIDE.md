@@ -26,6 +26,10 @@ This repo should not:
 - rewrite weekly or daily training math
 - silently change database semantics
 
+## Daily day resync
+
+The Daily date actions use the existing per-activity `activity_resync` queue without adding a schema or request type. `GET /api/sync/dates/{YYYY-MM-DD}/resync-preview` resolves and bounds canonical activity IDs from `strava_activities`; `POST /api/sync/dates/{YYYY-MM-DD}/resync` atomically enqueues one request per activity and reuses active requests. Responses contain only dates, counts, and local queue request IDs. The browser confirms before POST, polls the allowlisted request-status route, invalidates page-memory narrative state, and reloads Daily; it does not call Strava or expose activity names, narratives, or provider results. Older edits remain a manual date-level correction workflow, and future webhook automation is deferred.
+
 ## Safe default workflow
 1. Inspect the relevant route, frontend module, and database access pattern.
 2. Keep the scope small and vertical.

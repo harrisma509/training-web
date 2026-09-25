@@ -420,6 +420,20 @@
       });
     },
 
+    async previewDayResync(dateText) {
+      return fetchJson(`/api/sync/dates/${encodeURIComponent(dateText)}/resync-preview`);
+    },
+
+    async resyncDay(dateText) {
+      return fetchJson(`/api/sync/dates/${encodeURIComponent(dateText)}/resync`, {
+        method: "POST",
+      });
+    },
+
+    async fetchSyncRequestStatus(requestId) {
+      return fetchJson(`/api/sync-requests/${encodeURIComponent(requestId)}`);
+    },
+
     async fetchYearly() {
       return fetchJson("/api/yearly");
     },

@@ -27,7 +27,71 @@ Focused examples:
 ./.venv/bin/python -m pytest -x -q
 ```
 
-On Windows, activate the repository virtual environment first and use `python -m pytest`; use `python -m pytest -q` when `python3` is unavailable.
+### Windows
+
+Run Python tooling through the repository-local interpreter explicitly. Virtual-environment activation is optional and must not be assumed.
+
+```powershell
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt
+.\.venv\Scripts\python.exe -m pip install -r requirements-dev.txt
+.\.venv\Scripts\python.exe -m pytest --collect-only -q
+.\.venv\Scripts\python.exe -m pytest -q
+```
+
+Focused examples:
+
+```powershell
+.\.venv\Scripts\python.exe -m pytest tests\test_coach_orchestration.py -q
+.\.venv\Scripts\python.exe -m pytest -k budget -q
+.\.venv\Scripts\python.exe -m pytest --lf -q
+.\.venv\Scripts\python.exe -m pytest -x -q
+```
+
+Do not use bare `python`, `python3`, `py`, `pytest`, `pip`, or `pip3` when the repository-local `.venv` exists. This prevents commands from silently using a system interpreter with missing or incompatible dependencies.
+
+## Test-environment preflight
+
+Complete this preflight before editing code or running the first Python validation command:
+
+1. Confirm the command is running from the repository root.
+2. Confirm the repository-local interpreter exists.
+3. Print the interpreter path.
+4. Verify the required test and application imports.
+5. Use the same interpreter for every Python command during the task.
+6. Do not silently switch to a system interpreter.
+7. If the documented environment is missing or incomplete, classify validation as `BLOCKED` and report the precise problem.
+8. Do not install dependencies unless the task explicitly authorizes installation.
+
+macOS/Linux:
+
+```bash
+test -x ./.venv/bin/python
+./.venv/bin/python -c "import sys; print(sys.executable)"
+./.venv/bin/python -c "import pytest; print('pytest ready')"
+```
+
+Windows PowerShell:
+
+```powershell
+if (-not (Test-Path .\.venv\Scripts\python.exe)) {
+	throw "Repository Python environment not found"
+}
+
+$python = (Resolve-Path .\.venv\Scripts\python.exe).Path
+
+& $python -c "import sys; print(sys.executable)"
+& $python -c "import pytest, fastapi; print('training-web test environment ready')"
+```
+
+Use the captured interpreter for follow-on commands:
+
+```powershell
+& $python -m pytest tests\test_feature.py -q
+& $python -m pytest -q
+& $python -m py_compile routes\feature.py tests\test_feature.py
+```
+
+Do not switch interpreters during the task.
 
 ## Local search tooling
 
@@ -45,13 +109,15 @@ rg --files tests | rg 'test_.*\.py$'
 
 ## Definition of done for Python changes
 
-1. Identify the intended behavior and owning module.
-2. Add or update the smallest deterministic regression test that proves the behavior.
-3. Run the focused test first.
-4. Run the complete web suite before completion.
-5. Run `py_compile` on every changed Python file.
-6. Report the exact commands and outcomes.
-7. Never claim validation that did not occur.
+1. Read this Testing Guide before running Python commands.
+2. Complete the test-environment preflight with the repository-local interpreter.
+3. Identify the intended behavior and owning module.
+4. Add or update the smallest deterministic regression test that proves the behavior.
+5. Run the focused test first.
+6. Run the complete web suite before completion.
+7. Run `py_compile` on every changed Python file.
+8. Report the exact commands and outcomes.
+9. Never claim validation that did not occur.
 
 ## Manual edit to GHC workflow
 
@@ -96,7 +162,16 @@ Pytest covers Python, not vanilla JavaScript behavior. Continue `node --check` f
 
 ## Failure handling
 
-Reproduce the exact failure, then decide whether the code, test, or documented contract is wrong. Do not weaken a test merely to obtain green output. Make the smallest correction and rerun the focused test before rerunning the full suite.
+Classify each validation result as follows:
+
+- `PASS`: Tests executed and every assertion passed.
+- `FAIL`: Tests executed and at least one assertion failed.
+- `BLOCKED`: Tests did not execute because of an interpreter, dependency, import, collection, command, or environment problem.
+- `NOT RUN`: Validation was intentionally omitted.
+
+Reproduce the exact failure, then decide whether the code, test, or documented contract is wrong. A missing package in the system interpreter is not a product-code failure. If a command accidentally uses the wrong interpreter, record the attempt as `BLOCKED`, switch to the documented repository-local interpreter, and rerun the exact focused validation. Report the authoritative rerun prominently. Do not describe a blocked attempt as a failed test.
+
+Do not claim test coverage from compilation, collection, source inspection, or static contract matching alone. Do not weaken a test merely to obtain green output. Make the smallest correction and rerun the focused test before rerunning the full suite.
 
 ## Completion report checklist
 
