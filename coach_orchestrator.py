@@ -64,7 +64,7 @@ from routes.coach import (
 logger = logging.getLogger(__name__)
 MAX_HISTORY_CHARS = 64_000  # Maximum combined characters retained from prior Coach messages for the next request.
 MAX_HISTORY_MESSAGES = 24  # Maximum number of prior user and Coach messages included in the next request.
-PROVIDER_TIMEOUT_SECONDS = 60.0  # Maximum seconds allowed for a provider request before timing out.
+PROVIDER_TIMEOUT_SECONDS = 120.0  # Maximum seconds allowed for a provider request before timing out.
 SUPPORTED_REASONING_EFFORTS = {"none", "low", "medium", "high"}
 
 
