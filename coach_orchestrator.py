@@ -151,13 +151,14 @@ def _validate_response(response):
     return text
 
 
-def _failure(turn_id, status, category, status_code, detail, started):
+def _failure(turn_id, status, category, status_code, detail, started, reasoning_effort=None):
     try:
         _fail_coach_turn(
             turn_id,
             status=status,
             error_category=category,
             elapsed_ms=round((time.perf_counter() - started) * 1000),
+            reasoning_effort_requested=reasoning_effort,
         )
     except Exception:
         logger.exception("Failed to persist Coach turn failure turn_id=%s", turn_id)
@@ -180,6 +181,7 @@ def respond_to_coach(
     _, user_message, started_turn = _start_coach_turn(session_id, message, request_id)
     turn_id = started_turn["coach_turn_id"]
     started = time.perf_counter()
+    reasoning_effort = None
     try:
         settings = (settings_loader or load_coach_settings)()
         context = context_loader(settings.detailed_daily_history_days, settings.weekly_history_rows)
@@ -237,13 +239,14 @@ def respond_to_coach(
             settings.max_turn_cost_usd,
         )
         enforce_monthly_budget(proposed_cost, settings.monthly_cost_limit_usd)
+        reasoning_effort = validate_reasoning_effort(settings.reasoning_effort)
         request = AIRequest(
             model=model,
             instructions=provider_instructions,
             input_text=input_text,
             max_output_tokens=settings.max_output_tokens,
             timeout_seconds=PROVIDER_TIMEOUT_SECONDS,
-            reasoning_effort=validate_reasoning_effort(settings.reasoning_effort),
+            reasoning_effort=reasoning_effort,
         )
         receipt = build_receipt(
             selected_memories,
@@ -276,6 +279,7 @@ def respond_to_coach(
             total_tokens=response.total_tokens,
             estimated_cost_usd=cost,
             elapsed_ms=response.elapsed_ms,
+            reasoning_effort_requested=reasoning_effort,
         )
         return {
             "message": user_message,
@@ -284,25 +288,25 @@ def respond_to_coach(
             "usage": _coach_session_snapshot(session_id),
         }
     except ContextError as exc:
-        _failure(turn_id, "failed", exc.category, exc.status_code, "Coach context is unavailable.", started)
+        _failure(turn_id, "failed", exc.category, exc.status_code, "Coach context is unavailable.", started, reasoning_effort)
     except AITimeoutError:
-        _failure(turn_id, "timed_out", "provider_timeout", 504, "Coach provider timed out.", started)
+        _failure(turn_id, "timed_out", "provider_timeout", 504, "Coach provider timed out.", started, reasoning_effort)
     except AIRateLimitError:
-        _failure(turn_id, "failed", "provider_rate_limited", 429, "Coach provider rejected the request.", started)
+        _failure(turn_id, "failed", "provider_rate_limited", 429, "Coach provider rejected the request.", started, reasoning_effort)
     except AIAuthenticationError:
-        _failure(turn_id, "failed", "provider_authentication_failed", 502, "Coach provider rejected the request.", started)
+        _failure(turn_id, "failed", "provider_authentication_failed", 502, "Coach provider rejected the request.", started, reasoning_effort)
     except (AIConfigurationError,):
-        _failure(turn_id, "failed", "provider_configuration", 503, "Coach provider is unavailable.", started)
+        _failure(turn_id, "failed", "provider_configuration", 503, "Coach provider is unavailable.", started, reasoning_effort)
     except ProviderCapacityError:
-        _failure(turn_id, "failed", "provider_concurrency_limit", 429, "Coach provider capacity is unavailable.", started)
+        _failure(turn_id, "failed", "provider_concurrency_limit", 429, "Coach provider capacity is unavailable.", started, reasoning_effort)
     except ContextReceiptInvalid:
-        _failure(turn_id, "failed", "context_receipt_invalid", 500, "Unable to prepare Coach context receipt.", started)
+        _failure(turn_id, "failed", "context_receipt_invalid", 500, "Unable to prepare Coach context receipt.", started, reasoning_effort)
     except ContextReceiptConflict:
-        _failure(turn_id, "failed", "context_receipt_conflict", 500, "Unable to persist Coach context receipt.", started)
+        _failure(turn_id, "failed", "context_receipt_conflict", 500, "Unable to persist Coach context receipt.", started, reasoning_effort)
     except ContextReceiptUnavailable:
-        _failure(turn_id, "failed", "context_receipt_unavailable", 503, "Coach context receipt is unavailable.", started)
+        _failure(turn_id, "failed", "context_receipt_unavailable", 503, "Coach context receipt is unavailable.", started, reasoning_effort)
     except ContextReceiptError:
-        _failure(turn_id, "failed", "context_receipt_unavailable", 503, "Coach context receipt is unavailable.", started)
+        _failure(turn_id, "failed", "context_receipt_unavailable", 503, "Coach context receipt is unavailable.", started, reasoning_effort)
     except MonthlyBudgetDisabledError:
         _failure(
             turn_id,
@@ -311,6 +315,7 @@ def respond_to_coach(
             429,
             "AI Coach is paused because the monthly budget limit is $0.00. Update it in Settings > AI Coach.",
             started,
+            reasoning_effort,
         )
     except MonthlyBudgetLimitError:
         _failure(
@@ -320,6 +325,7 @@ def respond_to_coach(
             429,
             "The AI Coach monthly budget has been reached. Increase the limit in Settings > AI Coach or wait until next month.",
             started,
+            reasoning_effort,
         )
     except TurnCostLimitError:
         _failure(
@@ -329,13 +335,14 @@ def respond_to_coach(
             429,
             "This response exceeds the maximum estimated cost per turn. Increase the limit in Settings > AI Coach or request a shorter response.",
             started,
+            reasoning_effort,
         )
     except CostLimitError:
-        _failure(turn_id, "failed", "budget_limit", 429, "Coach budget capacity is unavailable.", started)
+        _failure(turn_id, "failed", "budget_limit", 429, "Coach budget capacity is unavailable.", started, reasoning_effort)
     except BudgetUnavailableError:
-        _failure(turn_id, "failed", "budget_unavailable", 503, "Coach budget status is unavailable.", started)
+        _failure(turn_id, "failed", "budget_unavailable", 503, "Coach budget status is unavailable.", started, reasoning_effort)
     except CoachSettingsUnavailableError:
-        _failure(turn_id, "failed", "settings_unavailable", 503, "Coach settings are unavailable.", started)
+        _failure(turn_id, "failed", "settings_unavailable", 503, "Coach settings are unavailable.", started, reasoning_effort)
     except CustomInstructionsUnavailableError:
         _failure(
             turn_id,
@@ -344,11 +351,12 @@ def respond_to_coach(
             503,
             "AI Coach Custom Instructions are unavailable.",
             started,
+            reasoning_effort,
         )
     except CoachOrchestrationError as exc:
-        _failure(turn_id, "failed", exc.category, exc.status_code, exc.detail, started)
+        _failure(turn_id, "failed", exc.category, exc.status_code, exc.detail, started, reasoning_effort)
     except AIProviderError:
-        _failure(turn_id, "failed", "provider_failed", 502, "Coach provider failed.", started)
+        _failure(turn_id, "failed", "provider_failed", 502, "Coach provider failed.", started, reasoning_effort)
     except Exception:
         logger.exception("Unexpected Coach orchestration failure turn_id=%s", turn_id)
-        _failure(turn_id, "failed", "internal_error", 500, "Unable to complete Coach response.", started)
+        _failure(turn_id, "failed", "internal_error", 500, "Unable to complete Coach response.", started, reasoning_effort)

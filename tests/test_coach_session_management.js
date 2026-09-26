@@ -1,6 +1,6 @@
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
-const { chooseSessionMenuPlacement } = require("../static/coach.js");
+const { chooseSessionMenuPlacement, reasoningEffortLabel } = require("../static/coach.js");
 
 const requests = [];
 global.window = {};
@@ -41,6 +41,9 @@ require("../static/api.js");
     assert.match(coachSource, /coachModeSelect/);
     assert.match(coachSource, /What's on your mind\?/);
     assert.match(coachSource, /coach_mode/);
+    assert.match(coachSource, /reasoning_effort_requested/);
+    assert.equal(reasoningEffortLabel("high"), "High reasoning");
+    assert.equal(reasoningEffortLabel(null), "");
     assert.match(coachSource, /state\.modePending/);
     assert.match(coachSource, /placeSessionMenu\(id\)/);
     assert.match(coachSource, /is-upward/);

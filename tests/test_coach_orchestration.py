@@ -546,6 +546,7 @@ class CoachOrchestrationTests(unittest.TestCase):
         self.assertEqual(complete.call_args.kwargs["output_tokens"], 30)
         self.assertEqual(complete.call_args.kwargs["reasoning_tokens"], 5)
         self.assertEqual(complete.call_args.kwargs["total_tokens"], 130)
+        self.assertEqual(complete.call_args.kwargs["reasoning_effort_requested"], "low")
         self.assertEqual(complete.call_args.kwargs["estimated_cost_usd"], Decimal("0.000052"))
         fail.assert_not_called()
 
@@ -1324,6 +1325,7 @@ class CoachOrchestrationTests(unittest.TestCase):
             "provider": "fake",
             "model": "gpt-5.6-luna",
             "status": "completed",
+            "reasoning_effort_requested": "high",
             "elapsed_ms": 9900,
             "total_tokens": 32700,
             "estimated_cost_usd": Decimal("0.0073"),
@@ -1392,6 +1394,7 @@ class CoachOrchestrationTests(unittest.TestCase):
             "provider": "fake",
             "model": "gpt-5.6-luna",
             "status": "completed",
+            "reasoning_effort_requested": "high",
             "elapsed_ms": 9900,
             "total_tokens": 32700,
             "estimated_cost_usd": 0.0073,

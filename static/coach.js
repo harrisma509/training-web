@@ -25,7 +25,7 @@
     }
 
     if (typeof document === "undefined" && typeof module !== "undefined") {
-        module.exports = { chooseSessionMenuPlacement, hasNewPersistedUserMessage, formatContextCoverage };
+        module.exports = { chooseSessionMenuPlacement, hasNewPersistedUserMessage, formatContextCoverage, reasoningEffortLabel };
         return;
     }
 
@@ -263,6 +263,11 @@
         const model = text(value);
         if (!model) return "Model unavailable";
         return model.toLowerCase().includes("gpt-5.6") ? "GPT-5.6 Luna" : model;
+    }
+
+    function reasoningEffortLabel(value) {
+        const labels = { none: "None reasoning", low: "Low reasoning", medium: "Medium reasoning", high: "High reasoning" };
+        return labels[text(value).toLowerCase()] || "";
     }
 
     function clearNode(node) {
@@ -921,7 +926,9 @@
                     context.type = "button";
                     context.addEventListener("click", () => toggleContextReceipt(context, turn, item));
                     actions.appendChild(context);
-                    actions.appendChild(makeElement("span", "", `${humanModel(turn.model)} • ${formatLatency(turn.elapsed_ms)} • ${formatTokens(turn.total_tokens)} tokens • ${formatCost(turn.estimated_cost_usd)}`));
+                    const reasoning = reasoningEffortLabel(turn.reasoning_effort_requested);
+                    const metadata = [humanModel(turn.model), reasoning, formatLatency(turn.elapsed_ms), `${formatTokens(turn.total_tokens)} tokens`, formatCost(turn.estimated_cost_usd)].filter(Boolean).join(" • ");
+                    actions.appendChild(makeElement("span", "", metadata));
                 }
                 item.appendChild(actions);
             }

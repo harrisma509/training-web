@@ -42,6 +42,7 @@ MAX_MESSAGE_LENGTH = 12000
 DEFAULT_SESSION_LIMIT = 20
 MAX_SESSION_LIMIT = 100
 MAX_SESSION_MESSAGES = 200
+SUPPORTED_REASONING_EFFORTS = {"none", "low", "medium", "high"}
 
 
 class CoachSessionNotFound(LookupError):
@@ -195,7 +196,7 @@ def _start_coach_turn(session_id, message_text, request_id):
                 VALUES (%s, %s, %s, %s, %s, 'started')
                 RETURNING coach_turn_id, coach_session_id, user_message_id, assistant_message_id,
                           request_id, provider, model, coaching_policy_version, coach_mode, status,
-                          started_at, completed_at, created_at
+                          reasoning_effort_requested, started_at, completed_at, created_at
                 """,
                 (parsed_id, user_message["coach_message_id"], request_id, COACHING_POLICY_VERSION,
                  compatibility_coach_mode(session.get("current_mode"))),
@@ -430,8 +431,8 @@ def get_coach_session(session_id: str):
                         ORDER BY created_at, coach_message_id
                         LIMIT %s
                     )
-                    SELECT t.coach_turn_id, t.assistant_message_id, t.provider, t.model, t.coach_mode, t.status,
-                           t.elapsed_ms, t.total_tokens, t.estimated_cost_usd
+                          SELECT t.coach_turn_id, t.assistant_message_id, t.provider, t.model, t.coach_mode, t.status,
+                              t.reasoning_effort_requested, t.elapsed_ms, t.total_tokens, t.estimated_cost_usd
                     FROM public.coach_turn t
                     JOIN public.coach_message assistant
                       ON assistant.coach_message_id = t.assistant_message_id
@@ -643,11 +644,17 @@ def _validate_turn_metadata(provider, model, provider_response_id, elapsed_ms, t
     )
 
 
+def _validate_reasoning_effort(value):
+    if value is not None and value not in SUPPORTED_REASONING_EFFORTS:
+        raise ValueError("Unsupported reasoning effort.")
+    return value
+
+
 def _complete_coach_turn(
     turn_id, assistant_text, structured_payload=None, provider=None, model=None,
     provider_response_id=None, input_tokens=None, cached_input_tokens=None,
     output_tokens=None, reasoning_tokens=None, total_tokens=None,
-    estimated_cost_usd=None, elapsed_ms=None, tool_call_count=0,
+    estimated_cost_usd=None, elapsed_ms=None, tool_call_count=0, reasoning_effort_requested=None,
 ):
     parsed_turn_id = _parse_positive_id(turn_id)
     if parsed_turn_id is None:
@@ -660,6 +667,7 @@ def _complete_coach_turn(
     provider, model, provider_response_id, elapsed_ms, tool_call_count = _validate_turn_metadata(
         provider, model, provider_response_id, elapsed_ms, tool_call_count
     )
+    reasoning_effort_requested = _validate_reasoning_effort(reasoning_effort_requested)
     token_values = [
         _nonnegative_int(value, name)
         for name, value in (
@@ -712,18 +720,20 @@ def _complete_coach_turn(
                     provider_response_id = %s, status = 'completed', completed_at = now(),
                     elapsed_ms = %s, input_tokens = %s, cached_input_tokens = %s,
                     output_tokens = %s, reasoning_tokens = %s, total_tokens = %s,
-                    estimated_cost_usd = %s, tool_call_count = %s
+                    estimated_cost_usd = %s, tool_call_count = %s,
+                    reasoning_effort_requested = %s
                 WHERE coach_turn_id = %s AND status = 'started'
                 RETURNING coach_turn_id, coach_session_id, user_message_id,
                           assistant_message_id, request_id, provider, model,
                           coaching_policy_version, coach_mode, status, started_at, completed_at,
                           elapsed_ms, input_tokens, cached_input_tokens, output_tokens,
                           reasoning_tokens, total_tokens, estimated_cost_usd,
-                          tool_call_count, provider_response_id
+                          tool_call_count, provider_response_id, reasoning_effort_requested
                 """,
                 (
                     assistant_message["coach_message_id"], provider, model, provider_response_id,
-                    elapsed_ms, *token_values, estimated_cost_usd, tool_call_count, parsed_turn_id,
+                    elapsed_ms, *token_values, estimated_cost_usd, tool_call_count,
+                    reasoning_effort_requested, parsed_turn_id,
                 ),
             )
             completed_turn = cur.fetchone()
@@ -744,13 +754,17 @@ def _complete_coach_turn(
     return _json_row(assistant_message), _json_row(completed_turn)
 
 
-def _fail_coach_turn(turn_id, status="failed", error_category="unknown_error", elapsed_ms=None):
+def _fail_coach_turn(
+    turn_id, status="failed", error_category="unknown_error", elapsed_ms=None,
+    reasoning_effort_requested=None,
+):
     parsed_turn_id = _parse_positive_id(turn_id)
     if parsed_turn_id is None:
         raise ValueError("turn_id must be a positive integer")
     if status not in {"failed", "timed_out", "cancelled"}:
         raise ValueError("unsupported terminal turn status")
     elapsed_ms = _nonnegative_int(elapsed_ms, "elapsed_ms")
+    reasoning_effort_requested = _validate_reasoning_effort(reasoning_effort_requested)
     category = _sanitize_error_category(error_category)
 
     with db_conn() as conn:
@@ -758,11 +772,12 @@ def _fail_coach_turn(turn_id, status="failed", error_category="unknown_error", e
             cur.execute(
                 """
                 UPDATE public.coach_turn
-                SET status = %s, error_category = %s, completed_at = now(), elapsed_ms = %s
+                SET status = %s, error_category = %s, completed_at = now(), elapsed_ms = %s,
+                    reasoning_effort_requested = COALESCE(%s, reasoning_effort_requested)
                 WHERE coach_turn_id = %s AND status = 'started'
                 RETURNING coach_turn_id, coach_session_id, coach_mode, status, completed_at, elapsed_ms, error_category
                 """,
-                (status, category, elapsed_ms, parsed_turn_id),
+                (status, category, elapsed_ms, reasoning_effort_requested, parsed_turn_id),
             )
             failed_turn = cur.fetchone()
             if failed_turn is None:

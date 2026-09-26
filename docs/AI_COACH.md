@@ -13,9 +13,16 @@ AI Coach V1 is complete as a working vertical slice:
 - Injury and risk-note awareness
 - Bounded conversation history
 - Usage, latency, and cost tracking
+- Per-turn requested reasoning-effort metadata
 - Server-side budget and concurrency safeguards
 - A responsive, modern Coach web interface
 - Deterministic and editable conversation titles
+
+Completed turns retain the validated reasoning effort requested for that turn.
+The UI presents this as request metadata (for example, "High reasoning"); it
+does not claim that the provider independently verified an internal reasoning
+depth. Provider-returned `reasoning_tokens`, when available, remain separate
+usage telemetry.
 
 AI Coach V2 should build on this foundation without weakening the central architectural rule:
 
