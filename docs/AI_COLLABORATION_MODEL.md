@@ -16,6 +16,8 @@ Every Training Intelligence planning or engineering conversation should begin by
 4. The repository-local `docs/TESTING_GUIDE.md`
 5. The current schema or API contract when data behavior is involved
 
+When a task involves repository ownership, container/service placement, database access, internal APIs, Search/reporting, ETL orchestration, or cross-service behavior, also read `training-etl/docs/ARD/TRAINING_SYSTEM_SERVICE_BOUNDARIES.md`.
+
 The Engineering Constitution defines stable cross-repository principles. Repository instructions define local mandatory rules. Feature documents define current detailed contracts.
 
 ---

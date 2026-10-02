@@ -1,7 +1,7 @@
 # AI Dev Guide
 
 ## Mission
-This repo is the web dashboard and API layer for the Training Dashboard. It consumes already-processed data from the shared PostgreSQL database and presents it to the browser. The ETL repo owns data collection, schema evolution, and data-building logic.
+This repo is the web dashboard and browser-facing API layer for the Training Dashboard. It consumes already-processed data from the shared PostgreSQL database and presents it to the browser. The ETL repo owns data collection, schema evolution, and data-building logic. The separate `training-api` container is an internal ETL facade, not this browser-facing API layer.
 
 Future agent work should respect that boundary and keep the web repo focused on presentation, API behavior, and deployment.
 
@@ -15,7 +15,7 @@ Future agent work should respect that boundary and keep the web repo focused on 
 Treat this repo as the read/query + presentation layer.
 
 The web app should:
-- read processed state from Postgres
+- read processed state from Postgres through bounded, parameterized, server-side queries
 - expose stable API routes
 - render dashboard data cleanly
 - show operational status and settings
@@ -25,6 +25,11 @@ This repo should not:
 - implement raw ingestion logic
 - rewrite weekly or daily training math
 - silently change database semantics
+- receive Strava credentials or perform Strava ingestion
+- duplicate authoritative ETL calculations or rebuild logic
+- expose the internal `training-api` directly to browser JavaScript
+
+Direct server-side read access to PostgreSQL is approved and expected for ordinary dashboard, Search, reporting, lookup, narrative, and export workflows. Schema ownership remains in `training-etl`; direct read access does not grant schema evolution or arbitrary SQL authority. Read `training-etl/docs/ARD/TRAINING_SYSTEM_SERVICE_BOUNDARIES.md` for cross-service decisions.
 
 ## Daily day resync
 

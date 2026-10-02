@@ -537,7 +537,7 @@ class CoachOrchestrationTests(unittest.TestCase):
         request = self.provider.requests[0]
         self.assertEqual(request.reasoning_effort, "low")
         self.assertEqual(request.max_output_tokens, 1200)
-        self.assertEqual(request.timeout_seconds, 60.0)
+        self.assertEqual(request.timeout_seconds, 120.0)
         self.assertIn('"as_of":"2026-09-07"', request.input_text)
         self.assertEqual(result["turn"], self.completed)
         complete.assert_called_once()

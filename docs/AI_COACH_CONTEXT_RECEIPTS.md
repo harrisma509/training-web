@@ -1,11 +1,14 @@
-# AI Coach Context Receipt Design
+# AI Coach Context Receipts Contract
 
 ## Status and ownership
 
-This document locks the Slice A V1.1 Context Receipt contract. Slice A created
-reviewed DDL and design documentation; the standalone SQL was applied manually
-through DBeaver. Slice B adds application persistence and historical retrieval;
-UI and callback implementation remain future work.
+This document records the Slice A V1.1 Context Receipt contract and later
+implementation. Slice A created reviewed DDL and design documentation; the
+standalone SQL was applied manually through DBeaver. Slice B added application
+persistence and historical retrieval. The read-only per-response Context
+viewer and server-backed Durable Memories Settings UI are implemented in the
+`training-web` source. Training Intelligence callback/event work remains
+future work.
 
 `training-etl` owns the authoritative PostgreSQL schema and training context.
 `training-web` owns Coach sessions, messages, turn lifecycle, orchestration,
@@ -46,7 +49,7 @@ or receipt field on `coach_turn`. The foreign key uses `ON DELETE CASCADE`,
 matching the existing `coach_tool_call -> coach_turn` child convention and
 because a receipt has no meaning without its turn.
 
-The future model is:
+The current receipt relation and future event extension are:
 
 ```text
 coach_turn
@@ -58,7 +61,9 @@ The future event table is intentionally not created here.
 
 ## Receipt JSON V1 contract
 
-The V1 document has exactly these top-level keys:
+The V1 document has exactly these top-level keys. This legacy example uses the
+original coverage allowlist; current receipts also include Daily Check-in and
+narrative coverage fields described below.
 
 ```json
 {
@@ -89,21 +94,28 @@ The V1 document has exactly these top-level keys:
 ```
 
 The example is documentation-only; no production receipt is seeded. The
-receipt stores memory IDs for internal correlation, but the normal UI will not
+receipt stores memory IDs for internal correlation, but the normal UI does not
 display them. It stores selected memory title, type, priority, and controlled
 selection reasons, but never full memory text. `additional_data_requested` is
-included as an always-empty V1 array so the viewer can explicitly show that no
-additional data was requested; it is not a future callback-event container.
+included as an always-empty array in V1 and V2 so the viewer can explicitly
+show that no additional data was requested; it is not a future callback-event
+container.
 
 `context_coverage` is a compact allowlist, not a copied `context.coverage`
 object or full authoritative context. `custom_instructions_included` is only a
-boolean. No character counts are stored.
+boolean. Current receipts store compact Daily Check-in coverage and bounded
+narrative counts: `daily_checkins_included`, `daily_checkin_count`,
+`oldest_daily_checkin_date`, `newest_daily_checkin_date`,
+`narrative_activity_count`, `narrative_character_count`, and
+`narrative_truncated_activity_count`. They never store narrative bodies.
 
 Coach Modes V1 adds `coach_mode` as the only new top-level receipt key. Because
 V1 is explicitly an exact immutable shape, new mode-bearing receipts use
 `receipt_version = 2`. Version 1 receipts remain readable and missing mode is
 interpreted as `training` at compatibility boundaries; old receipt rows are
-never rewritten.
+never rewritten. Validation accepts the original legacy coverage allowlist
+for stored receipts and the current expanded coverage allowlist for new
+receipts, in either receipt version.
 
 ## Controlled selection reasons
 
@@ -132,15 +144,16 @@ as memory-routing evidence in the receipt.
 
 ## Receipt limits and excluded data
 
-Future application validation must enforce:
+Application validation enforces the supported V1 and V2 receipt shapes,
+including:
 
-- receipt version exactly 1
-- exactly the approved V1 top-level keys
+- receipt version exactly 1 or 2
+- exactly the approved top-level keys for that version
 - no more than 12 selected memories
 - approved memory type, priority, and selection-reason values
 - unique approved active scopes
-- `recent_message_count` as an integer from 0 through the verified history
-  message limit
+- `recent_message_count` as a nonnegative integer, populated from the
+  already-bounded provider-history window defined by the global Coach contract
 - only approved bounded context-coverage keys and JSON-safe values
 - maximum serialized receipt size of 16,000 characters
 
@@ -148,40 +161,40 @@ The database intentionally enforces only essential structural checks and does
 not duplicate the evolving JSON contract with complex JSONPath or serialized
 length checks.
 
-The receipt excludes full memory text, full Custom Instructions, section or
-character telemetry, recent-history character counts, provider-instruction
-characters, authoritative-context characters, prompts, raw provider payloads,
-SQL, authentication data, routing scores, inactive or unselected memory
-snapshots, provider usage/cost/latency fields, and future callback results.
+The receipt excludes full memory text, full Custom Instructions, prompt and
+context character counts, recent-history character counts,
+provider-instruction characters, authoritative-context characters, prompts,
+raw provider payloads, narrative bodies, SQL, authentication data, routing
+scores, inactive or unselected memory snapshots, provider usage/cost/latency
+fields, and future callback results. Narrative coverage counts are the
+explicitly allowlisted exception.
 
 ## Immutability and old-turn behavior
 
 A receipt is inserted at most once for a Coach turn. There is no normal update
-or delete route. Slice B must use an insert conflict behavior that never
+or delete route. The application uses insert conflict behavior that never
 silently replaces an existing receipt. No receipt is backfilled for old turns;
 turns created before this feature simply have no receipt row.
 
-Slice B must determine exact insertion timing from the real lifecycle. The
-current lifecycle creates a started turn before context assembly and provider
-execution, then completes the turn in a transaction with the assistant message
-and usage metadata. The receipt must not claim provider use if a request never
-reached the provider. Slice B must distinguish assembled context from
-provider-submitted context as needed before choosing its insertion boundary.
+The current lifecycle creates a started turn before context assembly and
+provider execution. After provider-capacity admission, the application
+persists and commits the receipt immediately before calling the provider, so a
+capacity rejection or receipt failure cannot leave a receipt for a provider
+call that did not begin.
 
 ## Slice B: persistence and retrieval
 
-Slice B builds the receipt from the actual selected memories and routing
-evidence, preserve human-readable deterministic reasons, capture compact
-allowlisted coverage from the actual Training Intelligence payload, record the
-actual bounded recent-message count, and record whether compiled Custom
-Instructions were nonblank.
+The application builds the receipt from the actual selected memories and
+routing evidence, preserves human-readable deterministic reasons, captures
+compact allowlisted coverage from the actual Training Intelligence payload,
+records the actual bounded recent-message count, and records whether compiled
+Custom Instructions were nonblank.
 
-It validates the exact V1 document and 16,000-character limit, then admits the
+It validates the versioned document and 16,000-character limit, admits the
 turn to `provider_capacity()`, persists the receipt with one immutable INSERT
-and commit, and only then calls `provider.complete()`. A capacity rejection or
-receipt failure therefore cannot leave a receipt for a provider call that did
-not begin. The retrieval route never reruns routing, calls a provider, or
-exposes raw JSON as the normal UI contract.
+and commit, and only then calls `provider.complete()`. The retrieval route
+never reruns routing, calls a provider, or exposes raw JSON as the normal UI
+contract.
 
 When Durable Memory storage is unavailable, no memories are selected and no
 memory block is added to provider instructions. Routing evidence is still
@@ -190,19 +203,18 @@ the receipt preserves truthful active topic scopes. Receipt failures use the
 internal categories `context_receipt_invalid`, `context_receipt_conflict`, and
 `context_receipt_unavailable`; client-facing details remain sanitized.
 
-## Planned Slice C: Settings and per-response UI
+## Implemented Settings and per-response UI
 
-Slice C will add the server-backed Durable Memories Settings surface and a
-read-only per-response Context viewer. Each completed response will have a
-click/tap Context control, optionally showing the selected-memory count. The
-Why this answer panel will show selected memory titles, types, priorities,
-dates when useful, friendly reasons, active scopes, compact Training
-Intelligence coverage, bounded recent-message count, Custom Instructions
-included, and **Additional data requested: None**.
+Completed Coach responses expose a Context control that opens the read-only
+per-response viewer. The panel shows selected memory titles, types,
+priorities, selection reasons, active scopes, compact Training Intelligence
+coverage, bounded recent-message count, Custom Instructions inclusion, and
+whether additional data was requested. The Settings > AI Coach surface
+provides server-backed Durable Memories management.
 
-The UI will not expose memory IDs, raw JSON, full prompts, full memory text by
-default, routing scores, SQL, or internal endpoint details. Settings will
-remain server-backed with no hard-delete control.
+The UI does not expose memory IDs, raw JSON, full prompts, full memory text by
+default, routing scores, SQL, or internal endpoint details. Settings remain
+server-backed with no hard-delete control.
 
 ## Future Training Intelligence callback compatibility
 

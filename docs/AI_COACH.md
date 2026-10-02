@@ -2,6 +2,15 @@
 
 ## Overview
 
+This is the sole global current contract for AI Coach behavior. It owns shared
+policy, authority, request composition, modes, provider behavior, privacy, and
+general operating limits. The focused [Personalization contract](AI_COACH_PERSONALIZATION.md)
+owns Custom Instructions and Durable Memories; the focused
+[Context Receipts contract](AI_COACH_CONTEXT_RECEIPTS.md) owns receipt shape,
+immutability, and compatibility. Those documents do not redefine this
+document's shared contracts. Their archived design records are historical,
+not current authority.
+
 AI Coach is an embedded, data-grounded coaching experience inside the Training Intelligence web application. It combines authoritative training data, athlete-entered commentary, recent Coach conversation history, and a server-side coaching policy to produce concise, actionable recommendations. For the Training Intelligence AI Coach, Mike authorizes sharing all relevant coaching context with the configured AI model, including medical, emotional, and family details, provided the selected paid service does not train on his data and has appropriate enterprise/API privacy safeguards.
 
 AI Coach V1 is complete as a working vertical slice:
@@ -92,8 +101,8 @@ training-web
 
 | Concern | Owner |
 |---|---|
-| Training calculations | training-etl / training-api |
-| Weekly Audit results | training-etl / training-api |
+| Training calculations | training-etl |
+| Weekly Audit results | training-etl, coordinated through training-api context |
 | Fresh model-facing context | training-api |
 | Sessions and messages | training-web / PostgreSQL |
 | Turn lifecycle | training-web / PostgreSQL |
@@ -102,6 +111,8 @@ training-web
 | Model inference | Configured AI provider |
 | UI presentation | training-web static frontend |
 | Cost and usage records | training-web / PostgreSQL |
+
+The Coach context call to `training-api` is an approved exception to the ordinary web read path. It exists because the context coordinates multiple ETL-owned authoritative projections into one bounded, time-aligned contract before a Coach turn. It does not mean that all `training-web` PostgreSQL reads must traverse `training-api`; ordinary dashboard, Search, reporting, lookup, narrative, and presentation reads may use bounded server-side queries directly.
 
 ---
 
@@ -223,9 +234,10 @@ critical selection overflow fails safely before provider inference. The receipt
 still retains real topic scopes derived from the question, bounded history, and
 authoritative context even when no Durable Memories can be loaded.
 
-Each new turn also persists one validated V1 Context Receipt immediately before
-provider execution, after provider-capacity admission. The receipt INSERT and
-commit complete before `provider.complete()` begins. It records selected memory
+Each new turn also persists one validated, versioned Context Receipt
+immediately before provider execution, after provider-capacity admission.
+Mode-bearing turns use receipt V2; legacy V1 receipts remain readable. The
+receipt INSERT and commit complete before `provider.complete()` begins. It records selected memory
 metadata and controlled selection reasons, active scopes, compact context
 coverage, bounded history count, narrative coverage counts, and whether Custom
 Instructions were included. Narrative text is never stored in the receipt.
@@ -303,12 +315,12 @@ The packet contains eight components:
     Defines the immediate task and receives the strongest ordinary-memory
     routing influence.
 
-The exact provider-instruction order is: universal policy, Custom Instructions
-wrapper and compiled instructions, selected mode strategy, Durable Memory
-wrapper and selected memories, then the temporal reference and authoritative
-context, bounded recent conversation, and current question. The mode strategy
-is included exactly once and is selected from the started turn, never reread
-from the session after the turn begins.
+This is the canonical component order. Components 1-4 are assembled in the
+provider request's `instructions` field; components 5-8 are assembled in
+`input_text` in the same order. The mode strategy is included exactly once and
+is selected from the started turn, never reread from the session after the
+turn begins. Server-controlled reasoning and output limits are request
+controls, not additional packet components.
 
 Training Coach answers simple factual questions directly while using structured
 actions for substantive training decisions. Conversational Coach supports
@@ -399,6 +411,11 @@ Stores the lifecycle and accounting for one user-question/assistant-answer pair:
 - Error category
 - Tool-call count
 
+`reasoning_effort_requested` records the validated persisted setting used for
+that turn; it is request metadata, not provider verification of internal
+reasoning depth. Provider-returned `reasoning_tokens` are separate usage
+telemetry.
+
 ### Local persistence behavior
 
 - Opening the Coach tab does not call the AI provider.
@@ -412,11 +429,11 @@ Stores the lifecycle and accounting for one user-question/assistant-answer pair:
 
 ## What Is Sent to the AI Provider
 
-Each real Coach turn sends the newly assembled seven-component context packet
-described above. The provider receives the packet as one provider-neutral
-request; it does not receive percentage weights for the sections.
+Each real Coach turn sends the same eight-component context packet described
+above. The provider receives it as one provider-neutral request; it does not
+receive percentage weights for the sections.
 
-### 1. Product Coach policy
+### Product Coach policy
 
 The server-side policy defines:
 
@@ -428,27 +445,34 @@ The server-side policy defines:
 - Response structure
 - Markdown formatting expectations
 
-### 2. Custom Instructions
+### Custom Instructions
 
 Nonblank Custom Instructions are compiled deterministically and placed after
 the Product Coach policy. They cannot override product safety policy,
 clinician guidance, authoritative Training Intelligence, privacy controls, or
 missing-data semantics.
 
-### 3. Selected Durable Memories
+### Selected mode response strategy
+
+The immutable `coach_turn.coach_mode` snapshot selects the response strategy
+and is added to provider instructions after Custom Instructions. It changes
+response framing only and does not change truth, safety, context, settings,
+budgets, or conversation history.
+
+### Selected Durable Memories
 
 Selected memories are compiled after Custom Instructions. Their numerical
 selection rules rank and bound memory candidates; they do not assign a
 percentage influence to the rest of the context packet.
 
-### 4. Temporal reference
+### Temporal reference
 
 Before the full authoritative context, `training-web` adds a deterministic
 temporal-reference block derived from the context's `as_of.current_date`,
 `as_of.timezone`, and `as_of.response_generated_at` fields. Relative dates are
 derived from the Training API context, not from the web server clock.
 
-### 5. Fresh Training Intelligence
+### Fresh Training Intelligence
 
 The application fetches the current context from:
 
@@ -465,6 +489,15 @@ persisted settings fail closed before context retrieval or provider creation.
 `recent_days` remains sparse and newest first: the API returns existing
 `daily_training` rows only, so the configured calendar window is not the same as
 the actual row count.
+
+`daily_checkins` is a separate bounded list of persisted athlete-reported
+check-ins in the same inclusive local-date window. Rows use date-only values and
+are newest first; missing check-in dates are not synthesized, and null values
+remain unknown. Check-ins can provide reported status, readiness or energy,
+soreness or pain, physical labor, handling quality, notes, and flags such as
+illness, injury, travel, or a goal event. They are current subjective evidence,
+not calculated training truth, activity rows, measured `recovery_history`,
+weekly `athlete_narrative`, or Durable Memories.
 
 `weekly_rows` bounds weekly Load history, weekly TID history, audit history, and
 recent weekly commentary. The corresponding commentary date lookback is
@@ -488,6 +521,7 @@ The model-facing context may include:
 - Weekly Load history
 - Weekly TID history
 - Recent training days and rides
+- Persisted athlete-reported Daily Check-ins
 - Zone exposure
 - Fitness, Fatigue, and Form
 - Sleep and recovery history
@@ -502,7 +536,7 @@ The model-facing context may include:
 
 The complete context is fetched again for each real Coach turn so that newly entered information can affect the next answer immediately.
 
-### 6. Bounded recent conversation
+### Bounded recent conversation
 
 The application includes both sides of recent conversation history:
 
@@ -512,14 +546,16 @@ The application includes both sides of recent conversation history:
 Current V1 bounds:
 
 - Maximum 24 prior messages
-- Maximum 24,000 characters across those messages
+- Maximum 64,000 characters across those messages
 - Most recent messages are preferred
 - Messages are kept in chronological order
 - The new current question is always included separately
 
 Activities and health measurements must be matched by their explicit dates rather than inferred from array position. The current repository evidence does not formally guarantee ordering for `recent_days` or `recovery_history`, so the temporal reference does not claim newest-first or oldest-first ordering; explicit dates remain authoritative.
 
-Twelve prior messages usually represent about six question/answer exchanges, but long Coach answers may reach the character limit sooner.
+The message and character ceilings are enforced by orchestration; either may
+bind first. Receipt-specific history coverage records the actual message count
+without duplicating the conversation contents.
 
 Example model-facing conversation:
 
@@ -537,42 +573,16 @@ User: When can I start riding again?
 
 Older messages remain stored and visible locally even after they fall outside the active model-history window.
 
-### 7. Current question
+### Personalization
 
-The current message is added after the authoritative context and recent conversation.
-
----
-
-## What Goes Back and Forth on Each Turn
-
-### Request to provider
-
-```text
-Configured model
-+ Coach policy
-+ Custom Instructions
-+ Selected Durable Memories
-+ Temporal reference
-+ Fresh Training Intelligence context
-+ Recent user questions
-+ Recent Coach answers
-+ Current user question
-+ Server-controlled reasoning and output limits
-```
-
-### Response from provider
-
-The adapter normalizes provider output into an application-level response containing:
-
-- Assistant text
-- Provider
-- Model
-- Provider response ID
-- Input tokens
-- Cached input tokens
-- Output tokens
-- Reasoning tokens
-- Total tokens
+Custom Instructions and Durable Memories have distinct user-managed lifecycles
+and safety boundaries. Their current field, size, normalization, eligibility,
+routing, and management contracts live in the focused
+[Personalization contract](AI_COACH_PERSONALIZATION.md). Both are compiled into
+provider instructions in the canonical order above; neither can override
+product policy, clinician guidance, privacy controls, or authoritative facts.
+Settings management makes no provider call, and optional Durable Memory
+unavailability does not block an otherwise valid turn.
 - Elapsed time
 - Completion status
 
@@ -651,9 +661,9 @@ AIRequest(
     model=model,
     instructions=coach_policy,
     input_text=model_input,
-    max_output_tokens=1200,
-    timeout_seconds=60,
-    reasoning_effort="low",
+    max_output_tokens=settings.max_output_tokens,
+    timeout_seconds=PROVIDER_TIMEOUT_SECONDS,
+    reasoning_effort=settings.reasoning_effort,
 )
 ```
 
@@ -686,10 +696,9 @@ Provider SDK types must not escape the provider adapter.
 - Provider: OpenAI
 - API: Responses API
 - Model: `gpt-5.6-luna`
-- Reasoning effort for real coaching: `low`
-- Reasoning effort for diagnostic connectivity: `none`
-- Maximum output tokens: 1,200
-- Provider timeout: 60 seconds
+- Reasoning effort: loaded from persisted Settings and validated for each paid turn (`none`, `low`, `medium`, or `high`); application and database default: `low`
+- Maximum output tokens: loaded from persisted Settings for each paid turn; default: 1,200
+- Provider timeout: 120 seconds, set by the code-level `PROVIDER_TIMEOUT_SECONDS` constant
 - SDK retries: zero initially
 - Service tier: Standard/default processing
 
@@ -733,14 +742,14 @@ The context client:
 
 The context JSON is serialized deterministically before provider inference.
 
-Current maximum serialized authoritative context size:
-
-```text
-240,000 characters
-A 240,000-character guard protects against runaway context, but it is not primarily a spending limit. It also protects latency, model focus, provider-window headroom, and accidental payload expansion. Your explicit per-turn and monthly spending limits remain the real cost controls.
-```
-
-If the authoritative context exceeds this limit, the request fails before the paid provider call rather than silently dropping arbitrary sections.
+The authoritative-context guard is 500,000 serialized characters and applies
+only to Training Intelligence context before provider inference. It does not
+cap the complete provider request, measure provider tokens, or define the
+provider's context-window limit; it is a protective ceiling, not a target.
+Per-turn and monthly budgets remain the spending controls. `context_client.py`
+owns the value and `coach_orchestrator.py` applies it during input assembly.
+Oversized authoritative context fails before the paid provider call rather than
+silently dropping arbitrary sections.
 
 ---
 
@@ -841,7 +850,7 @@ No raw provider exception body is returned to the browser.
 ```text
 Maximum active turn per session: 1
 Maximum simultaneous provider calls per web process: 2
-Maximum provider timeout: 60 seconds
+Maximum provider timeout: 120 seconds (code-level request timeout)
 Maximum Coach output tokens: 250-8,000, configured value defaults to 1,200
 Maximum theoretical cost per turn: $0.01-$1.00, configured value defaults to $0.25
 Monthly application recorded-cost ceiling: $0.00-$25.00, configured value defaults to $5.00
@@ -1059,7 +1068,7 @@ V2 should be driven by observed use rather than feature volume.
 
 Problem:
 
-Older messages eventually fall outside the 24-message / 24,000-character
+Older messages eventually fall outside the 24-message / 64,000-character
 active-history window. Selected Durable Memories already provide bounded,
 deterministic background facts for each request; session summarization and
 compaction remain future work.

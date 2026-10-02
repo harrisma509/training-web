@@ -1,26 +1,29 @@
+# **Historical design record:** This file is retained for decision history and does not define current runtime behavior. See [AI Coach current contract](../../AI_COACH.md) and [Personalization contract](../../AI_COACH_PERSONALIZATION.md).
+
 # AI Coach Durable Memories Design
 
 ## Status and ownership
 
 This document locks the V1.1 Durable Memories contract. Backend management,
-deterministic routing, bounded selection, compilation, and paid-turn prompt
-integration are implemented. The standalone DDL is
+the Settings UI, deterministic routing, bounded selection, compilation, and
+paid-turn prompt integration are implemented in `training-web`. The standalone DDL is
 `training-etl/sql/ai_coach_memories_v1.sql`, and the authoritative definition
 is in `training-etl/sql/training_postgress_db_schema.sql`. Mike applies the
-standalone script manually through DBeaver. This slice does not implement the
-Settings UI, extraction, or provider behavior.
+standalone script manually through DBeaver. Runtime deployment state is not
+asserted here. Automatic extraction and provider behavior remain out of scope.
 
 Durable Memories are manually curated atomic facts that the Coach may need
 across sessions but cannot reliably obtain from bounded context. Custom
 Instructions remain the coaching constitution. Product policy remains
 non-editable. Training Intelligence remains authoritative for current and
 calculated data. Recent conversation remains bounded conversational context.
-Activity descriptions and Strava private notes are a separate future
-context-quality feature, not Durable Memories.
+Current Coach orchestration hydrates selected activity descriptions and
+Strava private notes as bounded Coach context. They remain distinct from
+Durable Memories and are not routed into memory storage.
 
 ## Manual management
 
-Settings > AI Coach will be the authoritative editor. V1.1 supports list,
+Settings > AI Coach is the authoritative editor. V1.1 supports list,
 create, edit, deactivate, and reactivate. There is no application hard-delete
 route; SQL is an administrative escape hatch. There is no automatic extraction,
 silent write, or conversation “remember this” action.
@@ -134,7 +137,7 @@ memories. These are ceilings, not selection targets.
 
 ## Compilation and precedence
 
-The future server-controlled wrapper means:
+The server-controlled wrapper means:
 
 > These Durable Memories are selected background facts about the athlete. Use
 > them only when relevant. Current authoritative Training Intelligence, current
@@ -180,13 +183,13 @@ The selected block is included exactly once in provider instructions and is
 therefore counted exactly once by existing cost preflight. It is not persisted
 into messages or authoritative context.
 
-## Future UI contract
+## Implemented Settings UI
 
-Settings > AI Coach will contain the Memories editor. It will list active,
-future, expired, and deactivated status; provide add/edit forms; type and
-priority dropdowns; applicability checkboxes; title and multiline text; date
-inputs; active/deactivate/reactivate controls; and character counts. It will
-have no hard-delete button and no second editor in Coach Session Info.
+The Settings > AI Coach surface contains the Memories editor. It lists active,
+future, expired, and inactive memories; provides add/edit forms; type and
+priority selectors; applicability checkboxes; title and multiline text; date
+inputs; activate/deactivate controls; and a memory-text character count. It
+has no hard-delete control and no second editor in Coach Session Info.
 
 No schema seed is included. Mike-specific memories will be added later through
 the completed UI or a separately reviewed SQL artifact. The initial seed is
@@ -198,5 +201,4 @@ memories, not a dump of the full Copilot memory collection.
 Automatic extraction, conversation “remember this” tools, silent writes,
 embeddings, vector search, Graph-RAG, a secondary intent-classifier model,
 background garbage collection, automatic deduplication/merging/conflict
-resolution/decay/pruning, hard delete, chat deletion UI, and Strava activity
-description/private-note ingestion are all deferred.
+resolution/decay/pruning, hard delete, and chat deletion UI are deferred.

@@ -11,6 +11,8 @@ This app is responsible for:
 - sync status and operational health views
 - user settings and app preferences
 - web deployment for the local NAS runtime
+- bounded server-side read-only PostgreSQL queries over processed data for dashboard, Search, reporting, lookup, narrative, and export workflows
+- web-owned Coach persistence and AI-provider orchestration
 
 ## System architecture
 
@@ -33,12 +35,16 @@ This repo owns:
 
 The web app should be treated as the read/query and presentation layer, not as the source of truth for ETL logic or schema evolution.
 
+Its browser-facing routes may read the shared PostgreSQL database directly on the server through bounded, parameterized queries. The separate `training-api` container is not a mandatory hop for ordinary dashboard or Search reads; it is reserved for approved synchronous ETL operations and coordinated ETL-owned contracts. Browser JavaScript communicates with `training-web` only.
+
 ## Repository boundary
 - `training-etl` owns data collection, schema intent, ETL builders, database writes, and operational ETL scripts.
 - `training-web` owns the app layer, dashboard UI, and API surface for consuming already-processed data.
+- `training-web` owns browser-facing API routes and may perform bounded direct server-side reads over processed PostgreSQL data.
 - Do not modify database schema from this repo unless explicitly requested and coordinated.
 - Do not add ETL logic, transform logic, or warehouse/data-model work here unless the task explicitly requires it.
 - If a request touches data collection, schema, builder logic, or audit rules, stop and route the work to the ETL repo.
+- If a request touches service placement, internal APIs, or cross-repository database access, read `training-etl/docs/ARD/TRAINING_SYSTEM_SERVICE_BOUNDARIES.md`.
 
 ## Production runtime
 The real runtime is the HarrisServer Docker deployment, not the local macOS environment.

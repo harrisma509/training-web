@@ -1,3 +1,5 @@
+# **Historical design record:** This file is retained for decision history and does not define current runtime behavior. See [AI Coach current contract](../../AI_COACH.md) and [Personalization contract](../../AI_COACH_PERSONALIZATION.md).
+
 # AI Coach Custom Instructions Design
 
 ## Status and ownership
@@ -8,7 +10,7 @@ executed it manually through DBeaver. Backend persistence, paid-turn prompt
 assembly, and the seven-textarea Settings UI are implemented.
 
 `training-etl` owns the authoritative schema definition. `training-web` owns
-backend loading, validation, compilation, and the future Settings editor.
+backend loading, validation, compilation, and the implemented Settings editor.
 Custom Instructions are not Durable Memories, product policy, or a replacement
 for authoritative Training Intelligence context.
 
@@ -33,7 +35,7 @@ not embedded in schema.
 The database enforces `char_length` of at most 1,500 for each section and at
 most 8,000 characters across exactly the seven fields. Blank sections are
 allowed. PostgreSQL owns structural storage bounds only; HTML, Markdown,
-prompt-safety, and line-ending policy belong to the future application layer.
+prompt-safety, and line-ending policy belong to the implemented application layer.
 
 The backend converts CRLF and CR to LF, trims surrounding whitespace, preserves
 internal Markdown and blank lines, rejects non-string values and unknown fields,
@@ -84,10 +86,10 @@ The backend compiles nonblank sections in this fixed order with stable labels:
 The request assembly order is:
 
 1. Stable non-editable product Coach policy
-2. Server-controlled wrapper stating that Custom Instructions cannot override safety, clinician guidance, authoritative data, privacy, or missing-data semantics
-3. Compiled Custom Instructions
-4. Selected response strategy from the immutable `coach_turn.coach_mode`
-5. Relevant Durable Memories after that feature exists
+2. Custom Instructions: the server-controlled precedence wrapper followed by compiled Custom Instructions
+3. Selected mode response strategy from the immutable `coach_turn.coach_mode`
+4. Selected Durable Memories
+5. Temporal reference
 6. Fresh authoritative Training Intelligence context
 7. Bounded recent conversation
 8. Current user question
@@ -102,11 +104,11 @@ Settings management operations.
 
 ## Existing guard compatibility
 
-The existing 240,000-character guard applies only to authoritative Training  A 240,000-character guard protects against runaway context, but it is not primarily a spending limit. It also protects latency, model focus, provider-window headroom, and accidental payload expansion. Your explicit per-turn and monthly spending limits remain the real cost controls.
 
-API context and remains unchanged. The existing 24-message / 24,000-character
-guard applies only to recent conversation and remains unchanged. The existing
-output-token setting remains unrelated to Custom Instructions input size.
+Authoritative-context and recent-conversation sizing are owned by the current
+Coach contract in `AI_COACH.md` and the orchestration source. This document
+defines the Custom Instructions profile bounds and inclusion behavior only.
+Preflight accounting includes the compiled Custom Instructions exactly once.
 
 The combined 8,000-character Custom Instructions bound fits the current
 architecture. Per-turn preflight accounting includes the final provider

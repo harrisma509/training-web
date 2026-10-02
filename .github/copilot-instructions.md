@@ -21,17 +21,30 @@ The separate `training-etl` repo owns Strava ingestion, ETL builders, database w
 ## Repo boundary
 
 This repo owns:
+- The browser-facing FastAPI application and browser-facing routes
+- Static frontend assets and product presentation
+- Bounded, parameterized, server-side read-only PostgreSQL queries over processed data
+- Search, reporting, lookup, narrative, and approved export workflows
+- Web-owned records and bounded CRUD
+- Coach sessions, messages, turns, settings, memories, receipts, orchestration, and provider integration
+- Sync request orchestration and status presentation
 
-- FastAPI app setup
-- API routes
-- Static frontend JavaScript and CSS
-- Health ingestion API
-- Sync UI/status
-- NAS web deployment
-- Dashboard presentation
+The separate `training-etl` repo owns:
+- External-source ingestion and provider credentials
+- Normalization and authoritative field semantics
+- Schema SQL, migrations, and schema evolution
+- ETL-managed writes
+- Authoritative calculations and builders
+- Backfills, rebuilds, reconciliation, and repair logic
+- `training-runner` and `training-api`
 
 Do not modify `training-etl` files from this repo unless explicitly requested.
 
+For repository, service, database, Search, ETL orchestration, or internal API decisions, read `training-etl/docs/ARD/TRAINING_SYSTEM_SERVICE_BOUNDARIES.md`.
+
+`training-web` is the browser-facing application and server-side read/query layer. Its server-side routes may perform bounded, parameterized, read-only PostgreSQL queries over processed data for ordinary dashboard, Search, reporting, lookup, narrative, and export workflows. This does not grant schema ownership or permission to duplicate ETL calculations.
+
+The separate `training-api` container is an internal authenticated ETL facade for explicitly approved synchronous ETL operations and coordinated ETL-owned contracts. It is not the mandatory path for every database read, and browser JavaScript must never call it directly. `training-runner` executes scheduled, queued, and background ETL work.
 Do not change database schema from this repo unless explicitly requested.
 
 ## Runtime

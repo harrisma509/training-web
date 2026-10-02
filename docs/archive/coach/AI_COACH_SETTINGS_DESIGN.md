@@ -1,3 +1,5 @@
+# **Historical design record:** This file is retained for decision history and does not define current runtime behavior. See [AI Coach current contract](../../AI_COACH.md).
+
 # AI Coach Settings Persistence Design
 
 ## Status
@@ -88,6 +90,6 @@ The existing provider timeout, concurrency limit, provider/model configuration, 
 1. Review `training-etl/sql/ai_coach_settings_v1.sql`.
 2. Apply it manually through DBeaver.
 3. Run the included read-only verification queries and confirm one row with the expected defaults.
-4. Implement and test backend persistence and orchestration loading/enforcement.
+4. Backend persistence and orchestration loading/enforcement are implemented; validate the deployed behavior after runtime rollout.
 5. Perform API, browser, and runtime validation.
 6. Update `docs/AI_COACH.md` after verified behavior changes.
