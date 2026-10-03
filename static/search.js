@@ -93,7 +93,6 @@ if (typeof module !== "undefined" && module.exports) {
         { label: "Moving", key: "moving_sec", sort_by: "moving" },
         { label: "Elapsed", key: "elapsed_sec", sort_by: "elapsed" },
         { label: "Load", key: "activity_load", sort_by: "load" },
-        { label: "Actions", key: "actions" },
     ];
     const ACTIVITY_TYPE_LABELS = {
         AlpineSki: "Alpine Ski",
@@ -550,8 +549,6 @@ if (typeof module !== "undefined" && module.exports) {
     }
 
     function createActionsControl(row) {
-        const container = document.createElement("div");
-        container.className = "search-actions-cell";
         const button = document.createElement("button");
         button.type = "button";
         button.className = "search-actions-toggle";
@@ -568,8 +565,7 @@ if (typeof module !== "undefined" && module.exports) {
                 openActionsMenu(button, row);
             }
         });
-        container.appendChild(button);
-        return container;
+        return button;
     }
 
     async function resyncActivity(row) {
@@ -657,7 +653,16 @@ if (typeof module !== "undefined" && module.exports) {
             const tr = document.createElement("tr");
             RESULT_COLUMNS.forEach(column => {
                 const cell = document.createElement("td");
-                if (column.key === "name" && row.activity_id != null && /^\d+$/.test(String(row.activity_id))) {
+                if (column.key === "date_local") {
+                    const dateContent = document.createElement("span");
+                    dateContent.className = "search-date-cell-content";
+                    const date = document.createElement("span");
+                    date.className = "search-date-value";
+                    date.textContent = formatCell(row, column.key);
+                    dateContent.appendChild(date);
+                    dateContent.appendChild(createActionsControl(row));
+                    cell.appendChild(dateContent);
+                } else if (column.key === "name" && row.activity_id != null && /^\d+$/.test(String(row.activity_id))) {
                     const link = document.createElement("a");
                     link.className = "activity-link";
                     link.href = `https://www.strava.com/activities/${encodeURIComponent(row.activity_id)}`;
@@ -665,8 +670,6 @@ if (typeof module !== "undefined" && module.exports) {
                     link.rel = "noopener noreferrer";
                     link.textContent = text(row.name);
                     cell.appendChild(link);
-                } else if (column.key === "actions") {
-                    cell.appendChild(createActionsControl(row));
                 } else {
                     cell.textContent = formatCell(row, column.key);
                 }

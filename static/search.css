@@ -169,6 +169,35 @@
     background: var(--table-header-bg);
 }
 
+#searchResults th:first-child,
+#searchResults td:first-child {
+    width: 1%;
+    padding-right: 2px;
+    white-space: nowrap;
+}
+
+#searchResults th:nth-child(2),
+#searchResults td:nth-child(2) {
+    width: 1%;
+    padding-right: 2px;
+    padding-left: 2px;
+    white-space: nowrap;
+    text-align: right;
+}
+
+#searchResults .search-date-cell-content {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 1px;
+    white-space: nowrap;
+}
+
+#searchResults th:nth-child(2) .search-sort {
+    width: 100%;
+    justify-content: flex-end;
+    text-align: right;
+}
+
 .search-sort {
     display: inline-flex;
     align-items: center;
@@ -216,19 +245,13 @@
     cursor: default;
 }
 
-.search-actions-cell {
-    display: flex;
-    justify-content: center;
-    min-width: 32px;
-}
-
 .search-actions-toggle {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 24px;
-    min-width: 24px;
-    height: 24px;
+    width: 14px;
+    min-width: 14px;
+    height: 18px;
     margin: 0;
     padding: 0;
     border: 1px solid transparent;

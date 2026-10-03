@@ -173,6 +173,10 @@ function descendants(element) {
     return element.children.flatMap(child => [child, ...descendants(child)]);
 }
 
+function tableRows(table) {
+    return table.children.find(element => element.tagName === "TBODY")?.children || [];
+}
+
 function sortButton(table, label) {
     return descendants(table).find(element => element.className.includes("search-sort")
         && element.children.some(child => child.className === "search-sort-label" && child.textContent === label));
@@ -194,6 +198,7 @@ async function main() {
     const dailySource = fs.readFileSync("static/daily.js", "utf8");
     const appSource = fs.readFileSync("static/app.js", "utf8");
     const htmlSource = fs.readFileSync("index.html", "utf8");
+    const searchCssSource = fs.readFileSync("static/search.css", "utf8");
     assert.doesNotMatch(searchSource, /new Date|Date\.parse/);
     assert.match(searchSource, /Array\.from\(menu\.children\)\.find\(item => !item\.disabled\)/);
     assert.doesNotMatch(searchSource, /menu\.children\.find/);
@@ -218,6 +223,13 @@ async function main() {
     assert.match(htmlSource, /search\.css/);
     assert.match(htmlSource, /search\.js\?v=20261003-activity-resync-fix-v1/);
     assert.doesNotMatch(fs.readFileSync("static/style.css", "utf8"), /\.search-(?:pane|filters|results|chip)/);
+    assert.match(searchCssSource, /#searchResults th:first-child,\s*#searchResults td:first-child\s*\{[^}]*width:\s*1%;[^}]*white-space:\s*nowrap;/s);
+    assert.match(searchCssSource, /#searchResults th:nth-child\(2\),\s*#searchResults td:nth-child\(2\)\s*\{[^}]*width:\s*1%;[^}]*white-space:\s*nowrap;[^}]*text-align:\s*right;/s);
+    assert.match(searchCssSource, /#searchResults \.search-date-cell-content\s*\{[^}]*display:\s*inline-flex;[^}]*gap:\s*1px;[^}]*white-space:\s*nowrap;/s);
+    assert.match(searchCssSource, /#searchResults th:nth-child\(2\) \.search-sort\s*\{[^}]*justify-content:\s*flex-end;[^}]*text-align:\s*right;/s);
+    assert.doesNotMatch(searchCssSource, /(^|\n)\s*(?:table\s+)?(?:tr\s+)?(?:th|td|tr)(?:\s|:|\{)/);
+    assert.doesNotMatch(searchCssSource, /(^|\n)\s*(?:th|td|tr):nth-child\(/);
+    assert.doesNotMatch(searchCssSource, /\.search-actions-cell/);
 
     const harness = createSearchHarness();
     harness.setResponse(async () => ({
@@ -364,21 +376,22 @@ async function main() {
     sorting.setResponse(async () => ({ items: [], total_count: 0 }));
     sorting.window.SearchController.activate();
     await sorting.settle();
+    assert.equal(tableRows(sorting.elements.searchResults)[0].children[0].colSpan, 10, "empty state should span all Search columns");
     sorting.elements.searchText.value = "tempo";
     await sorting.elements.searchText.trigger("input");
     const headers = descendants(sorting.elements.searchResults).filter(element => element.tagName === "TH");
-    assert.equal(headers.length, 11);
+    assert.equal(headers.length, 10);
     assert.equal(headers.some(header => header.textContent === "Category"), false);
-    const actionsHeader = headers.find(header => header.textContent === "Actions");
-    assert.ok(actionsHeader);
-    assert.equal(actionsHeader.className, "search-nonsortable-header");
-    assert.equal(descendants(actionsHeader).some(element => element.tagName === "BUTTON"), false);
-    assert.equal(actionsHeader.attributes["aria-sort"], undefined);
+    assert.equal(headers.some(header => descendantText(header).includes("Actions")), false);
+    assert.ok(headers.every(header => header.className === "search-sortable-header"));
     assert.equal(sortableColumns.length, 10);
     for (const [label, sortBy] of sortableColumns) {
         const initialButton = sortButton(sorting.elements.searchResults, label);
         assert.ok(initialButton, `${label} should be sortable`);
         assert.match(descendantText(initialButton), /[↓↑]/, `${label} should show a direction arrow`);
+        if (label === "Start") {
+            assert.deepEqual(initialButton.children.map(child => child.className), ["search-sort-label", "search-sort-indicator"]);
+        }
         const firstDirection = sortBy === "date" ? "asc" : "desc";
         await initialButton.trigger("click");
         assert.equal(sorting.requests.at(-1).sort_by, sortBy);
@@ -403,6 +416,18 @@ async function main() {
         assert.equal(activeHeader.attributes["aria-sort"], secondDirection === "desc" ? "descending" : "ascending");
     }
 
+    const invalidInitial = createSearchHarness("http://localhost/?tab=search&search_start_date=2024-01-01");
+    invalidInitial.window.SearchController.activate();
+    await invalidInitial.settle();
+    assert.equal(invalidInitial.requests.length, 0, "an incomplete initial date range must not request results");
+    assert.equal(tableRows(invalidInitial.elements.searchResults)[0].children[0].colSpan, 10, "validation placeholder should span all Search columns");
+
+    const failedInitial = createSearchHarness();
+    failedInitial.setResponse(async () => { throw new Error("offline"); });
+    failedInitial.window.SearchController.activate();
+    await failedInitial.settle();
+    assert.equal(tableRows(failedInitial.elements.searchResults)[0].children[0].colSpan, 10, "request-error placeholder should span all Search columns");
+
     const actions = createSearchHarness();
     actions.setResponse(async () => ({
         items: [
@@ -424,11 +449,22 @@ async function main() {
     }));
     actions.window.SearchController.activate();
     await actions.settle();
+    const resultRows = tableRows(actions.elements.searchResults);
+    assert.equal(resultRows.length, 2);
+    assert.ok(resultRows.every(row => row.children.length === 10), "each result row should have ten data cells and no Actions cell");
+    for (const [index, row] of resultRows.entries()) {
+        const dateCell = row.children[0];
+        const dateContent = dateCell.children[0];
+        assert.equal(dateContent.className, "search-date-cell-content");
+        assert.equal(dateContent.children[0].className, "search-date-value");
+        assert.equal(dateContent.children[0].textContent, index === 0 ? "2024-04-03" : "2024-04-04");
+        assert.equal(dateContent.children[1].className, "search-actions-toggle");
+    }
+    assert.equal(resultRows[0].children[1].textContent, "3:20 PM", "Start values should retain 12-hour formatting");
     const actionsButtons = descendants(actions.elements.searchResults)
         .filter(element => element.className.includes("search-actions-toggle"));
     assert.equal(actionsButtons.length, 2, "each result row should have one compact actions trigger");
     assert.deepEqual(actionsButtons.map(button => button.textContent), ["⋮", "⋮"]);
-    assert.equal(actionsButtons.some(button => button.textContent === "Actions"), false);
     for (const [index, button] of actionsButtons.entries()) {
         assert.equal(button.tagName, "BUTTON");
         assert.equal(button.attributes["aria-label"], `Activity actions for ${index === 0 ? "Local ride" : "Second ride"}`);
@@ -437,10 +473,15 @@ async function main() {
         assert.equal(button.attributes["aria-controls"], "search-actions-menu");
     }
     const actionsButton = actionsButtons[0];
+    const requestsBeforeMenu = actions.requests.length;
     await actionsButton.keyboardActivate("Enter");
     assert.equal(actionsButton.attributes["aria-expanded"], "true");
+    assert.equal(actions.requests.length, requestsBeforeMenu, "opening the date-cell menu must not activate Date sorting");
+    assert.equal(actions.window.AppState.activeTab, "search", "opening the menu must not navigate to Daily");
+    assert.equal(actions.getUrl().searchParams.has("date"), false, "opening the menu must not navigate to a date");
     let menu = actions.body.children.find(element => element.attributes.role === "menu");
     assert.ok(menu, "Actions menu should be portalled outside the scrollable results table");
+    assert.ok(Number.parseFloat(menu.style.left) >= 8, "the portalled menu should stay within the viewport's left edge");
     const editLink = menu.children.find(element => element.tagName === "A");
     assert.equal(editLink.href, "https://www.strava.com/activities/12345/edit");
     assert.equal(editLink.target, "_blank");
@@ -507,6 +548,7 @@ async function main() {
     await unsafeActivity.settle();
     const unsafeButton = descendants(unsafeActivity.elements.searchResults)
         .find(element => element.className.includes("search-actions-toggle"));
+    assert.equal(tableRows(unsafeActivity.elements.searchResults)[0].children.length, 10);
     await unsafeButton.trigger("click");
     const unsafeMenu = unsafeActivity.body.children[0];
     assert.equal(unsafeMenu.children.some(element => element.tagName === "A"), false);
