@@ -699,26 +699,6 @@ tr:hover td {
   box-shadow: inset 0 0 0 9999px var(--row-hover-shadow);
 }
 
-.ac-ratio-low {
-  color: var(--yellow);
-  font-weight: 700;
-}
-
-.ac-ratio-target {
-  color: var(--green);
-  font-weight: 700;
-}
-
-.ac-ratio-caution {
-  color: var(--yellow);
-  font-weight: 700;
-}
-
-.ac-ratio-spike {
-  color: var(--red);
-  font-weight: 700;
-}
-
 .hidden {
   display: none;
 }

@@ -40,10 +40,6 @@ for (const [selector, pattern] of [
     ["th", /(?:^|\n)th\s*,/],
     ["td", /(?:^|\n)td\s*\{/],
     ["tr:hover td", /(?:^|\n)tr:hover td\s*\{/],
-    [".ac-ratio-low", /(?:^|\n)\.ac-ratio-low\s*\{/],
-    [".ac-ratio-target", /(?:^|\n)\.ac-ratio-target\s*\{/],
-    [".ac-ratio-caution", /(?:^|\n)\.ac-ratio-caution\s*\{/],
-    [".ac-ratio-spike", /(?:^|\n)\.ac-ratio-spike\s*\{/],
     [".hr-zone-label", /(?:^|\n)\.hr-zone-label\s*\{/],
 ]) {
     assert.match(sharedSource, pattern, `missing shared or unrelated selector: ${selector}`);
