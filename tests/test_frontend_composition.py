@@ -146,6 +146,7 @@ def test_stylesheet_and_synchronous_script_order_is_stable() -> None:
         "/static/style.css",
         "/static/daily.css",
         "/static/gear.css",
+        "/static/zones.css",
         "/static/search.css",
         "/static/components.css",
         "/static/plan.css",

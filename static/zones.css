@@ -1,0 +1,51 @@
+#zonesPane .table-wrap {
+    width: max-content;
+    max-width: 100%;
+    display: block;
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    overflow: hidden;
+}
+
+#zonesTable {
+    width: max-content;
+    min-width: unset;
+    max-width: 100%;
+    table-layout: auto;
+    border-collapse: collapse;
+}
+
+#zonesTable th,
+#zonesTable td {
+    padding: 1px 4px;
+}
+
+.zone-good {
+    background: color-mix(in srgb, var(--green) 90%, var(--panel));
+    color: var(--zone-good-text);
+    font-weight: 800;
+}
+
+.zone-strong {
+    background: color-mix(in srgb, var(--green) 55%, var(--panel));
+    color: var(--zone-strong-text);
+    font-weight: 900;
+}
+
+.zone-caution {
+    background: color-mix(in srgb, var(--yellow) 90%, var(--panel));
+    color: var(--zone-caution-text);
+    font-weight: 900;
+}
+
+.zone-bad {
+    background: color-mix(in srgb, var(--red) 70%, var(--panel));
+    color: var(--zone-bad-text);
+    font-weight: 900;
+}
+
+.zone-low {
+    background: color-mix(in srgb, var(--red) 32%, var(--panel));
+    color: var(--zone-low-text);
+    font-weight: 800;
+}
