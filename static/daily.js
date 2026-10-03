@@ -739,6 +739,7 @@ function updateDailySearchControls() {
   const searchStatus = document.getElementById("dailySearchStatusWrap");
   const statusText = document.getElementById("dailySearchStatusText");
   const appliedQuery = String(window.AppState.dailyAppliedQuery || "").trim();
+  const exactDate = String(window.AppState.dailyExactDate || "").trim();
   const rawDraftQuery = String(window.AppState.dailyDraftQuery || "");
   const draftQuery = rawDraftQuery.trim();
   const displayedCount = Number(window.AppState.dailySearchMatchCount || 0);
@@ -754,10 +755,12 @@ function updateDailySearchControls() {
     dailyLimit.disabled = Boolean(appliedQuery);
   }
   if (searchStatus) {
-    searchStatus.classList.toggle("hidden", !appliedQuery);
+    searchStatus.classList.toggle("hidden", !appliedQuery && !exactDate);
   }
   if (statusText) {
-    if (!appliedQuery) {
+    if (exactDate && !appliedQuery) {
+      statusText.textContent = `Showing ${exactDate}`;
+    } else if (!appliedQuery) {
       statusText.textContent = "";
     } else if (totalCount > 0 && displayedCount < totalCount) {
       statusText.textContent = `Showing ${formatSearchCount(displayedCount)} of ${formatSearchCount(totalCount)} matching days across all history for '${appliedQuery}'`;
@@ -765,6 +768,10 @@ function updateDailySearchControls() {
       statusText.textContent = `Showing ${formatSearchCount(displayedCount)} matching days across all history for '${appliedQuery}'`;
     }
   }
+  const advancedButton = document.getElementById("dailySearchAdvanced");
+  if (advancedButton) advancedButton.classList.toggle("hidden", !appliedQuery);
+  const clearButton = document.getElementById("dailyClearSearch");
+  if (clearButton) clearButton.textContent = exactDate && !appliedQuery ? "Clear date" : "Clear search";
 }
 
 function renderDailySearchResults(payload = { rows: [], total_count: 0 }, query = "") {
@@ -784,6 +791,24 @@ function renderDailySearchResults(payload = { rows: [], total_count: 0 }, query 
     return;
   }
 
+  const summary = document.createElement("div");
+  summary.className = "daily-search-header";
+  const dayWord = totalCount === 1 ? "day" : "days";
+  const summaryText = totalCount > rows.length
+    ? `${totalCount} matching ${dayWord} across all history`
+    : `${totalCount} matching ${dayWord} across all history`;
+  const summaryLabel = document.createElement("span");
+  summaryLabel.textContent = summaryText;
+  const advancedButton = document.createElement("button");
+  advancedButton.type = "button";
+  advancedButton.className = "button-secondary small";
+  advancedButton.textContent = "Open in Advanced Search";
+  advancedButton.addEventListener("click", () => {
+    window.SearchController?.openAdvancedSearch({ text: String(query).trim() });
+  });
+  summary.append(summaryLabel, advancedButton);
+  results.appendChild(summary);
+
   if (!rows.length) {
     showDailySearchResults();
     const empty = document.createElement("div");
@@ -792,15 +817,6 @@ function renderDailySearchResults(payload = { rows: [], total_count: 0 }, query 
     results.appendChild(empty);
     return;
   }
-
-  const summary = document.createElement("div");
-  summary.className = "daily-search-header";
-  const dayWord = totalCount === 1 ? "day" : "days";
-  const summaryText = totalCount > rows.length
-    ? `${totalCount} matching ${dayWord} across all history`
-    : `${totalCount} matching ${dayWord} across all history`;
-  summary.textContent = summaryText;
-  results.appendChild(summary);
 
   rows.slice(0, 5).forEach((row, index) => {
     const item = document.createElement("div");
@@ -888,6 +904,7 @@ async function searchDailyRides(query) {
 
 function handleDailySearchInput(event) {
   const query = String(event.target.value || "");
+  window.AppState.dailyExactDate = "";
   window.AppState.dailyDraftQuery = query;
   updateDailySearchControls();
 
@@ -913,6 +930,10 @@ function applyDailySearch() {
   }
 
   window.AppState.dailyAppliedQuery = trimmed;
+  window.AppState.dailyExactDate = "";
+  const url = new URL(window.location.href);
+  url.searchParams.delete("date");
+  window.history.replaceState({}, "", url);
   hideDailySearchResults();
   updateDailySearchControls();
   loadDaily();
@@ -920,6 +941,10 @@ function applyDailySearch() {
 
 function clearAppliedDailySearch() {
   window.AppState.dailyAppliedQuery = "";
+  window.AppState.dailyExactDate = "";
+  const url = new URL(window.location.href);
+  url.searchParams.delete("date");
+  window.history.replaceState({}, "", url);
   window.AppState.dailyDraftQuery = "";
   window.AppState.dailySearchMatchCount = 0;
   window.AppState.dailySearchTotalCount = 0;
@@ -982,6 +1007,7 @@ function attachDailySearch() {
   const results = document.getElementById("dailySearchResults");
   const applyBtn = document.getElementById("dailySearchApply");
   const clearBtn = document.getElementById("dailyClearSearch");
+  const advancedBtn = document.getElementById("dailySearchAdvanced");
   if (!input || !results) {
     return;
   }
@@ -996,6 +1022,10 @@ function attachDailySearch() {
   });
   applyBtn?.addEventListener("click", applyDailySearch);
   clearBtn?.addEventListener("click", clearAppliedDailySearch);
+  advancedBtn?.addEventListener("click", () => {
+    const query = String(window.AppState.dailyAppliedQuery || "").trim();
+    if (query) window.SearchController?.openAdvancedSearch({ text: query });
+  });
 
   document.addEventListener("click", (event) => {
     const isInside = input.contains(event.target) || results.contains(event.target);
@@ -1053,6 +1083,7 @@ attachDailyLimitSelector();
 async function loadDaily() {
   const requestId = ++dailyLoadRequestId;
   const query = String(window.AppState.dailyAppliedQuery || "").trim();
+  const exactDate = String(window.AppState.dailyExactDate || "").trim();
   const limit = query ? 1000 : Number(window.AppState.dailyLimit);
   const dailyLimitSelector = document.getElementById("dailyLimit");
 
@@ -1064,7 +1095,7 @@ async function loadDaily() {
 
   try {
     if (window.api && typeof window.api.fetchDaily === "function") {
-      const payload = await window.api.fetchDaily(limit, query);
+      const payload = await window.api.fetchDaily(limit, query, exactDate);
       if (requestId !== dailyLoadRequestId) {
         return;
       }
@@ -1077,6 +1108,7 @@ async function loadDaily() {
       if (query) {
         params.set("q", query);
       }
+      if (exactDate) params.set("date", exactDate);
       const payload = await fetch(`/api/daily?${params.toString()}`).then(response => response.json());
       if (requestId !== dailyLoadRequestId) {
         return;

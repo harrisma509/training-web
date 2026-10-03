@@ -110,10 +110,11 @@
       return fetchJson(`/api/gear/dashboard?limit=${limit}`);
     },
 
-    async fetchDaily(limit = 60, q = "") {
+    async fetchDaily(limit = 60, q = "", date = "") {
       const trimmedQuery = typeof q === "string" ? q.trim() : "";
       const effectiveLimit = trimmedQuery ? 1000 : Math.max(1, Number(limit) || 60);
       const params = new URLSearchParams({ limit: String(effectiveLimit) });
+      if (date) params.set("date", String(date));
       if (trimmedQuery) {
         params.set("q", trimmedQuery);
       }
@@ -122,6 +123,16 @@
         return payload;
       }
       return payload;
+    },
+
+    async searchActivities(filters = {}) {
+      const params = new URLSearchParams();
+      Object.entries(filters || {}).forEach(([key, value]) => {
+        if (value !== null && value !== undefined && String(value).trim() !== "") {
+          params.set(key, String(value).trim());
+        }
+      });
+      return fetchJson(`/api/activities/search?${params.toString()}`);
     },
 
     async fetchActivityNarrative(activityId) {

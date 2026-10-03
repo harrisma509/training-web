@@ -7,6 +7,8 @@ This endpoint combines daily_training and daily health tables.
 Do not put Weekly, Zones, Sync, or Weekly Audit logic here.
 """
 
+from datetime import date as Date
+
 from fastapi import APIRouter
 from fastapi.responses import JSONResponse
 
@@ -66,12 +68,14 @@ def api_ride_search(q: str = "", limit: int = 5):
 
 
 @router.get("/api/daily")
-def api_daily(limit: int = 365, q: str = ""):
+def api_daily(limit: int = 365, q: str = "", date: Date | None = None):
     trimmed_q = (q or "").strip()
     if trimmed_q:
         limit = max(1, min(int(limit or 1000), 1000))
         like_pattern = _ride_search_pattern(trimmed_q)
-        sql = """
+        date_filter = "\n                and daily_training.date = %s" if date is not None else ""
+        count_date_filter = "\n                and date = %s" if date is not None else ""
+        sql = f"""
             select
                 daily_training.date AS date,
                 daily_training.activity_count,
@@ -127,22 +131,26 @@ def api_daily(limit: int = 365, q: str = ""):
                 daily_training.main_ride_name is not null
                 and trim(daily_training.main_ride_name) <> ''
                 and lower(daily_training.main_ride_name) like lower(%s) escape '\\'
+                {date_filter}
             order by daily_training.date desc
             limit %s
         """
-        count_sql = """
+        count_sql = f"""
             select count(*) as total_count
             from daily_training
             where
                 main_ride_name is not null
                 and trim(main_ride_name) <> ''
                 and lower(main_ride_name) like lower(%s) escape '\\'
+                {count_date_filter}
         """
+        count_params = (like_pattern, date) if date is not None else (like_pattern,)
+        query_params = (like_pattern, date, limit) if date is not None else (like_pattern, limit)
         with db_conn() as conn:
             with conn.cursor() as cur:
-                cur.execute(count_sql, (like_pattern,))
+                cur.execute(count_sql, count_params)
                 total_result = cur.fetchone()
-                cur.execute(sql, (like_pattern, limit))
+                cur.execute(sql, query_params)
                 rows = cur.fetchall()
         total_count = int((total_result or {}).get("total_count", 0) or 0)
         return JSONResponse({"rows": rows_to_json(rows), "total_count": total_count})
@@ -216,13 +224,14 @@ def api_daily(limit: int = 365, q: str = ""):
             on health_weight.date = dates.date
         left join strava_activities AS narrative_activity
             on narrative_activity.activity_id = daily_training.main_ride_id
-        order by dates.date desc
-        limit %s
     """
+    if date is not None:
+        sql += "\n        where dates.date = %s"
+    sql += "\n        order by dates.date desc\n        limit %s"
 
     with db_conn() as conn:
         with conn.cursor() as cur:
-            cur.execute(sql, (limit,))
+            cur.execute(sql, (date, limit) if date is not None else (limit,))
             rows = cur.fetchall()
 
     return JSONResponse(rows_to_json(rows))

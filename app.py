@@ -22,6 +22,7 @@ from fastapi.staticfiles import StaticFiles
 
 from logging_config import configure_logging
 from health_api.ingest_routes import router as health_router
+from routes.activities import router as activities_router
 from routes.daily import router as daily_router
 from routes.daily_checkins import router as daily_checkins_router
 from routes.weekly import router as weekly_router
@@ -47,6 +48,7 @@ BASE_DIR = Path(__file__).resolve().parent
 
 app = FastAPI(title="Training Dashboard")
 app.include_router(health_router)
+app.include_router(activities_router)
 app.include_router(daily_router)
 app.include_router(daily_checkins_router)
 app.include_router(weekly_router)

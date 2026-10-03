@@ -98,12 +98,12 @@
       : rawStartupTab === "gear" ? "gear" : "components";
 
     next.appearance = ["system", "light", "dark"].includes(next.appearance) ? next.appearance : "system";
-    next.activeTab = ["plan", "goals", "kpis", "charts", "daily", "weekly", "zones", "service", "yearly", "coach"].includes(rawActiveTab)
+    next.activeTab = ["plan", "goals", "kpis", "charts", "daily", "search", "weekly", "zones", "service", "yearly", "coach"].includes(rawActiveTab)
       ? rawActiveTab
       : ["gear", "components"].includes(rawActiveTab) ? "service" : "daily";
     next.serviceSubtab = activeServiceSubtab;
     next.rememberLastTab = next.rememberLastTab !== false;
-    next.startupTab = ["plan", "goals", "kpis", "charts", "daily", "weekly", "zones", "service", "yearly", "coach"].includes(rawStartupTab)
+    next.startupTab = ["plan", "goals", "kpis", "charts", "daily", "search", "weekly", "zones", "service", "yearly", "coach"].includes(rawStartupTab)
       ? rawStartupTab
       : ["gear", "components"].includes(rawStartupTab) ? "service" : "daily";
     next.startupServiceSubtab = startupServiceSubtab;

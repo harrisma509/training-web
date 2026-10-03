@@ -1012,7 +1012,7 @@
 
     startupTab?.addEventListener("change", (event) => {
       const selectedTab = event.target.value === "overview" ? "plan" : event.target.value;
-      if (!["plan", "goals", "kpis", "charts", "daily", "weekly", "zones", "service", "yearly", "coach"].includes(selectedTab)) {
+      if (!["plan", "goals", "kpis", "charts", "daily", "search", "weekly", "zones", "service", "yearly", "coach"].includes(selectedTab)) {
         return;
       }
 

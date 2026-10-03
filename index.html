@@ -45,6 +45,7 @@
         <button id="planTab" type="button">Plan</button>
         <button id="weeklyTab" type="button">Weekly</button>
         <button id="dailyTab" class="active" type="button">Daily</button>
+        <button id="searchTab" type="button">Search</button>
         <button id="goalsTab" type="button">Goals</button>
         <button id="kpisTab" type="button">KPIs</button>
         <button id="chartsTab" type="button">Charts</button>
@@ -161,6 +162,7 @@
                   <option value="kpis">KPIs</option>
                   <option value="charts">Charts</option>
                   <option value="daily">Daily</option>
+                  <option value="search">Search</option>
                   <option value="weekly">Weekly</option>
                   <option value="zones">Zones</option>
                   <option value="service">Service</option>
@@ -808,10 +810,83 @@
     <section id="dailyPane">
       <div id="dailySearchStatusWrap" class="daily-search-status-wrap hidden">
         <div id="dailySearchStatusText" class="daily-search-status-text"></div>
+        <button id="dailySearchAdvanced" type="button" class="button-secondary">Open in Advanced Search</button>
         <button id="dailyClearSearch" type="button" class="button-secondary">Clear search</button>
       </div>
       <div class="table-wrap">
         <table id="dailyTable"></table>
+      </div>
+    </section>
+
+    <section id="searchPane" class="hidden" aria-label="Activity Search">
+      <form id="searchForm" class="activity-search-form">
+        <div class="activity-search-primary">
+          <label class="activity-search-query">
+            <span>Activity</span>
+            <input id="searchText" type="search" maxlength="200" autocomplete="off">
+          </label>
+          <label><span>From</span><input id="searchStartDate" type="date"></label>
+          <label><span>To</span><input id="searchEndDate" type="date"></label>
+          <button type="submit">Search</button>
+          <button id="searchClear" type="button" class="button-secondary">Reset</button>
+        </div>
+        <details class="activity-search-filters">
+          <summary>More filters</summary>
+          <div class="activity-search-filter-grid">
+            <label><span>Sport type</span><input id="searchSportType" type="text" maxlength="100"
+                placeholder="e.g. Ride"></label>
+            <label><span>Category</span>
+              <select id="searchCategory">
+                <option value="">Any category</option>
+                <option value="ride">Ride</option>
+                <option value="hike">Hike</option>
+                <option value="walk">Walk</option>
+                <option value="run">Run</option>
+                <option value="ski">Ski</option>
+                <option value="mobility">Mobility</option>
+                <option value="strength">Strength</option>
+                <option value="other">Other</option>
+              </select>
+            </label>
+            <label><span>Gear ID</span><input id="searchGearId" type="text" maxlength="100"></label>
+            <label><span>Distance min (mi)</span><input id="searchMinDistance" type="number" min="0" step="0.1"></label>
+            <label><span>Distance max (mi)</span><input id="searchMaxDistance" type="number" min="0" step="0.1"></label>
+            <label><span>Elevation min (ft)</span><input id="searchMinElevation" type="number" min="0" step="1"></label>
+            <label><span>Elevation max (ft)</span><input id="searchMaxElevation" type="number" min="0" step="1"></label>
+            <label><span>Moving time min (sec)</span><input id="searchMinDuration" type="number" min="0"
+                step="60"></label>
+            <label><span>Moving time max (sec)</span><input id="searchMaxDuration" type="number" min="0"
+                step="60"></label>
+            <label><span>Start time from</span><input id="searchStartTimeFrom" type="time"></label>
+            <label><span>Start time to</span><input id="searchStartTimeTo" type="time"></label>
+          </div>
+        </details>
+      </form>
+      <div class="activity-search-toolbar">
+        <div id="searchStatus" class="activity-search-status" role="status" aria-live="polite"></div>
+        <div class="activity-search-page-controls">
+          <label for="searchSort">Order</label>
+          <select id="searchSort">
+            <option value="newest">Newest</option>
+            <option value="oldest">Oldest</option>
+            <option value="start_time">Start time</option>
+            <option value="highest_elevation">Highest elevation</option>
+            <option value="longest_distance">Longest distance</option>
+            <option value="longest_duration">Longest duration</option>
+          </select>
+          <label for="searchLimit">Rows</label>
+          <select id="searchLimit">
+            <option value="25">25</option>
+            <option value="50" selected>50</option>
+            <option value="100">100</option>
+          </select>
+          <span id="searchPageStatus" aria-live="polite"></span>
+          <button id="searchPrevious" type="button" class="button-secondary" disabled>Previous</button>
+          <button id="searchNext" type="button" class="button-secondary" disabled>Next</button>
+        </div>
+      </div>
+      <div class="table-wrap activity-search-table-wrap">
+        <table id="searchResults" class="activity-search-table"></table>
       </div>
     </section>
 
@@ -1050,6 +1125,7 @@
   <script src="/static/coach-memories.js"></script>
   <script src="/static/settings.js?v=20260914-service-nav"></script>
   <script src="/static/daily.js"></script>
+  <script src="/static/search.js"></script>
   <script src="/static/plan.js"></script>
   <script src="/static/goals.js"></script>
   <script src="/static/kpis.js"></script>

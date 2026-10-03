@@ -32,6 +32,9 @@ if (window.ChartsController) {
 if (window.DailyController) {
   window.TrainingApp.features.daily = window.DailyController;
 }
+if (window.SearchController) {
+  window.TrainingApp.features.search = window.SearchController;
+}
 if (window.WeeklyController) {
   window.TrainingApp.features.weekly = window.WeeklyController;
 }
@@ -66,6 +69,7 @@ const chartsLoadTab = document.getElementById("chartsLoadTab");
 const chartsHealthTab = document.getElementById("chartsHealthTab");
 const chartsVolumeTab = document.getElementById("chartsVolumeTab");
 const dailyTab = document.getElementById("dailyTab");
+const searchTab = document.getElementById("searchTab");
 const weeklyTab = document.getElementById("weeklyTab");
 const zonesTab = document.getElementById("zonesTab");
 const serviceTab = document.getElementById("serviceTab");
@@ -84,6 +88,7 @@ const chartsLoadPanel = document.getElementById("chartsLoadPanel");
 const chartsHealthPanel = document.getElementById("chartsHealthPanel");
 const chartsVolumePanel = document.getElementById("chartsVolumePanel");
 const dailyPane = document.getElementById("dailyPane");
+const searchPane = document.getElementById("searchPane");
 const weeklyPane = document.getElementById("weeklyPane");
 const zonesPane = document.getElementById("zonesPane");
 const servicePane = document.getElementById("servicePane");
@@ -199,6 +204,7 @@ goalsTab?.addEventListener("click", () => showTab("goals"));
 kpisTab?.addEventListener("click", () => showTab("kpis"));
 chartsTab?.addEventListener("click", () => showTab("charts"));
 dailyTab.addEventListener("click", () => showTab("daily"));
+searchTab?.addEventListener("click", () => showTab("search"));
 weeklyTab.addEventListener("click", () => showTab("weekly"));
 zonesTab.addEventListener("click", () => showTab("zones"));
 serviceTab?.addEventListener("click", () => showTab("service"));
@@ -359,15 +365,20 @@ function showServiceSubtab(subtab) {
 window.showServiceSubtab = showServiceSubtab;
 
 function showTab(tab) {
-  const normalizedTab = ["plan", "goals", "kpis", "charts", "daily", "weekly", "zones", "service", "yearly", "coach"].includes(tab) ? tab : "daily";
+  const normalizedTab = ["plan", "goals", "kpis", "charts", "daily", "search", "weekly", "zones", "service", "yearly", "coach"].includes(tab) ? tab : "daily";
   state.activeTab = normalizedTab;
   persistPreferences();
+  const url = new URL(window.location.href);
+  url.searchParams.set("tab", normalizedTab);
+  if (normalizedTab !== "daily") url.searchParams.delete("date");
+  window.history.replaceState({}, "", url);
 
   const isPlan = normalizedTab === "plan";
   const isGoals = normalizedTab === "goals";
   const isKpis = normalizedTab === "kpis";
   const isCharts = normalizedTab === "charts";
   const isDaily = normalizedTab === "daily";
+  const isSearch = normalizedTab === "search";
   const isWeekly = normalizedTab === "weekly";
   const isZones = normalizedTab === "zones";
   const isService = normalizedTab === "service";
@@ -379,6 +390,7 @@ function showTab(tab) {
   kpisPane.classList.toggle("hidden", !isKpis);
   chartsPane.classList.toggle("hidden", !isCharts);
   dailyPane.classList.toggle("hidden", !isDaily);
+  searchPane?.classList.toggle("hidden", !isSearch);
   weeklyPane.classList.toggle("hidden", !isWeekly);
   zonesPane.classList.toggle("hidden", !isZones);
   servicePane.classList.toggle("hidden", !isService);
@@ -395,6 +407,7 @@ function showTab(tab) {
   kpisTab?.classList.toggle("active", isKpis);
   chartsTab?.classList.toggle("active", isCharts);
   dailyTab.classList.toggle("active", isDaily);
+  searchTab?.classList.toggle("active", isSearch);
   weeklyTab.classList.toggle("active", isWeekly);
   zonesTab.classList.toggle("active", isZones);
   serviceTab?.classList.toggle("active", isService);
@@ -423,6 +436,9 @@ function showTab(tab) {
 
   if (isCoach && window.CoachController && typeof window.CoachController.activate === "function") {
     window.CoachController.activate();
+  }
+  if (isSearch && window.SearchController && typeof window.SearchController.activate === "function") {
+    window.SearchController.activate();
   }
 }
 
@@ -710,5 +726,21 @@ async function loadData() {
 }
 
 setInterval(loadSyncStatus, 60000);
-showTab(window.AppState.activeTab || "daily");
+const initialUrlParams = new URLSearchParams(window.location.search);
+const requestedTab = initialUrlParams.get("tab");
+const validTabs = ["plan", "goals", "kpis", "charts", "daily", "search", "weekly", "zones", "service", "yearly", "coach"];
+if (requestedTab === "daily" && /^\d{4}-\d{2}-\d{2}$/.test(initialUrlParams.get("date") || "")) {
+  window.AppState.dailyExactDate = initialUrlParams.get("date");
+}
+showTab(validTabs.includes(requestedTab) ? requestedTab : (window.AppState.activeTab || "daily"));
+window.addEventListener("popstate", () => {
+  const params = new URLSearchParams(window.location.search);
+  if (window.SearchController) window.SearchController.restoreFromUrl();
+  const tab = params.get("tab");
+  if (tab === "daily" && /^\d{4}-\d{2}-\d{2}$/.test(params.get("date") || "")) {
+    window.AppState.dailyExactDate = params.get("date");
+    window.DailyController?.load();
+  }
+  showTab(validTabs.includes(tab) ? tab : "daily");
+});
 loadData();
