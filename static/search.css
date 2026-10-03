@@ -218,11 +218,39 @@
 
 .search-actions-cell {
     display: flex;
-    min-width: 82px;
+    justify-content: center;
+    min-width: 32px;
 }
 
 .search-actions-toggle {
-    white-space: nowrap;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    min-width: 24px;
+    height: 24px;
+    margin: 0;
+    padding: 0;
+    border: 1px solid transparent;
+    border-radius: 3px;
+    background: transparent;
+    color: var(--muted);
+    font-size: 14px;
+    font-weight: 600;
+    line-height: 1;
+    cursor: pointer;
+}
+
+.search-actions-toggle:hover,
+.search-actions-toggle:focus-visible {
+    color: var(--text);
+    border-color: var(--blue);
+    outline: none;
+}
+
+.search-actions-toggle:disabled {
+    cursor: wait;
+    opacity: 0.65;
 }
 
 .search-actions-menu {

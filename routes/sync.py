@@ -397,7 +397,7 @@ def create_activity_resync(activity_id: str):
                     WHERE activity_id = %s
                     LIMIT 1
                     """,
-                    (normalized_id,),
+                    (str(normalized_id),),
                 )
                 if not cur.fetchone():
                     return JSONResponse({"detail": "Activity not found."}, status_code=404)

@@ -34,6 +34,12 @@ class FakeElement {
         for (const handler of this.listeners[name] || []) await handler(event);
     }
 
+    async keyboardActivate(key) {
+        if (this.tagName !== "BUTTON") throw new Error("Keyboard activation requires a button");
+        await this.trigger("keydown", { key });
+        if (key === "Enter" || key === " ") await this.trigger("click");
+    }
+
     appendChild(child) {
         child.parentNode = this;
         this.children.push(child);
@@ -189,6 +195,8 @@ async function main() {
     const appSource = fs.readFileSync("static/app.js", "utf8");
     const htmlSource = fs.readFileSync("index.html", "utf8");
     assert.doesNotMatch(searchSource, /new Date|Date\.parse/);
+    assert.match(searchSource, /Array\.from\(menu\.children\)\.find\(item => !item\.disabled\)/);
+    assert.doesNotMatch(searchSource, /menu\.children\.find/);
     assert.match(searchSource, /window\.api\.searchActivities\(\{/);
     assert.match(searchSource, /const SEARCH_URL_KEYS/);
     assert.match(searchSource, /Date range incomplete/);
@@ -208,6 +216,7 @@ async function main() {
     assert.doesNotMatch(htmlSource, /id="searchCategory"|>Category</);
     assert.match(htmlSource, /id="dailySearchAdvanced"/);
     assert.match(htmlSource, /search\.css/);
+    assert.match(htmlSource, /search\.js\?v=20261003-activity-resync-fix-v1/);
     assert.doesNotMatch(fs.readFileSync("static/style.css", "utf8"), /\.search-(?:pane|filters|results|chip)/);
 
     const harness = createSearchHarness();
@@ -364,6 +373,7 @@ async function main() {
     assert.ok(actionsHeader);
     assert.equal(actionsHeader.className, "search-nonsortable-header");
     assert.equal(descendants(actionsHeader).some(element => element.tagName === "BUTTON"), false);
+    assert.equal(actionsHeader.attributes["aria-sort"], undefined);
     assert.equal(sortableColumns.length, 10);
     for (const [label, sortBy] of sortableColumns) {
         const initialButton = sortButton(sorting.elements.searchResults, label);
@@ -395,23 +405,40 @@ async function main() {
 
     const actions = createSearchHarness();
     actions.setResponse(async () => ({
-        items: [{
-            activity_id: 12345,
-            name: "Local ride",
-            date_local: "2024-04-03",
-            start_at_local: "2024-04-03T15:20:00",
-            sport_type: "MountainBikeRide",
-        }],
-        total_count: 1,
+        items: [
+            {
+                activity_id: 12345,
+                name: "Local ride",
+                date_local: "2024-04-03",
+                start_at_local: "2024-04-03T15:20:00",
+                sport_type: "MountainBikeRide",
+            },
+            {
+                activity_id: 12346,
+                name: "Second ride",
+                date_local: "2024-04-04",
+                sport_type: "Ride",
+            },
+        ],
+        total_count: 2,
     }));
     actions.window.SearchController.activate();
     await actions.settle();
-    const actionsButton = descendants(actions.elements.searchResults)
-        .find(element => element.className.includes("search-actions-toggle"));
-    assert.ok(actionsButton);
-    await actionsButton.trigger("click");
+    const actionsButtons = descendants(actions.elements.searchResults)
+        .filter(element => element.className.includes("search-actions-toggle"));
+    assert.equal(actionsButtons.length, 2, "each result row should have one compact actions trigger");
+    assert.deepEqual(actionsButtons.map(button => button.textContent), ["⋮", "⋮"]);
+    assert.equal(actionsButtons.some(button => button.textContent === "Actions"), false);
+    for (const [index, button] of actionsButtons.entries()) {
+        assert.equal(button.tagName, "BUTTON");
+        assert.equal(button.attributes["aria-label"], `Activity actions for ${index === 0 ? "Local ride" : "Second ride"}`);
+        assert.equal(button.attributes["aria-haspopup"], "menu");
+        assert.equal(button.attributes["aria-expanded"], "false");
+        assert.equal(button.attributes["aria-controls"], "search-actions-menu");
+    }
+    const actionsButton = actionsButtons[0];
+    await actionsButton.keyboardActivate("Enter");
     assert.equal(actionsButton.attributes["aria-expanded"], "true");
-    assert.equal(actionsButton.attributes["aria-controls"], "search-actions-menu");
     let menu = actions.body.children.find(element => element.attributes.role === "menu");
     assert.ok(menu, "Actions menu should be portalled outside the scrollable results table");
     const editLink = menu.children.find(element => element.tagName === "A");
@@ -426,15 +453,20 @@ async function main() {
     await menu.trigger("keydown", { key: "ArrowDown", preventDefault() { preventedArrow = true; } });
     assert.equal(preventedArrow, true);
     assert.equal(menu.children[1].focused, true);
-    await actions.document.trigger("click", { target: new FakeElement("div") });
-    assert.equal(actions.body.children.length, 0, "outside clicks should close the menu");
+    await actionsButtons[1].keyboardActivate(" ");
+    assert.equal(actions.body.children.length, 1, "opening another row should close the first menu");
     assert.equal(actionsButton.attributes["aria-expanded"], "false");
-
-    await actionsButton.trigger("click");
+    assert.equal(actionsButtons[1].attributes["aria-expanded"], "true");
     menu = actions.body.children[0];
     await actions.document.trigger("keydown", { key: "Escape", preventDefault() { this.prevented = true; } });
     assert.equal(actions.body.children.length, 0, "Escape should close the menu");
-    assert.equal(actionsButton.focused, true, "Escape should return focus to the menu button");
+    assert.equal(actionsButtons[1].focused, true, "Escape should return focus to the menu button");
+
+    await actionsButton.keyboardActivate(" ");
+    menu = actions.body.children[0];
+    await actions.document.trigger("click", { target: new FakeElement("div") });
+    assert.equal(actions.body.children.length, 0, "outside clicks should close the menu");
+    assert.equal(actionsButton.attributes["aria-expanded"], "false");
 
     await actionsButton.trigger("click");
     menu = actions.body.children[0];
@@ -600,6 +632,7 @@ async function main() {
     await global.window.api.resyncActivity("12345");
     assert.equal(requestedUrl, "/api/sync/activities/12345/resync");
     assert.equal(requestedOptions.method, "POST");
+    assert.equal(requestedOptions.body, undefined);
 
     await global.window.api.fetchSyncRequestStatus(9001);
     assert.equal(requestedUrl, "/api/sync-requests/9001");

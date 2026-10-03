@@ -546,7 +546,7 @@ if (typeof module !== "undefined" && module.exports) {
         menu.style.top = `${top}px`;
         button.setAttribute("aria-expanded", "true");
         state.openActionsMenu = { button, menu };
-        menu.children.find(item => !item.disabled)?.focus();
+        Array.from(menu.children).find(item => !item.disabled)?.focus();
     }
 
     function createActionsControl(row) {
@@ -554,12 +554,12 @@ if (typeof module !== "undefined" && module.exports) {
         container.className = "search-actions-cell";
         const button = document.createElement("button");
         button.type = "button";
-        button.className = "button-secondary small search-actions-toggle";
-        button.textContent = "Actions";
+        button.className = "search-actions-toggle";
+        button.textContent = "⋮";
         button.setAttribute("aria-haspopup", "menu");
         button.setAttribute("aria-expanded", "false");
         button.setAttribute("aria-controls", "search-actions-menu");
-        button.setAttribute("aria-label", `Actions for ${text(row.name) || "activity"}`);
+        button.setAttribute("aria-label", `Activity actions for ${text(row.name) || "activity"}`);
         button.disabled = Boolean(safeActivityId(row) && state.resyncingActivityIds.has(safeActivityId(row)));
         button.addEventListener("click", () => {
             if (state.openActionsMenu?.button === button) {
