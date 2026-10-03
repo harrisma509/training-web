@@ -3,7 +3,7 @@ const fs = require("node:fs");
 
 const source = fs.readFileSync("static/daily.js", "utf8");
 const apiSource = fs.readFileSync("static/api.js", "utf8");
-const styleSource = fs.readFileSync("static/style.css", "utf8");
+const styleSource = fs.readFileSync("static/daily.css", "utf8");
 
 assert.match(source, /daily-day-actions-toggle/);
 assert.match(source, /aria-haspopup="menu"/);
@@ -28,7 +28,7 @@ assert.match(apiSource, /sync\/dates/);
 assert.match(apiSource, /sync-requests/);
 assert.match(styleSource, /\.daily-day-actions-toggle/);
 assert.match(styleSource, /min-width: 14px/);
-assert.match(styleSource, /height: 24px/);
+assert.match(styleSource, /height: 18px/);
 assert.match(styleSource, /margin: 0/);
 assert.match(styleSource, /position: fixed/);
 assert.match(styleSource, /\.daily-day-resync-status \{/);

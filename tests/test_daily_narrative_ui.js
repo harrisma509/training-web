@@ -3,7 +3,7 @@ const fs = require("node:fs");
 
 const source = fs.readFileSync("static/daily.js", "utf8");
 const apiSource = fs.readFileSync("static/api.js", "utf8");
-const styleSource = fs.readFileSync("static/style.css", "utf8");
+const styleSource = fs.readFileSync("static/daily.css", "utf8");
 
 assert.match(source, /main_ride_has_description/);
 assert.match(source, /main_ride_has_private_note/);

@@ -144,6 +144,7 @@ def test_stylesheet_and_synchronous_script_order_is_stable() -> None:
     ]
     assert stylesheet_paths == [
         "/static/style.css",
+        "/static/daily.css",
         "/static/search.css",
         "/static/components.css",
         "/static/plan.css",
