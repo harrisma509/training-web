@@ -427,8 +427,13 @@ function showTab(tab, { fromHistory = false } = {}) {
     gearControls.classList.add("hidden");
   }
 
-  if (isPlan && typeof window.loadPlan === "function") {
-    window.loadPlan();
+  if (isPlan) {
+    const planFeature = window.TrainingApp?.features?.plan;
+    if (typeof planFeature?.load === "function") {
+      planFeature.load();
+    } else if (typeof window.loadPlan === "function") {
+      window.loadPlan();
+    }
   }
 
   if (isCharts) {
