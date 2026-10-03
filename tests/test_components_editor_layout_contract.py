@@ -7,7 +7,7 @@ import unittest
 REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
 COMPONENTS_JS = (REPOSITORY_ROOT / "static" / "components.js").read_text()
 COMPONENTS_CSS = (REPOSITORY_ROOT / "static" / "components.css").read_text()
-INDEX_HTML = (REPOSITORY_ROOT / "index.html").read_text()
+INDEX_HTML = (REPOSITORY_ROOT / "templates" / "index.html").read_text()
 
 
 class ComponentsEditorLayoutContractTests(unittest.TestCase):

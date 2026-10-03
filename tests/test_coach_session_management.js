@@ -32,7 +32,7 @@ require("../static/api.js");
     assert.deepEqual(JSON.parse(requests[1].options.body), { mode: "conversational" });
 
     const coachSource = fs.readFileSync("static/coach.js", "utf8");
-    const indexSource = fs.readFileSync("index.html", "utf8");
+    const indexSource = fs.readFileSync("templates/index.html", "utf8");
     assert.match(coachSource, /Chat actions for \$\{title\}/);
     assert.match(coachSource, /Delete chat/);
     assert.match(coachSource, /input\.addEventListener\("blur", \(\) => saveRename/);

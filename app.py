@@ -6,7 +6,7 @@ This file wires together the web app:
 - health API router
 - training dashboard route modules
 - static file serving
-- index.html response
+- server-rendered index template
 
 Route implementation details live in routes/*.py.
 Database and JSON helpers live in db.py.
@@ -16,9 +16,10 @@ This refactor is intended to preserve existing behavior.
 
 from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
+from fastapi.templating import Jinja2Templates
 
 from logging_config import configure_logging
 from health_api.ingest_routes import router as health_router
@@ -69,8 +70,9 @@ app.include_router(coach_memories_router)
 app.include_router(coach_context_receipt_router)
 
 app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")
+templates = Jinja2Templates(directory=BASE_DIR / "templates")
 
 
 @app.get("/", response_class=HTMLResponse)
-def index():
-    return (BASE_DIR / "index.html").read_text(encoding="utf-8")
+def index(request: Request):
+    return templates.TemplateResponse(request=request, name="index.html", context={})

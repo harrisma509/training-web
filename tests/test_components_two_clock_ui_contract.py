@@ -7,7 +7,7 @@ import unittest
 ROOT = Path(__file__).resolve().parents[1]
 COMPONENTS_JS = (ROOT / "static" / "components.js").read_text()
 COMPONENTS_CSS = (ROOT / "static" / "components.css").read_text()
-INDEX_HTML = (ROOT / "index.html").read_text()
+INDEX_HTML = (ROOT / "templates" / "index.html").read_text()
 
 
 class ComponentsTwoClockUiContractTests(unittest.TestCase):

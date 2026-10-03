@@ -1,7 +1,7 @@
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
 
-const indexSource = fs.readFileSync("index.html", "utf8");
+const indexSource = fs.readFileSync("templates/index.html", "utf8");
 const sharedSource = fs.readFileSync("static/style.css", "utf8");
 const settingsSource = fs.readFileSync("static/settings.css", "utf8");
 const yearlySource = fs.readFileSync("static/yearly.css", "utf8");

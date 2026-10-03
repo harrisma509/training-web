@@ -4,7 +4,7 @@ from urllib.parse import urlsplit
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-INDEX_PATH = REPO_ROOT / "index.html"
+INDEX_PATH = REPO_ROOT / "templates" / "index.html"
 VOID_ELEMENTS = {
     "area",
     "base",
