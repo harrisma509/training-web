@@ -4,11 +4,6 @@
  * This file holds the settings panel layout, tabs, controls, and drawer chrome. It relies on the global theme
  * variables from style.css and is scoped to the settings experience rather than the whole app shell.
  */
-.button-secondary {
-  background: var(--button-secondary-bg);
-  color: var(--text);
-}
-
 .settings-icon-button {
   display: inline-flex;
   align-items: center;

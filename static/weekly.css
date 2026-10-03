@@ -415,12 +415,6 @@
   flex-wrap: wrap;
 }
 
-.button-primary {
-  background: var(--blue);
-  color: var(--button-active-text);
-  border: 1px solid var(--blue);
-}
-
 .drawer-error {
   color: var(--red);
   font-size: 12px;
@@ -429,6 +423,7 @@
 }
 
 @media (max-width: 1050px) {
+
   .weekly-drawer,
   .drawer-icon-cell {
     display: none;
