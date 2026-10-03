@@ -98,6 +98,27 @@ def parse_html(source: str):
     return parser.document
 
 
+def test_settings_partial_is_single_authority_at_the_original_composition_point() -> None:
+    root_source = (REPO_ROOT / "templates" / "index.html").read_text(encoding="utf-8")
+    partial_source = (REPO_ROOT / "templates" / "partials" / "settings" / "settings_drawer.html").read_text(
+        encoding="utf-8"
+    )
+    rendered_source, document = parse_index()
+
+    include = '{% include "partials/settings/settings_drawer.html" %}'
+    assert root_source.count(include) == 1
+    assert root_source.count('id="settingsDrawer"') == 0
+    assert partial_source.count('id="settingsDrawer"') == 1
+
+    body = next(element for element in by_tag(document, "body"))
+    assert [child.tag for child in body.children[:3]] == ["header", "div", "main"]
+    rendered_settings = next(element for element in all_elements(document) if element.attributes.get("id") == "settingsDrawer")
+    partial_document = parse_html(partial_source)
+    partial_settings = next(element for element in all_elements(partial_document) if element.attributes.get("id") == "settingsDrawer")
+    assert normalized_tree(rendered_settings) == normalized_tree(partial_settings)
+    assert rendered_source.count('id="settingsDrawer"') == 1
+
+
 def normalized_tree(element):
     return (
         element.tag,

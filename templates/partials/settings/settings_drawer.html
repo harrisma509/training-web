@@ -1,0 +1,443 @@
+  <div id="settingsDrawer" class="settings-drawer hidden" aria-hidden="true">
+    <div class="settings-panel">
+      <div class="settings-header">
+        <div>
+          <div class="settings-title">Settings</div>
+          <div class="settings-subtitle">Preferences and data maintenance</div>
+        </div>
+        <button id="settingsCloseBtn" type="button" class="drawer-close-button" aria-label="Close settings">×</button>
+      </div>
+
+      <div class="settings-body">
+        <div class="settings-tab-list" role="tablist" aria-label="Settings tabs">
+          <button class="settings-tab active" type="button" data-settings-tab="general" role="tab" aria-selected="true"
+            aria-controls="settingsGeneralTab">General</button>
+          <button class="settings-tab" type="button" data-settings-tab="yearly" role="tab" aria-selected="false"
+            aria-controls="settingsYearlyTab">Yearly</button>
+          <button class="settings-tab" type="button" data-settings-tab="ai-coach" role="tab" aria-selected="false"
+            aria-controls="settingsAiCoachTab">AI Coach</button>
+        </div>
+
+        <div id="settingsGeneralTab" class="settings-tab-panel">
+          <div class="settings-general-grid">
+            <div class="settings-section settings-general-tile">
+              <div class="settings-label">Appearance</div>
+              <div class="settings-choice-list">
+                <label class="settings-choice"><input id="appearanceSystem" type="radio" name="appearance"
+                    value="system"> System</label>
+                <label class="settings-choice"><input id="appearanceLight" type="radio" name="appearance" value="light">
+                  Light</label>
+                <label class="settings-choice"><input id="appearanceDark" type="radio" name="appearance" value="dark">
+                  Dark</label>
+              </div>
+            </div>
+
+            <div class="settings-section settings-general-tile">
+              <div class="settings-label">App Preferences</div>
+              <div class="settings-choice-list">
+                <label class="settings-choice"><input id="rememberLastTab" type="checkbox" checked> Remember last
+                  selected tab</label>
+              </div>
+              <div id="startupTabRow" class="settings-control-row hidden">
+                <label for="startupTab">Startup tab</label>
+                <select id="startupTab">
+                  <option value="plan">Plan</option>
+                  <option value="goals">Goals</option>
+                  <option value="kpis">KPIs</option>
+                  <option value="charts">Charts</option>
+                  <option value="daily">Daily</option>
+                  <option value="search">Search</option>
+                  <option value="weekly">Weekly</option>
+                  <option value="zones">Zones</option>
+                  <option value="service">Service</option>
+                  <option value="yearly">Yearly</option>
+                  <option value="coach">Coach</option>
+                </select>
+              </div>
+              <div class="settings-control-row" style="margin-top: 12px;">
+                <label for="defaultSyncDaysInput">Default sync days</label>
+                <input id="defaultSyncDaysInput" type="number" min="1" max="6000" step="1" value="7">
+              </div>
+              <div class="settings-help-text">Number of recent days refreshed by new sync requests. Range: 1–6000.</div>
+              <div class="settings-actions">
+                <button id="saveDefaultSyncDaysBtn" type="button" class="button-primary">Save</button>
+              </div>
+              <div id="defaultSyncDaysStatus" class="settings-status-message" aria-live="polite"></div>
+            </div>
+
+            <div class="settings-section settings-general-tile">
+              <div class="settings-label">Gear filters</div>
+              <div class="settings-choice-list">
+                <label class="settings-choice"><input id="settingsHideShoes" type="checkbox"> Hide shoes</label>
+                <label class="settings-choice"><input id="settingsHideRetired" type="checkbox"> Hide retired</label>
+              </div>
+            </div>
+
+            <div class="settings-section settings-general-tile">
+              <div class="settings-label">Default bike</div>
+              <div class="settings-control-row">
+                <label for="settingsDefaultBike">Default bike</label>
+                <select id="settingsDefaultBike">
+                  <option value="">Loading bikes...</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="settings-section settings-general-tile settings-general-span-2">
+              <div class="settings-label">Row limits</div>
+              <div class="settings-row-limits">
+                <div class="settings-limit-item">
+                  <label for="settingsDailyLimit">Daily rows</label>
+                  <select id="settingsDailyLimit">
+                    <option value="60">60</option>
+                    <option value="90">90</option>
+                    <option value="365">365</option>
+                    <option value="1000">1000</option>
+                  </select>
+                </div>
+                <div class="settings-limit-item">
+                  <label for="settingsWeeklyLimit">Weekly rows</label>
+                  <select id="settingsWeeklyLimit">
+                    <option value="10">10</option>
+                    <option value="52">52</option>
+                    <option value="520">520</option>
+                  </select>
+                </div>
+                <div class="settings-limit-item">
+                  <label for="settingsZonesLimit">Zones rows</label>
+                  <select id="settingsZonesLimit">
+                    <option value="26">26</option>
+                    <option value="60">60</option>
+                    <option value="260">260</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            <div class="settings-section settings-general-tile settings-general-span-2">
+              <div class="settings-label">System status</div>
+              <div id="settingsStatusSummary" class="settings-status-summary" aria-live="polite">Loading...</div>
+              <div class="settings-actions">
+                <button id="refreshStatusBtn" type="button" class="button-secondary">Refresh Status</button>
+                <button id="copyDiagnosticsBtn" type="button" class="button-primary">Copy Diagnostics</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div id="settingsYearlyTab" class="settings-tab-panel hidden">
+          <div class="yearly-settings-grid">
+            <div class="yearly-settings-left-column">
+              <div class="settings-section yearly-section-card">
+                <div class="settings-label">Year Selection</div>
+                <div class="settings-control-row yearly-control-row">
+                  <label for="yearlyMaintenanceYear">Year</label>
+                  <select id="yearlyMaintenanceYear"></select>
+                </div>
+                <div class="settings-actions yearly-maintenance-actions">
+                  <button id="yearlyMaintenancePreviewBtn" type="button" class="button-secondary">Preview
+                    Calculation</button>
+                  <button id="yearlyMaintenanceCalculateBtn" type="button" class="button-primary" disabled>Calculate
+                    Year</button>
+                </div>
+              </div>
+
+              <div class="settings-section yearly-section-card yearly-status-card">
+                <div class="settings-label">Calculation Status</div>
+                <div id="yearlyMaintenanceResult" class="yearly-maintenance-result"></div>
+              </div>
+            </div>
+
+            <div class="settings-section yearly-section-card">
+              <div class="settings-label">Preview Results</div>
+              <div id="yearlyMaintenanceStatus" class="yearly-maintenance-status">Select a year to preview.</div>
+              <div id="yearlyMaintenancePreviewSummary" class="yearly-maintenance-preview-summary"></div>
+              <div id="yearlyMaintenanceWarnings" class="yearly-maintenance-warning-panel">No warnings yet.</div>
+            </div>
+          </div>
+
+          <div class="settings-section yearly-section-card">
+            <div class="settings-label">Difference Review</div>
+            <div id="yearlyMaintenanceComparisonWrap" class="yearly-maintenance-comparison-wrap hidden">
+              <table class="yearly-maintenance-table">
+                <thead>
+                  <tr>
+                    <th>Metric</th>
+                    <th>Stored</th>
+                    <th>Preview</th>
+                    <th>Difference</th>
+                  </tr>
+                </thead>
+                <tbody id="yearlyMaintenanceComparisonBody"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <div id="settingsAiCoachTab" class="settings-tab-panel hidden">
+          <section class="settings-section settings-ai-coach-card" aria-labelledby="settingsAiCoachTitle">
+            <div class="settings-ai-coach-heading">
+              <div>
+                <div id="settingsAiCoachTitle" class="settings-label">Usage and response controls</div>
+                <p class="settings-help-text">These limits apply to new Coach responses and are stored by the server.
+                </p>
+              </div>
+              <div id="aiCoachSettingsUpdated" class="settings-meta" aria-live="polite">Last updated: unavailable</div>
+            </div>
+
+            <div id="aiCoachSettingsStatus" class="settings-status-message" role="status" aria-live="polite"></div>
+            <div id="aiCoachSettingsError" class="settings-form-error" role="alert" aria-live="assertive"></div>
+
+            <div class="settings-section-heading">CONTEXT SENT TO COACH</div>
+            <div class="settings-ai-coach-fields">
+              <div class="settings-field">
+                <label for="aiCoachMonthlyLimit">Monthly application cost limit (USD)</label>
+                <input id="aiCoachMonthlyLimit" type="number" min="0" max="25" step="0.01" inputmode="decimal"
+                  aria-describedby="aiCoachMonthlyLimitHelp aiCoachMonthlyLimitError">
+                <div id="aiCoachMonthlyLimitHelp" class="settings-help-text">0.00 disables new paid Coach responses.
+                </div>
+                <div id="aiCoachMonthlyLimitError" class="settings-field-error" role="alert"></div>
+              </div>
+
+              <div class="settings-field">
+                <label for="aiCoachTurnLimit">Maximum estimated cost per turn (USD)</label>
+                <input id="aiCoachTurnLimit" type="number" min="0.01" max="1" step="0.01" inputmode="decimal"
+                  aria-describedby="aiCoachTurnLimitHelp aiCoachTurnLimitError">
+                <div id="aiCoachTurnLimitHelp" class="settings-help-text">An independent per-request safety cap.</div>
+                <div id="aiCoachTurnLimitError" class="settings-field-error" role="alert"></div>
+              </div>
+
+              <div class="settings-field">
+                <label for="aiCoachOutputTokens">Maximum output tokens</label>
+                <input id="aiCoachOutputTokens" type="number" min="250" max="32000" step="1" inputmode="numeric"
+                  aria-describedby="aiCoachOutputTokensHelp aiCoachOutputTokensError">
+                <div id="aiCoachOutputTokensHelp" class="settings-help-text">A maximum, not a requested answer length.
+                  Each token is a piece of text and roughly 1 token equals 3-4 English characters.
+                </div>
+                <div id="aiCoachOutputTokensError" class="settings-field-error" role="alert"></div>
+              </div>
+
+              <div class="settings-field">
+                <label for="aiCoachReasoning">Reasoning effort</label>
+                <select id="aiCoachReasoning" aria-describedby="aiCoachReasoningHelp aiCoachReasoningError">
+                  <option value="none">None</option>
+                  <option value="low">Low</option>
+                  <option value="medium">Medium</option>
+                  <option value="high">High</option>
+                </select>
+                <div id="aiCoachReasoningHelp" class="settings-help-text">Server-controlled reasoning setting.</div>
+                <div id="aiCoachReasoningError" class="settings-field-error" role="alert"></div>
+              </div>
+
+              <div class="settings-field">
+                <label for="aiCoachDailyHistoryDays">Detailed daily history (calendar days)</label>
+                <input id="aiCoachDailyHistoryDays" type="number" min="7" max="365" step="1" inputmode="numeric"
+                  aria-describedby="aiCoachDailyHistoryDaysHelp aiCoachDailyHistoryDaysWarning aiCoachDailyHistoryDaysError">
+                <div id="aiCoachDailyHistoryDaysHelp" class="settings-help-text">Default is 28 days. Larger windows
+                  provide more daily detail but increase request size and may exceed the Coach context limit.</div>
+                <div id="aiCoachDailyHistoryDaysWarning" class="settings-warning-text" role="status"></div>
+                <div id="aiCoachDailyHistoryDaysError" class="settings-field-error" role="alert"></div>
+              </div>
+
+              <div class="settings-field">
+                <label for="aiCoachWeeklyHistoryRows">Weekly history (weeks)</label>
+                <input id="aiCoachWeeklyHistoryRows" type="number" min="4" max="104" step="1" inputmode="numeric"
+                  aria-describedby="aiCoachWeeklyHistoryRowsHelp aiCoachWeeklyHistoryRowsWarning aiCoachWeeklyHistoryRowsError">
+                <div id="aiCoachWeeklyHistoryRowsHelp" class="settings-help-text">Default is 26 weeks. Larger windows
+                  provide broader trend history but increase request size and may exceed the Coach context limit.</div>
+                <div id="aiCoachWeeklyHistoryRowsWarning" class="settings-warning-text" role="status"></div>
+                <div id="aiCoachWeeklyHistoryRowsError" class="settings-field-error" role="alert"></div>
+              </div>
+            </div>
+
+            <div class="settings-ai-coach-actions">
+              <button id="aiCoachSettingsRetry" type="button" class="button-secondary">Retry</button>
+              <button id="aiCoachSettingsCancel" type="button" class="button-secondary">Cancel</button>
+              <button id="aiCoachSettingsSave" type="button" class="button-primary">Save</button>
+            </div>
+          </section>
+
+          <section class="settings-section settings-ai-coach-card settings-custom-instructions-card"
+            aria-labelledby="aiCoachCustomInstructionsTitle">
+            <div class="settings-ai-coach-heading">
+              <div>
+                <div id="aiCoachCustomInstructionsTitle" class="settings-label">Custom Instructions</div>
+                <p class="settings-help-text">Durable coaching preferences are separate from usage limits and response
+                  controls.</p>
+              </div>
+              <div id="aiCoachCustomInstructionsUpdated" class="settings-meta" aria-live="polite">Last updated:
+                unavailable</div>
+            </div>
+
+            <div id="aiCoachCustomInstructionsStatus" class="settings-status-message" role="status" aria-live="polite">
+            </div>
+            <div id="aiCoachCustomInstructionsError" class="settings-form-error" role="alert" aria-live="assertive">
+            </div>
+
+            <div class="settings-custom-instructions-fields">
+              <div class="settings-field settings-custom-instruction-field">
+                <label for="aiCoachCustomCoachingPriorities">Coaching priorities</label>
+                <textarea id="aiCoachCustomCoachingPriorities" data-custom-instruction-field="coaching_priorities"
+                  rows="4" maxlength="1500"
+                  aria-describedby="aiCoachCustomCoachingPrioritiesHelp aiCoachCustomCoachingPrioritiesCount aiCoachCustomCoachingPrioritiesError"></textarea>
+                <div id="aiCoachCustomCoachingPrioritiesHelp" class="settings-help-text">What should win when coaching
+                  goals conflict, such as safety, consistency, riding availability, enjoyment, strength, and sustainable
+                  performance.</div>
+                <div id="aiCoachCustomCoachingPrioritiesCount" class="settings-character-count" aria-live="polite">0 /
+                  1,500</div>
+                <div id="aiCoachCustomCoachingPrioritiesError" class="settings-field-error" role="alert"></div>
+              </div>
+
+              <div class="settings-field settings-custom-instruction-field">
+                <label for="aiCoachCustomSafetyRules">Safety and progression rules</label>
+                <textarea id="aiCoachCustomSafetyRules" data-custom-instruction-field="safety_progression_rules"
+                  rows="4" maxlength="1500"
+                  aria-describedby="aiCoachCustomSafetyRulesHelp aiCoachCustomSafetyRulesCount aiCoachCustomSafetyRulesError"></textarea>
+                <div id="aiCoachCustomSafetyRulesHelp" class="settings-help-text">Stable safety thresholds and
+                  overrides, including load ramps, poor sleep, travel recovery, injury, and clinician guidance.</div>
+                <div id="aiCoachCustomSafetyRulesCount" class="settings-character-count" aria-live="polite">0 / 1,500
+                </div>
+                <div id="aiCoachCustomSafetyRulesError" class="settings-field-error" role="alert"></div>
+              </div>
+
+              <div class="settings-field settings-custom-instruction-field">
+                <label for="aiCoachCustomTrainingApproach">Training approach</label>
+                <textarea id="aiCoachCustomTrainingApproach" data-custom-instruction-field="training_approach" rows="4"
+                  maxlength="1500"
+                  aria-describedby="aiCoachCustomTrainingApproachHelp aiCoachCustomTrainingApproachCount aiCoachCustomTrainingApproachError"></textarea>
+                <div id="aiCoachCustomTrainingApproachHelp" class="settings-help-text">Durable preferences for weekly
+                  volume, strength, intensity, MTB/e-MTB demands, and the training style that works best.</div>
+                <div id="aiCoachCustomTrainingApproachCount" class="settings-character-count" aria-live="polite">0 /
+                  1,500</div>
+                <div id="aiCoachCustomTrainingApproachError" class="settings-field-error" role="alert"></div>
+              </div>
+
+              <div class="settings-field settings-custom-instruction-field">
+                <label for="aiCoachCustomRecoveryRules">Recovery and adjustment rules</label>
+                <textarea id="aiCoachCustomRecoveryRules" data-custom-instruction-field="recovery_adjustment_rules"
+                  rows="4" maxlength="1500"
+                  aria-describedby="aiCoachCustomRecoveryRulesHelp aiCoachCustomRecoveryRulesCount aiCoachCustomRecoveryRulesError"></textarea>
+                <div id="aiCoachCustomRecoveryRulesHelp" class="settings-help-text">How recommendations should change
+                  with sleep, soreness, illness, travel, missing subjective context, weight changes, or reduced
+                  training.</div>
+                <div id="aiCoachCustomRecoveryRulesCount" class="settings-character-count" aria-live="polite">0 / 1,500
+                </div>
+                <div id="aiCoachCustomRecoveryRulesError" class="settings-field-error" role="alert"></div>
+              </div>
+
+              <div class="settings-field settings-custom-instruction-field">
+                <label for="aiCoachCustomCommunicationStyle">Communication style</label>
+                <textarea id="aiCoachCustomCommunicationStyle" data-custom-instruction-field="communication_style"
+                  rows="4" maxlength="1500"
+                  aria-describedby="aiCoachCustomCommunicationStyleHelp aiCoachCustomCommunicationStyleCount aiCoachCustomCommunicationStyleError"></textarea>
+                <div id="aiCoachCustomCommunicationStyleHelp" class="settings-help-text">Preferred tone, structure,
+                  detail, use of bullets, risk callouts, dates, and concise-format requests.</div>
+                <div id="aiCoachCustomCommunicationStyleCount" class="settings-character-count" aria-live="polite">0 /
+                  1,500</div>
+                <div id="aiCoachCustomCommunicationStyleError" class="settings-field-error" role="alert"></div>
+              </div>
+
+              <div class="settings-field settings-custom-instruction-field">
+                <label for="aiCoachCustomPlanningPreferences">Planning preferences</label>
+                <textarea id="aiCoachCustomPlanningPreferences" data-custom-instruction-field="planning_preferences"
+                  rows="4" maxlength="1500"
+                  aria-describedby="aiCoachCustomPlanningPreferencesHelp aiCoachCustomPlanningPreferencesCount aiCoachCustomPlanningPreferencesError"></textarea>
+                <div id="aiCoachCustomPlanningPreferencesHelp" class="settings-help-text">Practical planning preferences
+                  such as time estimates, strength preservation, life stress, safe alternatives, fueling, and enjoyable
+                  progression.</div>
+                <div id="aiCoachCustomPlanningPreferencesCount" class="settings-character-count" aria-live="polite">0 /
+                  1,500</div>
+                <div id="aiCoachCustomPlanningPreferencesError" class="settings-field-error" role="alert"></div>
+              </div>
+
+              <div class="settings-field settings-custom-instruction-field settings-custom-instruction-field-wide">
+                <label for="aiCoachCustomOtherInstructions">Other instructions <span
+                    class="settings-optional-label">Optional</span></label>
+                <textarea id="aiCoachCustomOtherInstructions" data-custom-instruction-field="other_instructions"
+                  rows="4" maxlength="1500"
+                  aria-describedby="aiCoachCustomOtherInstructionsHelp aiCoachCustomOtherInstructionsCount aiCoachCustomOtherInstructionsError"></textarea>
+                <div id="aiCoachCustomOtherInstructionsHelp" class="settings-help-text">Durable coaching instructions
+                  that do not fit the six main sections. Not a memory dump, weekly plan, temporary injury note, or
+                  unlimited second prompt.</div>
+                <div id="aiCoachCustomOtherInstructionsCount" class="settings-character-count" aria-live="polite">0 /
+                  1,500</div>
+                <div id="aiCoachCustomOtherInstructionsError" class="settings-field-error" role="alert"></div>
+              </div>
+            </div>
+
+            <div id="aiCoachCustomInstructionsCombinedCount" class="settings-combined-count" aria-live="polite">
+              Combined: 0 / 8,000</div>
+            <div id="aiCoachCustomInstructionsCombinedError" class="settings-form-error" role="alert"
+              aria-live="assertive"></div>
+            <div class="settings-ai-coach-actions">
+              <button id="aiCoachCustomInstructionsRetry" type="button" class="button-secondary">Retry</button>
+              <button id="aiCoachCustomInstructionsCancel" type="button" class="button-secondary">Cancel</button>
+              <button id="aiCoachCustomInstructionsSave" type="button" class="button-primary">Save</button>
+            </div>
+          </section>
+
+          <section class="settings-section settings-ai-coach-card" aria-labelledby="aiCoachMemoriesTitle">
+            <div class="settings-ai-coach-heading">
+              <div>
+                <div id="aiCoachMemoriesTitle" class="settings-label">Durable Memories</div>
+                <p class="settings-help-text">Curated facts that help the Coach know you across sessions, so answers
+                  reflect your goals, history, equipment, preferences, and safety needs without requiring you to repeat
+                  them. The Coach starts with your current question and uses recent things you said only when needed for
+                  a follow-up; critical safety memories are always considered. Memories are never hard-deleted.</p>
+              </div>
+              <label class="settings-memory-filter-label" for="aiCoachMemoryStatusFilter">Show
+                <select id="aiCoachMemoryStatusFilter">
+                  <option value="all">All</option>
+                  <option value="active">Active</option>
+                  <option value="inactive">Inactive</option>
+                  <option value="future">Future</option>
+                  <option value="expired">Expired</option>
+                </select>
+              </label>
+            </div>
+            <div id="aiCoachMemoriesStatus" class="settings-status-message" role="status" aria-live="polite"></div>
+            <div id="aiCoachMemoriesError" class="settings-form-error" role="alert" aria-live="assertive"></div>
+            <div id="aiCoachMemoriesList" class="settings-memory-list"></div>
+            <form id="aiCoachMemoryForm" class="settings-memory-form">
+              <div class="settings-memory-form-heading">
+                <div id="aiCoachMemoryFormTitle" class="settings-label">Add memory</div>
+                <button id="aiCoachMemoryCancel" type="button" class="button-secondary hidden">Cancel edit</button>
+              </div>
+              <input id="aiCoachMemoryId" type="hidden">
+              <div class="settings-memory-fields">
+                <div class="settings-field"><label for="aiCoachMemoryType">Type</label>
+                  <select id="aiCoachMemoryType"></select>
+                </div>
+                <div class="settings-field"><label for="aiCoachMemoryPriority">Priority</label>
+                  <select id="aiCoachMemoryPriority"></select>
+                </div>
+                <div class="settings-field settings-memory-title-field"><label for="aiCoachMemoryTitle">Title</label>
+                  <input id="aiCoachMemoryTitle" type="text" maxlength="120">
+                </div>
+                <div class="settings-field settings-memory-text-field"><label for="aiCoachMemoryText">Memory
+                    text</label>
+                  <textarea id="aiCoachMemoryText" rows="3" maxlength="1000"></textarea>
+                  <div id="aiCoachMemoryTextCount" class="settings-character-count">0 / 1,000</div>
+                </div>
+                <fieldset class="settings-field settings-memory-scopes">
+                  <legend>Applies to</legend>
+                  <div id="aiCoachMemoryScopes" class="settings-memory-scope-grid"></div>
+                </fieldset>
+                <div class="settings-field"><label for="aiCoachMemoryEffectiveDate">Effective date</label>
+                  <input id="aiCoachMemoryEffectiveDate" type="date">
+                </div>
+                <div class="settings-field"><label for="aiCoachMemoryExpiresAt">Expires at</label>
+                  <input id="aiCoachMemoryExpiresAt" type="datetime-local">
+                </div>
+                <label class="settings-choice settings-memory-active"><input id="aiCoachMemoryActive" type="checkbox"
+                    checked> Active</label>
+              </div>
+              <div class="settings-ai-coach-actions"><button id="aiCoachMemorySave" type="submit"
+                  class="button-primary">Add memory</button></div>
+            </form>
+          </section>
+        </div>
+      </div>
+    </div>
+  </div>
+

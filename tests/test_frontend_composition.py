@@ -2,9 +2,12 @@ from html.parser import HTMLParser
 from pathlib import Path
 from urllib.parse import urlsplit
 
+from jinja2 import Environment, FileSystemLoader
+
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 INDEX_PATH = REPO_ROOT / "templates" / "index.html"
+TEMPLATE_ENVIRONMENT = Environment(loader=FileSystemLoader(str(REPO_ROOT / "templates")))
 VOID_ELEMENTS = {
     "area",
     "base",
@@ -70,7 +73,7 @@ class CompositionParser(HTMLParser):
 
 
 def parse_index() -> tuple[str, Element]:
-    source = INDEX_PATH.read_text(encoding="utf-8")
+    source = TEMPLATE_ENVIRONMENT.get_template("index.html").render()
     parser = CompositionParser()
     parser.feed(source)
     parser.close()
