@@ -521,85 +521,6 @@ td {
   white-space: nowrap;
 }
 
-#gearPane .table-wrap {
-  width: max-content;
-  max-width: 100%;
-  min-width: 0;
-  display: block;
-}
-
-#gearTable {
-  width: max-content;
-  min-width: 0;
-  max-width: 100%;
-  table-layout: auto;
-}
-
-#gearTable th:nth-child(1),
-#gearTable td:nth-child(1) {
-  width: 300px;
-  min-width: 300px;
-  text-align: left;
-}
-
-#gearTable th:nth-child(2),
-#gearTable td:nth-child(2) {
-  width: 90px;
-  min-width: 90px;
-  text-align: left;
-}
-
-#gearTable th:nth-child(3),
-#gearTable td:nth-child(3) {
-  width: 100px;
-  min-width: 100px;
-  text-align: left;
-}
-
-#gearTable th:nth-child(4),
-#gearTable td:nth-child(4),
-#gearTable th:nth-child(5),
-#gearTable td:nth-child(5),
-#gearTable th:nth-child(6),
-#gearTable td:nth-child(6),
-#gearTable th:nth-child(7),
-#gearTable td:nth-child(7),
-#gearTable th:nth-child(8),
-#gearTable td:nth-child(8) {
-  text-align: right;
-}
-
-#gearTable th:nth-child(4),
-#gearTable td:nth-child(4) {
-  width: 80px;
-  min-width: 80px;
-}
-
-#gearTable th:nth-child(5),
-#gearTable td:nth-child(5) {
-  width: 100px;
-  min-width: 100px;
-}
-
-#gearTable th:nth-child(6),
-#gearTable td:nth-child(6) {
-  width: 100px;
-  min-width: 100px;
-}
-
-#gearTable th:nth-child(7),
-#gearTable td:nth-child(7) {
-  width: 130px;
-  min-width: 130px;
-}
-
-#gearTable th:nth-child(8),
-#gearTable td:nth-child(8) {
-  width: 120px;
-  min-width: 120px;
-  text-align: left;
-}
-
 .drawer-section-title {
   font-size: 12px;
   font-weight: 800;
@@ -758,18 +679,9 @@ th {
   color: var(--green);
 }
 
-.status-retired {
-  background: rgba(156, 163, 175, 0.15);
-  color: var(--muted);
-}
-
 .status-muted {
   background: rgba(107, 114, 128, 0.15);
   color: var(--muted);
-}
-
-.gear-row-retired {
-  opacity: 0.72;
 }
 
 .gear-header-row {
@@ -793,20 +705,6 @@ th {
   justify-content: flex-end;
   flex-wrap: wrap;
   gap: 10px 16px;
-}
-
-.gear-hide-shoes-label {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 12px;
-  color: var(--text);
-  cursor: pointer;
-  white-space: nowrap;
-}
-
-.gear-hide-shoes-label input {
-  margin: 0;
 }
 
 .gear-title {
