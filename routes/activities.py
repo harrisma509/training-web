@@ -17,7 +17,52 @@ DEFAULT_LIMIT = 50
 MAX_FILTER_VALUES = 25
 MAX_FILTER_VALUE_LENGTH = 100
 MAX_TEXT_LENGTH = 200
+MAX_ACTIVITY_TYPES = 100
 ACTIVITY_CATEGORIES = {"ride", "hike", "walk", "run", "ski", "mobility", "strength", "other"}
+
+
+@router.get("/api/activities/search/types")
+def search_activity_types():
+    try:
+        with db_conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT DISTINCT sport_type
+                    FROM public.strava_activities
+                    WHERE sport_type IS NOT NULL
+                      AND BTRIM(sport_type) <> ''
+                    ORDER BY sport_type
+                    LIMIT %s
+                    """,
+                    (MAX_ACTIVITY_TYPES,),
+                )
+                values = [str(row["sport_type"]) for row in cur.fetchall() if row.get("sport_type")]
+    except Exception:
+        return JSONResponse(
+            {"detail": "Activity type options are temporarily unavailable."},
+            status_code=503,
+        )
+    return JSONResponse({"sport_types": values})
+
+
+class ActivitySortBy(str, Enum):
+    DATE = "date"
+    START = "start"
+    ACTIVITY = "activity"
+    TYPE = "type"
+    CATEGORY = "category"
+    BIKE = "bike"
+    DISTANCE = "distance"
+    ELEVATION = "elevation"
+    MOVING = "moving"
+    ELAPSED = "elapsed"
+    LOAD = "load"
+
+
+class ActivitySortDirection(str, Enum):
+    ASC = "asc"
+    DESC = "desc"
 
 
 class ActivitySort(str, Enum):
@@ -29,49 +74,87 @@ class ActivitySort(str, Enum):
     LONGEST_DURATION = "longest_duration"
 
 
-SORT_SQL = {
-    ActivitySort.NEWEST: "a.date_local DESC, a.start_at_local DESC NULLS LAST, a.activity_id DESC",
-    ActivitySort.OLDEST: "a.date_local ASC, a.start_at_local ASC NULLS LAST, a.activity_id ASC",
-    ActivitySort.START_TIME: "a.start_at_local ASC NULLS LAST, a.activity_id ASC",
-    ActivitySort.HIGHEST_ELEVATION: (
-        "a.elevation_ft DESC NULLS LAST, a.date_local DESC, "
-        "a.start_at_local DESC NULLS LAST, a.activity_id DESC"
-    ),
-    ActivitySort.LONGEST_DISTANCE: (
-        "a.distance_mi DESC NULLS LAST, a.date_local DESC, "
-        "a.start_at_local DESC NULLS LAST, a.activity_id DESC"
-    ),
-    ActivitySort.LONGEST_DURATION: (
-        "a.moving_sec DESC NULLS LAST, a.date_local DESC, "
-        "a.start_at_local DESC NULLS LAST, a.activity_id DESC"
-    ),
+SORT_COLUMN_SQL = {
+    ActivitySortBy.DATE: "sa.date_local",
+    ActivitySortBy.START: "sa.start_at_local",
+    ActivitySortBy.ACTIVITY: 'sa."name"',
+    ActivitySortBy.TYPE: "sa.sport_type",
+    ActivitySortBy.CATEGORY: "sa.activity_category",
+    ActivitySortBy.BIKE: "g.gear_name",
+    ActivitySortBy.DISTANCE: "sa.distance_mi",
+    ActivitySortBy.ELEVATION: "sa.elevation_ft",
+    ActivitySortBy.MOVING: "sa.moving_sec",
+    ActivitySortBy.ELAPSED: "sa.elapsed_sec",
+    ActivitySortBy.LOAD: "d.main_ride_load",
+}
+
+SORT_DIRECTION_SQL = {
+    ActivitySortDirection.ASC: "ASC",
+    ActivitySortDirection.DESC: "DESC",
+}
+
+LEGACY_SORTS = {
+    ActivitySort.NEWEST: (ActivitySortBy.DATE, ActivitySortDirection.DESC),
+    ActivitySort.OLDEST: (ActivitySortBy.DATE, ActivitySortDirection.ASC),
+    ActivitySort.START_TIME: (ActivitySortBy.START, ActivitySortDirection.ASC),
+    ActivitySort.HIGHEST_ELEVATION: (ActivitySortBy.ELEVATION, ActivitySortDirection.DESC),
+    ActivitySort.LONGEST_DISTANCE: (ActivitySortBy.DISTANCE, ActivitySortDirection.DESC),
+    ActivitySort.LONGEST_DURATION: (ActivitySortBy.MOVING, ActivitySortDirection.DESC),
 }
 
 SELECT_SQL = """
     SELECT
-        a.activity_id,
-        a.date_local,
-        a.start_at_local,
-        a.start_at_utc,
-        a.timezone,
-        a.utc_offset_seconds,
-        a."name" AS name,
-        a.sport_type,
-        a.activity_category,
-        a.gear_id,
+        sa.activity_id,
+        sa.date_local,
+        sa.start_at_local,
+        sa.start_at_utc,
+        sa.timezone,
+        sa.utc_offset_seconds,
+        sa."name" AS name,
+        sa.sport_type,
+        sa.activity_category,
+        sa.gear_id,
         g.gear_name,
-        a.distance_mi,
-        a.elevation_ft,
-        a.moving_sec,
-        a.elapsed_sec,
+        sa.distance_mi,
+        sa.elevation_ft,
+        sa.moving_sec,
+        sa.elapsed_sec,
         d.main_ride_load AS activity_load
-    FROM public.strava_activities AS a
+    FROM public.strava_activities AS sa
     LEFT JOIN public.gear AS g
-        ON g.gear_id = a.gear_id
+        ON g.gear_id = sa.gear_id
     LEFT JOIN public.daily_training AS d
-        ON d.date = a.date_local
-        AND d.main_ride_id = a.activity_id
+        ON d.date = sa.date_local
+        AND d.main_ride_id = sa.activity_id
 """
+
+COUNT_SQL = """
+    SELECT COUNT(*) AS total_count
+    FROM public.strava_activities AS sa
+"""
+
+
+def _resolve_sort(sort_by, sort_direction, legacy_sort):
+    if legacy_sort is not None:
+        if sort_by is not None or sort_direction is not None:
+            raise HTTPException(
+                status_code=422,
+                detail="sort cannot be combined with sort_by or sort_direction.",
+            )
+        resolved_by, resolved_direction = LEGACY_SORTS[legacy_sort]
+        return resolved_by, resolved_direction, legacy_sort.value
+
+    resolved_by = sort_by or ActivitySortBy.DATE
+    resolved_direction = sort_direction or ActivitySortDirection.DESC
+    legacy_value = {
+        (ActivitySortBy.DATE, ActivitySortDirection.DESC): ActivitySort.NEWEST.value,
+        (ActivitySortBy.DATE, ActivitySortDirection.ASC): ActivitySort.OLDEST.value,
+        (ActivitySortBy.START, ActivitySortDirection.ASC): ActivitySort.START_TIME.value,
+        (ActivitySortBy.ELEVATION, ActivitySortDirection.DESC): ActivitySort.HIGHEST_ELEVATION.value,
+        (ActivitySortBy.DISTANCE, ActivitySortDirection.DESC): ActivitySort.LONGEST_DISTANCE.value,
+        (ActivitySortBy.MOVING, ActivitySortDirection.DESC): ActivitySort.LONGEST_DURATION.value,
+    }.get((resolved_by, resolved_direction), resolved_by.value)
+    return resolved_by, resolved_direction, legacy_value
 
 
 def _clean_filter_values(values, field_name, *, lowercase=False, allowed=None):
@@ -139,7 +222,9 @@ def search_activities(
     max_duration_sec: int | None = Query(default=None, ge=0),
     start_time_from: time | None = None,
     start_time_to: time | None = None,
-    sort: ActivitySort = ActivitySort.NEWEST,
+    sort_by: ActivitySortBy | None = None,
+    sort_direction: ActivitySortDirection | None = None,
+    sort: ActivitySort | None = None,
     limit: int = Query(default=DEFAULT_LIMIT, ge=1, le=MAX_LIMIT),
     offset: int = Query(default=0, ge=0),
 ):
@@ -180,21 +265,27 @@ def search_activities(
     if start_time_from is not None and start_time_to is not None and start_time_from > start_time_to:
         raise HTTPException(status_code=422, detail="Overnight time ranges are not supported.")
 
+    resolved_sort_by, resolved_sort_direction, applied_sort = _resolve_sort(
+        sort_by,
+        sort_direction,
+        sort,
+    )
+
     conditions = []
     parameters = []
 
     if start_date is not None and end_date is not None:
-        conditions.extend(("a.date_local >= %s", "a.date_local <= %s"))
+        conditions.extend(("sa.date_local >= %s", "sa.date_local <= %s"))
         parameters.extend((start_date, end_date))
 
     if trimmed_text:
-        conditions.append("lower(a.\"name\") LIKE lower(%s) ESCAPE '\\'")
+        conditions.append("lower(sa.\"name\") LIKE lower(%s) ESCAPE '\\'")
         parameters.append(f"%{_escape_like_literal(trimmed_text)}%")
 
     for values, expression in (
-        (sports, "lower(a.sport_type)"),
-        (categories, "a.activity_category"),
-        (gears, "a.gear_id"),
+        (sports, "lower(sa.sport_type)"),
+        (categories, "sa.activity_category"),
+        (gears, "sa.gear_id"),
     ):
         if values:
             placeholders = ", ".join("%s" for _ in values)
@@ -202,9 +293,9 @@ def search_activities(
             parameters.extend(values)
 
     for column, minimum, maximum in (
-        ("a.distance_mi", min_distance_mi, max_distance_mi),
-        ("a.elevation_ft", min_elevation_ft, max_elevation_ft),
-        ("a.moving_sec", min_duration_sec, max_duration_sec),
+        ("sa.distance_mi", min_distance_mi, max_distance_mi),
+        ("sa.elevation_ft", min_elevation_ft, max_elevation_ft),
+        ("sa.moving_sec", min_duration_sec, max_duration_sec),
     ):
         if minimum is not None:
             conditions.append(f"{column} >= %s")
@@ -214,23 +305,29 @@ def search_activities(
             parameters.append(maximum)
 
     if start_time_from is not None:
-        conditions.append("a.start_at_local IS NOT NULL AND a.start_at_local::time >= %s")
+        conditions.append("sa.start_at_local IS NOT NULL AND sa.start_at_local::time >= %s")
         parameters.append(start_time_from)
     if start_time_to is not None:
-        conditions.append("a.start_at_local IS NOT NULL AND a.start_at_local::time <= %s")
+        conditions.append("sa.start_at_local IS NOT NULL AND sa.start_at_local::time <= %s")
         parameters.append(start_time_to)
 
-    sql = SELECT_SQL
-    if conditions:
-        sql += "\n    WHERE " + "\n      AND ".join(conditions)
-    sql += "\n    ORDER BY " + SORT_SQL[sort]
-    sql += "\n    LIMIT %s OFFSET %s"
-    parameters.extend((limit + 1, offset))
+    where_sql = "\n    WHERE " + "\n      AND ".join(conditions) if conditions else ""
+    filter_parameters = tuple(parameters)
+    count_sql = COUNT_SQL + where_sql
+    direction_sql = SORT_DIRECTION_SQL[resolved_sort_direction]
+    order_sql = (
+        f"{SORT_COLUMN_SQL[resolved_sort_by]} {direction_sql} NULLS LAST, "
+        f"sa.activity_id {direction_sql}"
+    )
+    sql = SELECT_SQL + where_sql + "\n    ORDER BY " + order_sql + "\n    LIMIT %s OFFSET %s"
+    item_parameters = (*filter_parameters, limit, offset)
 
     try:
         with db_conn() as conn:
             with conn.cursor() as cur:
-                cur.execute(sql, tuple(parameters))
+                cur.execute(count_sql, filter_parameters)
+                total_count = int(cur.fetchone()["total_count"])
+                cur.execute(sql, item_parameters)
                 rows = cur.fetchall()
     except Exception:
         return JSONResponse(
@@ -238,18 +335,21 @@ def search_activities(
             status_code=503,
         )
 
-    has_more = len(rows) > limit
-    items = [_shape_activity(row) for row in rows[:limit]]
+    items = [_shape_activity(row) for row in rows]
     returned_count = len(items)
+    has_more = offset + returned_count < total_count
     return JSONResponse({
         "schema_version": 1,
         "items": items,
         "returned_count": returned_count,
+        "total_count": total_count,
         "limit": limit,
         "offset": offset,
         "has_more": has_more,
         "next_offset": offset + returned_count if has_more else None,
-        "applied_sort": sort.value,
+        "applied_sort": applied_sort,
+        "applied_sort_by": resolved_sort_by.value,
+        "applied_sort_direction": resolved_sort_direction.value,
         "applied_start_date": start_date.isoformat() if start_date else None,
         "applied_end_date": end_date.isoformat() if end_date else None,
     })

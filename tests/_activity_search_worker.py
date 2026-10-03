@@ -10,7 +10,7 @@ from urllib.parse import urlencode
 from unittest.mock import patch
 
 from fastapi import FastAPI
-from routes.activities import ActivitySort, router as activities_router
+from routes.activities import ActivitySort, ActivitySortBy, ActivitySortDirection, router as activities_router
 
 
 app = FastAPI()
@@ -18,16 +18,28 @@ app.include_router(activities_router)
 
 
 class FakeCursor:
-    def __init__(self, rows=None):
+    def __init__(self, rows=None, total_count=None):
         self.rows = list(rows or [])
+        self.total_count = len(self.rows) if total_count is None else total_count
         self.sql = None
         self.params = None
+        self.executions = []
+        self.events = []
 
     def execute(self, sql, params=()):
         self.sql = sql
         self.params = params
+        self.executions.append((sql, params))
+        self.events.append(("execute", sql, params))
+
+    def fetchone(self):
+        self.events.append(("fetchone", self.sql, self.params))
+        return {"total_count": self.total_count}
 
     def fetchall(self):
+        self.events.append(("fetchall", self.sql, self.params))
+        if "LIMIT %s OFFSET %s" in (self.sql or ""):
+            return self.rows[:self.params[-2]]
         return self.rows
 
     def __enter__(self):
@@ -38,8 +50,8 @@ class FakeCursor:
 
 
 class FakeConnection:
-    def __init__(self, rows=None):
-        self.cursor_value = FakeCursor(rows)
+    def __init__(self, rows=None, total_count=None):
+        self.cursor_value = FakeCursor(rows, total_count)
 
     def __enter__(self):
         return self
@@ -111,11 +123,11 @@ def activity_row(**updates):
 
 
 class ActivitySearchRouteTests(unittest.TestCase):
-    def response(self, params=None, rows=None, *, db_error=None, headers=None):
+    def response(self, params=None, rows=None, *, total_count=None, db_error=None, headers=None):
         if db_error is not None:
             database = patch("routes.activities.db_conn", side_effect=db_error)
         else:
-            self.connection = FakeConnection(rows)
+            self.connection = FakeConnection(rows, total_count)
             database = patch("routes.activities.db_conn", return_value=self.connection)
         with database as db_mock:
             result = asgi_get(params=params, headers=headers)
@@ -138,6 +150,9 @@ class ActivitySearchRouteTests(unittest.TestCase):
         (status, payload), _ = self.response(rows=[activity_row()])
 
         self.assertEqual(status, 200)
+        self.assertEqual(payload["total_count"], 1)
+        self.assertEqual(payload["applied_sort_by"], "date")
+        self.assertEqual(payload["applied_sort_direction"], "desc")
         self.assertIsNone(payload["applied_start_date"])
         self.assertIsNone(payload["applied_end_date"])
         self.assertEqual(payload["limit"], 50)
@@ -147,9 +162,29 @@ class ActivitySearchRouteTests(unittest.TestCase):
         self.assertEqual(payload["items"][0]["distance_mi"], 12.5)
         self.assertEqual(payload["items"][0]["gear_name"], "Trail Bike")
         self.assertEqual(payload["items"][0]["activity_load"], 85)
-        self.assertNotIn("a.date_local >= %s", self.connection.cursor_value.sql)
-        self.assertNotIn("a.date_local <= %s", self.connection.cursor_value.sql)
-        self.assertEqual(self.connection.cursor_value.params[-2:], (51, 0))
+        self.assertEqual([event[0] for event in self.connection.cursor_value.events], [
+            "execute", "fetchone", "execute", "fetchall",
+        ])
+        count_sql, count_params = self.connection.cursor_value.executions[0]
+        item_sql, item_params = self.connection.cursor_value.executions[1]
+        self.assertNotIn("sa.date_local >= %s", item_sql)
+        self.assertNotIn("sa.date_local <= %s", item_sql)
+        self.assertTrue(count_sql.lstrip().startswith("SELECT COUNT(*)"))
+        self.assertEqual(count_params, ())
+        self.assertEqual(item_params[-2:], (50, 0))
+
+    def test_activity_type_options_are_distinct_sorted_bounded_values(self):
+        self.connection = FakeConnection([{"sport_type": "Ride"}, {"sport_type": "MountainBikeRide"}])
+        with patch("routes.activities.db_conn", return_value=self.connection):
+            status, payload = asgi_get("/api/activities/search/types")
+
+        self.assertEqual(status, 200)
+        self.assertEqual(payload, {"sport_types": ["Ride", "MountainBikeRide"]})
+        sql, params = self.connection.cursor_value.executions[0]
+        self.assertIn("SELECT DISTINCT sport_type", sql)
+        self.assertIn("ORDER BY sport_type", sql)
+        self.assertIn("LIMIT %s", sql)
+        self.assertEqual(params, (100,))
 
     def test_explicit_date_range_is_inclusive_and_single_or_reversed_bounds_fail(self):
         (status, payload), database = self.response(
@@ -157,10 +192,15 @@ class ActivitySearchRouteTests(unittest.TestCase):
             rows=[],
         )
         self.assertEqual(status, 200)
+        self.assertEqual(payload["total_count"], 0)
         self.assertEqual(payload["applied_start_date"], "2026-09-01")
-        sql = self.connection.cursor_value.sql
-        self.assertIn("a.date_local >= %s", sql)
-        self.assertIn("a.date_local <= %s", sql)
+        count_sql, count_params = self.connection.cursor_value.executions[0]
+        item_sql, item_params = self.connection.cursor_value.executions[1]
+        self.assertIn("sa.date_local >= %s", count_sql)
+        self.assertIn("sa.date_local <= %s", count_sql)
+        self.assertIn("sa.date_local >= %s", item_sql)
+        self.assertIn("sa.date_local <= %s", item_sql)
+        self.assertEqual(count_params, item_params[:-2])
         self.assertEqual(database.call_count, 1)
 
         for params in (
@@ -181,7 +221,7 @@ class ActivitySearchRouteTests(unittest.TestCase):
         self.assertEqual(status, 200)
         sql = self.connection.cursor_value.sql
         params = self.connection.cursor_value.params
-        self.assertIn('lower(a."name") LIKE lower(%s)', sql)
+        self.assertIn('lower(sa."name") LIKE lower(%s)', sql)
         self.assertNotIn("Bear", sql)
         self.assertIn("%Bear\\%\\_%", params)
         self.assertIn("ESCAPE '\\'", sql)
@@ -214,9 +254,9 @@ class ActivitySearchRouteTests(unittest.TestCase):
         )
         self.assertEqual(status, 200)
         sql = self.connection.cursor_value.sql
-        self.assertIn("lower(a.sport_type) IN (%s, %s)", sql)
-        self.assertIn("a.activity_category IN (%s, %s)", sql)
-        self.assertIn("a.gear_id IN (%s, %s)", sql)
+        self.assertIn("lower(sa.sport_type) IN (%s, %s)", sql)
+        self.assertIn("sa.activity_category IN (%s, %s)", sql)
+        self.assertIn("sa.gear_id IN (%s, %s)", sql)
         self.assertEqual(
             self.connection.cursor_value.params[:6],
             ("mountainbikeride", "run", "ride", "walk", "bike-1", "bike-2"),
@@ -242,12 +282,12 @@ class ActivitySearchRouteTests(unittest.TestCase):
         )
         self.assertEqual(status, 200)
         sql = self.connection.cursor_value.sql
-        self.assertIn("a.distance_mi >= %s", sql)
-        self.assertIn("a.distance_mi <= %s", sql)
-        self.assertIn("a.elevation_ft >= %s", sql)
-        self.assertIn("a.elevation_ft <= %s", sql)
-        self.assertIn("a.moving_sec >= %s", sql)
-        self.assertIn("a.moving_sec <= %s", sql)
+        self.assertIn("sa.distance_mi >= %s", sql)
+        self.assertIn("sa.distance_mi <= %s", sql)
+        self.assertIn("sa.elevation_ft >= %s", sql)
+        self.assertIn("sa.elevation_ft <= %s", sql)
+        self.assertIn("sa.moving_sec >= %s", sql)
+        self.assertIn("sa.moving_sec <= %s", sql)
         self.assertEqual(self.connection.cursor_value.params[:6], (1.5, 20.0, 10.0, 5000.0, 60, 7200))
 
         for params in (
@@ -267,9 +307,9 @@ class ActivitySearchRouteTests(unittest.TestCase):
         )
         self.assertEqual(status, 200)
         sql = self.connection.cursor_value.sql
-        self.assertIn("a.start_at_local IS NOT NULL", sql)
-        self.assertIn("a.start_at_local::time >= %s", sql)
-        self.assertIn("a.start_at_local::time <= %s", sql)
+        self.assertIn("sa.start_at_local IS NOT NULL", sql)
+        self.assertIn("sa.start_at_local::time >= %s", sql)
+        self.assertIn("sa.start_at_local::time <= %s", sql)
         self.assertIn(time(6), self.connection.cursor_value.params)
         self.assertIn(time(11, 30), self.connection.cursor_value.params)
 
@@ -282,58 +322,138 @@ class ActivitySearchRouteTests(unittest.TestCase):
                 (_, _), database = self.response(params=params)
                 database.assert_not_called()
 
-    def test_all_supported_sorts_use_fixed_deterministic_ordering(self):
+    def test_every_sort_field_and_direction_uses_fixed_null_safe_tie_broken_sql(self):
         expected = {
-            "newest": "a.date_local DESC, a.start_at_local DESC NULLS LAST, a.activity_id DESC",
-            "oldest": "a.date_local ASC, a.start_at_local ASC NULLS LAST, a.activity_id ASC",
-            "start_time": "a.start_at_local ASC NULLS LAST, a.activity_id ASC",
-            "highest_elevation": (
-                "a.elevation_ft DESC NULLS LAST, a.date_local DESC, "
-                "a.start_at_local DESC NULLS LAST, a.activity_id DESC"
-            ),
-            "longest_distance": (
-                "a.distance_mi DESC NULLS LAST, a.date_local DESC, "
-                "a.start_at_local DESC NULLS LAST, a.activity_id DESC"
-            ),
-            "longest_duration": (
-                "a.moving_sec DESC NULLS LAST, a.date_local DESC, "
-                "a.start_at_local DESC NULLS LAST, a.activity_id DESC"
-            ),
+            "date": "sa.date_local",
+            "start": "sa.start_at_local",
+            "activity": 'sa."name"',
+            "type": "sa.sport_type",
+            "category": "sa.activity_category",
+            "bike": "g.gear_name",
+            "distance": "sa.distance_mi",
+            "elevation": "sa.elevation_ft",
+            "moving": "sa.moving_sec",
+            "elapsed": "sa.elapsed_sec",
+            "load": "d.main_ride_load",
+        }
+        self.assertEqual(set(expected), {sort.value for sort in ActivitySortBy})
+        for sort_by, expression in expected.items():
+            for direction, sql_direction in (("asc", "ASC"), ("desc", "DESC")):
+                with self.subTest(sort_by=sort_by, direction=direction):
+                    (status, payload), _ = self.response(
+                        params={"sort_by": sort_by, "sort_direction": direction},
+                        rows=[],
+                    )
+                    self.assertEqual(status, 200)
+                    self.assertEqual(payload["applied_sort_by"], sort_by)
+                    self.assertEqual(payload["applied_sort_direction"], direction)
+                    order_clause = self.connection.cursor_value.sql.split("ORDER BY ", 1)[1].splitlines()[0]
+                    self.assertEqual(
+                        order_clause,
+                        f"{expression} {sql_direction} NULLS LAST, sa.activity_id {sql_direction}",
+                    )
+
+    def test_default_sort_is_newest_and_legacy_sorts_map_to_fixed_pairs(self):
+        self.response(rows=[])
+        self.assertEqual(self.connection.cursor_value.executions[1][0].split("ORDER BY ", 1)[1].splitlines()[0],
+                         "sa.date_local DESC NULLS LAST, sa.activity_id DESC")
+        expected = {
+            "newest": ("date", "desc"),
+            "oldest": ("date", "asc"),
+            "start_time": ("start", "asc"),
+            "highest_elevation": ("elevation", "desc"),
+            "longest_distance": ("distance", "desc"),
+            "longest_duration": ("moving", "desc"),
         }
         self.assertEqual(set(expected), {sort.value for sort in ActivitySort})
-        for sort, fragment in expected.items():
-            with self.subTest(sort=sort):
-                (status, payload), _ = self.response(params={"sort": sort}, rows=[])
+        for legacy_sort, pair in expected.items():
+            with self.subTest(legacy_sort=legacy_sort):
+                (status, payload), _ = self.response(params={"sort": legacy_sort}, rows=[])
                 self.assertEqual(status, 200)
-                self.assertEqual(payload["applied_sort"], sort)
-                self.assertIn("ORDER BY " + fragment, self.connection.cursor_value.sql)
+                self.assertEqual(payload["applied_sort"], legacy_sort)
+                self.assertEqual((payload["applied_sort_by"], payload["applied_sort_direction"]), pair)
 
-        (_, _), database = self.response(params={"sort": "date; DROP TABLE strava_activities"})
-        database.assert_not_called()
+        for params in (
+            {"sort_by": "date; DROP TABLE strava_activities"},
+            {"sort_direction": "desc; DROP TABLE strava_activities"},
+            {"sort": "newest", "sort_by": "load"},
+            {"sort": "newest", "sort_direction": "asc"},
+        ):
+            with self.subTest(params=params):
+                (_, _), database = self.response(params=params)
+                database.assert_not_called()
 
-    def test_limit_offset_validation_and_limit_plus_one_has_more(self):
+    def test_count_and_item_queries_share_filter_sql_without_count_joins_or_paging(self):
+        (status, payload), _ = self.response(
+            params={
+                "start_date": "2026-09-01",
+                "end_date": "2026-09-30",
+                "text": "bike park",
+                "sport_type": "Ride",
+                "activity_category": "ride",
+                "gear_id": "bike-1",
+                "min_distance_mi": "10",
+                "max_elevation_ft": "5000",
+                "min_duration_sec": "600",
+                "start_time_from": "06:00",
+                "start_time_to": "10:00",
+                "limit": "2",
+                "offset": "100",
+            },
+            rows=[activity_row(activity_id="101"), activity_row(activity_id="102")],
+            total_count=162,
+        )
+        self.assertEqual(status, 200)
+        self.assertEqual(payload["total_count"], 162)
+        count_sql, count_params = self.connection.cursor_value.executions[0]
+        item_sql, item_params = self.connection.cursor_value.executions[1]
+        count_where = count_sql.partition("WHERE")[2].strip()
+        item_where = item_sql.partition("WHERE")[2].split("ORDER BY", 1)[0].strip()
+        self.assertEqual(count_where, item_where)
+        self.assertEqual(count_params, item_params[:-2])
+        self.assertTrue(count_sql.lstrip().startswith("SELECT COUNT(*)"))
+        self.assertNotRegex(count_sql, r"(?i)\b(ORDER\s+BY|LIMIT|OFFSET)\b")
+        self.assertNotIn("JOIN", count_sql.upper())
+        self.assertIn("%bike park%", count_params)
+        self.assertEqual(count_params[-2:], (time(6), time(10)))
+
+    def test_limit_offset_and_has_more_are_derived_from_exact_total(self):
         (status, payload), _ = self.response(
             params={"limit": "2", "offset": "10"},
             rows=[activity_row(activity_id=str(value)) for value in (1, 2, 3)],
+            total_count=13,
         )
         self.assertEqual(status, 200)
         self.assertEqual(payload["returned_count"], 2)
+        self.assertEqual(payload["total_count"], 13)
         self.assertEqual(payload["limit"], 2)
         self.assertEqual(payload["offset"], 10)
         self.assertTrue(payload["has_more"])
         self.assertEqual(payload["next_offset"], 12)
         self.assertEqual(len(payload["items"]), 2)
-        self.assertEqual(self.connection.cursor_value.params[-2:], (3, 10))
+        self.assertEqual(self.connection.cursor_value.params[-2:], (2, 10))
 
         for params in ({"limit": "101"}, {"limit": "0"}, {"offset": "-1"}, {"offset": "bad"}):
             with self.subTest(params=params):
                 (_, _), database = self.response(params=params)
                 database.assert_not_called()
 
-    def test_final_page_has_no_next_offset_and_limit_100_is_accepted(self):
-        (status, payload), _ = self.response(params={"limit": "100"}, rows=[activity_row()])
+    def test_final_page_and_empty_results_report_exact_totals(self):
+        (status, payload), _ = self.response(
+            params={"limit": "100", "offset": "100"},
+            rows=[activity_row()],
+            total_count=101,
+        )
         self.assertEqual(status, 200)
         self.assertEqual(payload["limit"], 100)
+        self.assertEqual(payload["total_count"], 101)
+        self.assertFalse(payload["has_more"])
+        self.assertIsNone(payload["next_offset"])
+
+        (status, payload), _ = self.response(rows=[], total_count=0)
+        self.assertEqual(status, 200)
+        self.assertEqual(payload["returned_count"], 0)
+        self.assertEqual(payload["total_count"], 0)
         self.assertFalse(payload["has_more"])
         self.assertIsNone(payload["next_offset"])
 
@@ -383,14 +503,14 @@ class ActivitySearchRouteTests(unittest.TestCase):
         (status, payload), _ = self.response(rows=[activity_row(activity_load=None)])
         self.assertEqual(status, 200)
         sql = self.connection.cursor_value.sql
-        self.assertIn("a.activity_id", sql)
-        self.assertIn("a.start_at_local", sql)
-        self.assertIn("a.start_at_utc", sql)
+        self.assertIn("sa.activity_id", sql)
+        self.assertIn("sa.start_at_local", sql)
+        self.assertIn("sa.start_at_utc", sql)
         self.assertIn("g.gear_name", sql)
         self.assertIn("LEFT JOIN public.gear AS g", sql)
         self.assertIn("LEFT JOIN public.daily_training AS d", sql)
-        self.assertIn("d.date = a.date_local", sql)
-        self.assertIn("d.main_ride_id = a.activity_id", sql)
+        self.assertIn("d.date = sa.date_local", sql)
+        self.assertIn("d.main_ride_id = sa.activity_id", sql)
         self.assertIn("d.main_ride_load AS activity_load", sql)
         self.assertNotIn("SELECT *", sql.upper())
         for forbidden in ("description", "private_note", "raw_json", "latitude", "longitude", "power", "cadence"):

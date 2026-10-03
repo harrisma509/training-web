@@ -8,7 +8,7 @@
   <link rel="icon" href="/static/favicon.ico" type="image/x-icon">
   <link rel="shortcut icon" href="/static/favicon.ico" type="image/x-icon">
   <link rel="stylesheet" href="/static/style.css?v=20260915-components-service-form-v1">
-  <link rel="stylesheet" href="/static/search.css?v=20261002-all-history-url-v1">
+  <link rel="stylesheet" href="/static/search.css?v=20261002-search-actions-v1">
   <link rel="stylesheet" href="/static/components.css?v=20260916-components-css-v11">
   <link rel="stylesheet" href="/static/plan.css">
   <link rel="stylesheet" href="/static/goals.css">
@@ -836,19 +836,9 @@
           <summary>More filters</summary>
           <label class="search-keep-open"><input id="searchKeepFiltersOpen" type="checkbox"> Keep filters open</label>
           <div class="search-filter-grid">
-            <label><span>Sport type</span><input id="searchSportType" type="text" maxlength="100"
-                placeholder="e.g. Ride"></label>
-            <label><span>Category</span>
-              <select id="searchCategory">
-                <option value="">Any category</option>
-                <option value="ride">Ride</option>
-                <option value="hike">Hike</option>
-                <option value="walk">Walk</option>
-                <option value="run">Run</option>
-                <option value="ski">Ski</option>
-                <option value="mobility">Mobility</option>
-                <option value="strength">Strength</option>
-                <option value="other">Other</option>
+            <label><span>Activity type</span>
+              <select id="searchSportType">
+                <option value="">Any activity type</option>
               </select>
             </label>
             <label><span>Bike / gear</span>
@@ -876,15 +866,6 @@
           <div id="searchStatus" class="search-status" role="status" aria-live="polite"></div>
         </div>
         <div class="search-page-controls">
-          <label for="searchSort">Order</label>
-          <select id="searchSort">
-            <option value="newest">Newest</option>
-            <option value="oldest">Oldest</option>
-            <option value="start_time">Start time</option>
-            <option value="highest_elevation">Highest elevation</option>
-            <option value="longest_distance">Longest distance</option>
-            <option value="longest_duration">Longest duration</option>
-          </select>
           <label for="searchLimit">Rows</label>
           <select id="searchLimit">
             <option value="25">25</option>

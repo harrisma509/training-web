@@ -16,6 +16,9 @@ class FakeElement {
         this.checked = false;
         this.open = false;
         this.className = "";
+        this.style = {};
+        this.parentNode = null;
+        this.focused = false;
         this.classList = {
             add: () => { },
             remove: () => { },
@@ -32,12 +35,33 @@ class FakeElement {
     }
 
     appendChild(child) {
+        child.parentNode = this;
         this.children.push(child);
         return child;
     }
 
     replaceChildren(...children) {
+        this.children.forEach(child => { child.parentNode = null; });
         this.children = children;
+        children.forEach(child => { child.parentNode = this; });
+    }
+
+    remove() {
+        if (!this.parentNode) return;
+        this.parentNode.children = this.parentNode.children.filter(child => child !== this);
+        this.parentNode = null;
+    }
+
+    contains(element) {
+        return this === element || this.children.some(child => child.contains(element));
+    }
+
+    focus() {
+        this.focused = true;
+    }
+
+    getBoundingClientRect() {
+        return { left: 10, right: 110, top: 10, bottom: 40, width: 100, height: 30 };
     }
 
     setAttribute(name, value) {
@@ -52,34 +76,63 @@ class FakeElement {
 function createSearchHarness(initialHref = "http://localhost/?tab=search") {
     const ids = [
         "searchForm", "searchText", "searchStartDate", "searchEndDate", "searchSportType",
-        "searchCategory", "searchGearId", "searchMinDistance", "searchMaxDistance",
+        "searchGearId", "searchMinDistance", "searchMaxDistance",
         "searchMinElevation", "searchMaxElevation", "searchMinDuration", "searchMaxDuration",
-        "searchStartTimeFrom", "searchStartTimeTo", "searchSort", "searchLimit", "searchClear",
+        "searchStartTimeFrom", "searchStartTimeTo", "searchLimit", "searchClear",
         "searchPrevious", "searchNext", "searchKeepFiltersOpen", "searchValidationMessage",
         "searchStatus", "searchScope", "searchActiveFilters", "searchResults", "searchPageStatus",
     ];
     const elements = Object.fromEntries(ids.map(id => [id, new FakeElement(id === "searchForm" ? "form" : "div")]));
     const inputIds = [
-        "searchText", "searchStartDate", "searchEndDate", "searchSportType", "searchCategory",
+        "searchText", "searchStartDate", "searchEndDate", "searchSportType",
         "searchGearId", "searchMinDistance", "searchMaxDistance", "searchMinElevation",
         "searchMaxElevation", "searchMinDuration", "searchMaxDuration", "searchStartTimeFrom",
-        "searchStartTimeTo", "searchSort", "searchLimit",
+        "searchStartTimeTo", "searchLimit",
     ];
     elements.searchForm.controls = inputIds.map(id => elements[id]);
-    elements.searchSort.value = "newest";
     elements.searchLimit.value = "50";
     const filterPanel = new FakeElement("details");
     let currentUrl = new URL(initialHref);
     const requests = [];
-    let respond = async () => ({ items: [], has_more: false, next_offset: null });
+    const resyncCalls = [];
+    const statusCalls = [];
+    const confirmations = [];
+    let respond = async () => ({ items: [], total_count: 0 });
+    const documentListeners = {};
+    const body = new FakeElement("body");
+    const document = {
+        body,
+        getElementById: id => elements[id] || null,
+        querySelector: selector => selector === ".search-filters" ? filterPanel : null,
+        createElement: tagName => new FakeElement(tagName),
+        addEventListener(name, handler) { (documentListeners[name] ||= []).push(handler); },
+        async trigger(name, event = {}) {
+            for (const handler of documentListeners[name] || []) await handler(event);
+        },
+    };
     const window = {
         AppState: { activeTab: "search", gearRows: [{ gear_id: 3, gear_name: "Trail Bike" }] },
         api: {
+            fetchActivitySearchTypes: async () => ({ sport_types: ["Ride", "MountainBikeRide", "FutureSport"] }),
             searchActivities: async query => {
                 requests.push(structuredClone(query));
                 return respond(query);
             },
+            resyncActivity: async activityId => {
+                resyncCalls.push(activityId);
+                return { request_id: 9001, status: "pending", activity_id: Number(activityId) };
+            },
+            fetchSyncRequestStatus: async requestId => {
+                statusCalls.push(requestId);
+                return { request_id: requestId, status: "completed" };
+            },
         },
+        confirm(message) { confirmations.push(message); return true; },
+        setTimeout(callback) { return setImmediate(callback); },
+        innerWidth: 1024,
+        innerHeight: 768,
+        showTab(tab) { this.AppState.activeTab = tab; },
+        DailyController: { load() { } },
         location: {
             get href() { return currentUrl.href; },
             get search() { return currentUrl.search; },
@@ -88,18 +141,18 @@ function createSearchHarness(initialHref = "http://localhost/?tab=search") {
             replaceState: (_state, _title, url) => { currentUrl = new URL(url, currentUrl); },
         },
     };
-    const document = {
-        getElementById: id => elements[id] || null,
-        querySelector: selector => selector === ".search-filters" ? filterPanel : null,
-        createElement: tagName => new FakeElement(tagName),
-    };
     vm.runInNewContext(fs.readFileSync("static/search.js", "utf8"), { window, document, URL, URLSearchParams, Intl, Number, String, Boolean, JSON, encodeURIComponent });
 
     return {
         elements,
         filterPanel,
         requests,
+        resyncCalls,
+        statusCalls,
+        confirmations,
         window,
+        document,
+        body,
         setResponse(handler) { respond = handler; },
         getUrl() { return currentUrl; },
         async settle() { await new Promise(resolve => setImmediate(resolve)); },
@@ -110,13 +163,24 @@ function descendantText(element) {
     return [element.textContent, ...element.children.map(descendantText)].filter(Boolean).join(" ");
 }
 
+function descendants(element) {
+    return element.children.flatMap(child => [child, ...descendants(child)]);
+}
+
+function sortButton(table, label) {
+    return descendants(table).find(element => element.className.includes("search-sort")
+        && element.children.some(child => child.className === "search-sort-label" && child.textContent === label));
+}
+
 async function main() {
     process.env.TZ = "Pacific/Auckland";
 
     assert.equal(formatActivityLocalDate("2024-03-10"), "2024-03-10");
-    assert.equal(formatActivityLocalTime("2024-03-10T03:15:00"), "03:15");
+    assert.equal(formatActivityLocalTime("2024-03-10T03:15:00"), "3:15 AM");
     assert.equal(formatActivityLocalDate("2024-11-03"), "2024-11-03");
-    assert.equal(formatActivityLocalTime("2024-11-03T09:45:00"), "09:45");
+    assert.equal(formatActivityLocalTime("2024-11-03T09:45:00"), "9:45 AM");
+    assert.equal(formatActivityLocalTime("2024-11-03T00:05:00"), "12:05 AM");
+    assert.equal(formatActivityLocalTime("2024-11-03T12:05:00"), "12:05 PM");
     assert.equal(formatActivityLocalTime(null), "");
     assert.equal(formatActivityLocalTime(""), "");
 
@@ -128,40 +192,53 @@ async function main() {
     assert.match(searchSource, /window\.api\.searchActivities\(\{/);
     assert.match(searchSource, /const SEARCH_URL_KEYS/);
     assert.match(searchSource, /Date range incomplete/);
-    assert.match(searchSource, /Showing \$\{first\}–\$\{last\}/);
+    assert.match(searchSource, /Showing \$\{first\}–\$\{last\} of \$\{totalCount\} activities/);
+    assert.match(searchSource, /sort_by: query\.sort_by/);
+    assert.match(searchSource, /sort_direction: query\.sort_direction/);
+    assert.doesNotMatch(searchSource, /field\("searchSort"\)/);
     assert.match(searchSource, /Last valid results remain shown\./);
     assert.match(appSource, /removeSearchParameters\(url\)/);
     assert.match(appSource, /history\.pushState/);
     assert.match(appSource, /tab === "search"\) window\.SearchController\?\.restoreFromUrl/);
-    assert.match(searchSource, /"highest_elevation"/);
-    assert.match(searchSource, /"longest_distance"/);
-    assert.match(searchSource, /"longest_duration"/);
     assert.match(dailySource, /dailySearchAdvanced/);
     assert.match(dailySource, /openAdvancedSearch\(\{ text:/);
     assert.match(htmlSource, /id="searchTab"/);
     assert.match(htmlSource, /id="searchResults"/);
+    assert.match(htmlSource, /id="searchSportType"/);
+    assert.doesNotMatch(htmlSource, /id="searchCategory"|>Category</);
     assert.match(htmlSource, /id="dailySearchAdvanced"/);
     assert.match(htmlSource, /search\.css/);
     assert.doesNotMatch(fs.readFileSync("static/style.css", "utf8"), /\.search-(?:pane|filters|results|chip)/);
 
     const harness = createSearchHarness();
     harness.setResponse(async () => ({
-        items: [{ activity_id: 12, name: "Local ride", date_local: "2024-04-03" }],
-        has_more: true,
-        next_offset: 50,
+        items: Array.from({ length: 50 }, (_, index) => ({
+            activity_id: index + 12,
+            name: index === 0 ? "Local ride" : `Ride ${index}`,
+            date_local: "2024-04-03",
+        })),
+        total_count: 126,
     }));
     harness.window.SearchController.activate();
     await harness.settle();
     assert.equal(harness.requests.length, 1);
-    assert.equal(harness.requests[0].sort, "newest");
+    assert.equal(harness.requests[0].sort_by, "date");
+    assert.equal(harness.requests[0].sort_direction, "desc");
     assert.equal(harness.requests[0].limit, 50);
     assert.equal(harness.requests[0].offset, 0);
     assert.equal(harness.requests[0].start_date, "");
     assert.equal(harness.requests[0].end_date, "");
     assert.equal(harness.elements.searchScope.textContent, "All history");
-    assert.match(harness.elements.searchPageStatus.textContent, /Showing 1–1 · More activities available/);
+    assert.equal(harness.elements.searchPageStatus.textContent, "Showing 1–50 of 126 activities");
+    assert.ok(harness.elements.searchSportType.children.some(option => option.value === "MountainBikeRide"
+        && option.textContent === "Mountain Bike Ride"));
+    assert.ok(harness.elements.searchSportType.children.some(option => option.value === "FutureSport"
+        && option.textContent === "Future Sport"));
+    assert.equal(harness.elements.searchNext.disabled, false);
     assert.match(descendantText(harness.elements.searchResults), /Local ride/);
-    assert.equal(harness.getUrl().searchParams.get("sort"), "newest");
+    assert.equal(harness.getUrl().searchParams.get("search_sort_by"), "date");
+    assert.equal(harness.getUrl().searchParams.get("search_sort_direction"), "desc");
+    assert.equal(harness.getUrl().searchParams.has("sort"), false);
     assert.equal(harness.getUrl().searchParams.has("start_date"), false);
 
     harness.elements.searchStartDate.value = "2024-01-01";
@@ -171,7 +248,7 @@ async function main() {
     assert.equal(harness.requests.length, 1, "an incomplete date range must not issue a request");
     assert.match(harness.elements.searchValidationMessage.textContent, /both a start date and an end date/);
     assert.match(descendantText(harness.elements.searchResults), /Local ride/, "validation must preserve prior rows");
-    assert.match(harness.elements.searchPageStatus.textContent, /More activities available/);
+    assert.equal(harness.elements.searchPageStatus.textContent, "Showing 1–50 of 126 activities");
     await harness.elements.searchNext.trigger("click");
     await harness.settle();
     assert.equal(harness.requests.at(-1).offset, 50, "Next must use the last valid result snapshot");
@@ -181,7 +258,7 @@ async function main() {
     await harness.settle();
     assert.match(harness.elements.searchStatus.textContent, /temporarily unavailable/);
     assert.match(descendantText(harness.elements.searchResults), /Local ride/, "request errors must preserve prior rows");
-    assert.match(harness.elements.searchPageStatus.textContent, /More activities available/);
+    assert.equal(harness.elements.searchPageStatus.textContent, "Showing 51–100 of 126 activities");
 
     harness.getUrl().searchParams.set("start_date", "2024-01-01");
     harness.getUrl().searchParams.set("end_date", "2024-01-31");
@@ -194,20 +271,20 @@ async function main() {
     assert.equal(harness.getUrl().searchParams.has("sort"), false);
     assert.equal(harness.getUrl().searchParams.get("keep"), "1");
 
-    harness.setResponse(async () => ({ items: [], has_more: false, next_offset: null }));
+    harness.setResponse(async () => ({ items: [], total_count: 0 }));
     harness.elements.searchStartDate.value = "";
     harness.elements.searchEndDate.value = "";
     await harness.elements.searchForm.trigger("submit", { preventDefault() { } });
     await harness.settle();
     assert.match(descendantText(harness.elements.searchResults), /No activities match these filters/);
-    assert.equal(harness.elements.searchPageStatus.textContent, "");
+    assert.equal(harness.elements.searchPageStatus.textContent, "0 activities");
     assert.equal(harness.elements.searchNext.disabled, true);
 
     assert.ok(harness.elements.searchGearId.children.some(option => option.textContent === "Trail Bike"));
     harness.elements.searchGearId.value = "3";
     await harness.elements.searchGearId.trigger("change");
     assert.equal(harness.elements.searchGearId.value, "3", "reading a changed gear selection must not overwrite it");
-    harness.setResponse(async () => ({ items: [], has_more: false, next_offset: null }));
+    harness.setResponse(async () => ({ items: [], total_count: 0 }));
     await harness.elements.searchForm.trigger("submit", { preventDefault() { } });
     await harness.settle();
     assert.equal(harness.requests.at(-1).gear_id, "3");
@@ -221,36 +298,234 @@ async function main() {
     assert.equal(harness.requests.at(-1).offset, 0);
     assert.equal(harness.getUrl().searchParams.has("search_gear_id"), false);
 
-    harness.elements.searchCategory.value = "Run";
-    await harness.elements.searchCategory.trigger("input");
+    harness.elements.searchSportType.value = "MountainBikeRide";
+    await harness.elements.searchSportType.trigger("change");
     await harness.elements.searchForm.trigger("submit", { preventDefault() { } });
     await harness.settle();
-    const categoryChip = harness.elements.searchActiveFilters.children.find(chip => /Category: Run/.test(chip.textContent));
-    assert.ok(categoryChip, "active filters should be removable chips");
-    await categoryChip.trigger("click");
+    const typeChip = harness.elements.searchActiveFilters.children.find(chip => /Activity type: Mountain Bike Ride/.test(chip.textContent));
+    assert.ok(typeChip, "friendly activity type filters should be removable chips");
+    assert.equal(harness.requests.at(-1).sport_type, "MountainBikeRide");
+    await typeChip.trigger("click");
     await harness.settle();
-    assert.equal(harness.requests.at(-1).activity_category, "");
+    assert.equal(harness.requests.at(-1).sport_type, "");
 
     harness.elements.searchText.value = "temporary filter";
     await harness.elements.searchClear.trigger("click");
     await harness.settle();
     assert.equal(harness.requests.at(-1).text, "");
-    assert.equal(harness.requests.at(-1).sort, "newest");
+    assert.equal(harness.requests.at(-1).sort_by, "date");
+    assert.equal(harness.requests.at(-1).sort_direction, "desc");
     assert.equal(harness.requests.at(-1).limit, 50);
     assert.equal(harness.requests.at(-1).offset, 0);
     assert.equal(harness.elements.searchText.value, "");
     assert.equal(harness.elements.searchScope.textContent, "All history");
 
-    const restored = createSearchHarness("http://localhost/?tab=search&text=climb&start_date=2024-02-01&end_date=2024-02-29&sort=oldest&limit=25&offset=25&keep=1");
+    const restored = createSearchHarness("http://localhost/?tab=search&search_text=climb&search_start_date=2024-02-01&search_end_date=2024-02-29&search_sort_by=load&search_sort_direction=asc&search_limit=25&search_offset=25&keep=1");
+    restored.setResponse(async () => ({ items: Array(25).fill({ name: "Climb" }), total_count: 100 }));
     restored.window.SearchController.activate();
     await restored.settle();
     assert.equal(restored.requests[0].text, "climb");
     assert.equal(restored.requests[0].start_date, "2024-02-01");
     assert.equal(restored.requests[0].end_date, "2024-02-29");
-    assert.equal(restored.requests[0].sort, "oldest");
+    assert.equal(restored.requests[0].sort_by, "load");
+    assert.equal(restored.requests[0].sort_direction, "asc");
     assert.equal(restored.requests[0].limit, 25);
     assert.equal(restored.requests[0].offset, 25);
     assert.equal(restored.getUrl().searchParams.get("keep"), "1");
+    assert.equal(restored.getUrl().searchParams.has("text"), false);
+    assert.equal(restored.getUrl().searchParams.get("search_sort_by"), "load");
+
+    const legacySort = createSearchHarness("http://localhost/?tab=search&sort=oldest");
+    legacySort.setResponse(async () => ({ items: [], total_count: 0 }));
+    legacySort.window.SearchController.activate();
+    await legacySort.settle();
+    assert.equal(legacySort.requests[0].sort_by, "date");
+    assert.equal(legacySort.requests[0].sort_direction, "asc");
+    assert.equal(legacySort.getUrl().searchParams.get("search_sort_by"), "date");
+    assert.equal(legacySort.getUrl().searchParams.get("search_sort_direction"), "asc");
+    assert.equal(legacySort.getUrl().searchParams.has("sort"), false);
+
+    const sortableColumns = [
+        ["Date", "date"], ["Start", "start"], ["Activity", "activity"],
+        ["Type", "type"], ["Bike", "bike"],
+        ["Distance", "distance"], ["Elevation", "elevation"],
+        ["Moving", "moving"], ["Elapsed", "elapsed"], ["Load", "load"],
+    ];
+    const sorting = createSearchHarness();
+    sorting.setResponse(async () => ({ items: [], total_count: 0 }));
+    sorting.window.SearchController.activate();
+    await sorting.settle();
+    sorting.elements.searchText.value = "tempo";
+    await sorting.elements.searchText.trigger("input");
+    const headers = descendants(sorting.elements.searchResults).filter(element => element.tagName === "TH");
+    assert.equal(headers.length, 11);
+    assert.equal(headers.some(header => header.textContent === "Category"), false);
+    const actionsHeader = headers.find(header => header.textContent === "Actions");
+    assert.ok(actionsHeader);
+    assert.equal(actionsHeader.className, "search-nonsortable-header");
+    assert.equal(descendants(actionsHeader).some(element => element.tagName === "BUTTON"), false);
+    assert.equal(sortableColumns.length, 10);
+    for (const [label, sortBy] of sortableColumns) {
+        const initialButton = sortButton(sorting.elements.searchResults, label);
+        assert.ok(initialButton, `${label} should be sortable`);
+        assert.match(descendantText(initialButton), /[↓↑]/, `${label} should show a direction arrow`);
+        const firstDirection = sortBy === "date" ? "asc" : "desc";
+        await initialButton.trigger("click");
+        assert.equal(sorting.requests.at(-1).sort_by, sortBy);
+        assert.equal(sorting.requests.at(-1).sort_direction, firstDirection);
+        assert.equal(sorting.requests.at(-1).text, "tempo", "sorting must preserve filters");
+        assert.equal(sorting.getUrl().searchParams.get("search_sort_by"), sortBy);
+        assert.equal(sorting.getUrl().searchParams.get("search_sort_direction"), firstDirection);
+        let activeHeader = descendants(sorting.elements.searchResults).find(element =>
+            element.tagName === "TH" && element.children.some(child =>
+                child.className.includes("search-sort") && child.children.some(labelElement =>
+                    labelElement.className === "search-sort-label" && labelElement.textContent === label)));
+        assert.equal(activeHeader.attributes["aria-sort"], firstDirection === "desc" ? "descending" : "ascending");
+        const secondButton = sortButton(sorting.elements.searchResults, label);
+        await secondButton.trigger("click");
+        const secondDirection = firstDirection === "desc" ? "asc" : "desc";
+        assert.equal(sorting.requests.at(-1).sort_by, sortBy);
+        assert.equal(sorting.requests.at(-1).sort_direction, secondDirection);
+        activeHeader = descendants(sorting.elements.searchResults).find(element =>
+            element.tagName === "TH" && element.children.some(child =>
+                child.className.includes("search-sort") && child.children.some(labelElement =>
+                    labelElement.className === "search-sort-label" && labelElement.textContent === label)));
+        assert.equal(activeHeader.attributes["aria-sort"], secondDirection === "desc" ? "descending" : "ascending");
+    }
+
+    const actions = createSearchHarness();
+    actions.setResponse(async () => ({
+        items: [{
+            activity_id: 12345,
+            name: "Local ride",
+            date_local: "2024-04-03",
+            start_at_local: "2024-04-03T15:20:00",
+            sport_type: "MountainBikeRide",
+        }],
+        total_count: 1,
+    }));
+    actions.window.SearchController.activate();
+    await actions.settle();
+    const actionsButton = descendants(actions.elements.searchResults)
+        .find(element => element.className.includes("search-actions-toggle"));
+    assert.ok(actionsButton);
+    await actionsButton.trigger("click");
+    assert.equal(actionsButton.attributes["aria-expanded"], "true");
+    assert.equal(actionsButton.attributes["aria-controls"], "search-actions-menu");
+    let menu = actions.body.children.find(element => element.attributes.role === "menu");
+    assert.ok(menu, "Actions menu should be portalled outside the scrollable results table");
+    const editLink = menu.children.find(element => element.tagName === "A");
+    assert.equal(editLink.href, "https://www.strava.com/activities/12345/edit");
+    assert.equal(editLink.target, "_blank");
+    assert.equal(editLink.rel, "noopener noreferrer");
+    assert.deepEqual(menu.children.map(element => element.textContent), [
+        "Edit in Strava", "Resync activity", "Open Daily",
+    ]);
+    actions.document.activeElement = menu.children[0];
+    let preventedArrow = false;
+    await menu.trigger("keydown", { key: "ArrowDown", preventDefault() { preventedArrow = true; } });
+    assert.equal(preventedArrow, true);
+    assert.equal(menu.children[1].focused, true);
+    await actions.document.trigger("click", { target: new FakeElement("div") });
+    assert.equal(actions.body.children.length, 0, "outside clicks should close the menu");
+    assert.equal(actionsButton.attributes["aria-expanded"], "false");
+
+    await actionsButton.trigger("click");
+    menu = actions.body.children[0];
+    await actions.document.trigger("keydown", { key: "Escape", preventDefault() { this.prevented = true; } });
+    assert.equal(actions.body.children.length, 0, "Escape should close the menu");
+    assert.equal(actionsButton.focused, true, "Escape should return focus to the menu button");
+
+    await actionsButton.trigger("click");
+    menu = actions.body.children[0];
+    await menu.children.find(element => element.textContent === "Open Daily").trigger("click");
+    assert.equal(actions.window.AppState.dailyExactDate, "2024-04-03");
+    assert.equal(actions.getUrl().searchParams.get("date"), "2024-04-03");
+    actions.window.AppState.activeTab = "search";
+
+    await actionsButton.trigger("click");
+    menu = actions.body.children[0];
+    await menu.children.find(element => element.textContent === "Resync activity").trigger("click");
+    await actions.settle();
+    assert.deepEqual(actions.confirmations, ["Queue a refresh for activity 12345 from Strava?"]);
+    assert.deepEqual(actions.resyncCalls, ["12345"], "one row action should enqueue exactly one activity");
+    assert.deepEqual(actions.statusCalls, [9001]);
+    assert.equal(actions.requests.length, 2, "successful refresh should rerun the current Search query");
+    assert.equal(actions.requests[1].sport_type, "");
+    assert.equal(actions.elements.searchStatus.textContent, "Activity refreshed from Strava.");
+    assert.equal(actions.elements.searchStatus.dataset.state, "success");
+    assert.equal(actions.body.children.length, 0, "the menu should close before queueing and polling");
+
+    const unknownType = createSearchHarness("http://localhost/?tab=search&search_sport_type=UnmappedActivityType&search_activity_category=run&activity_category=run");
+    unknownType.window.SearchController.activate();
+    await unknownType.settle();
+    assert.equal(unknownType.elements.searchSportType.value, "UnmappedActivityType");
+    assert.ok(unknownType.elements.searchSportType.children.some(option => option.value === "UnmappedActivityType"));
+    assert.equal(unknownType.requests[0].sport_type, "UnmappedActivityType");
+    assert.equal(unknownType.requests[0].activity_category, undefined);
+    assert.equal(unknownType.getUrl().searchParams.has("search_activity_category"), false);
+    assert.equal(unknownType.getUrl().searchParams.has("activity_category"), false);
+
+    const unsafeActivity = createSearchHarness();
+    unsafeActivity.setResponse(async () => ({
+        items: [{ activity_id: "12/34", name: "Unsafe id", date_local: "2024-04-03" }],
+        total_count: 1,
+    }));
+    unsafeActivity.window.SearchController.activate();
+    await unsafeActivity.settle();
+    const unsafeButton = descendants(unsafeActivity.elements.searchResults)
+        .find(element => element.className.includes("search-actions-toggle"));
+    await unsafeButton.trigger("click");
+    const unsafeMenu = unsafeActivity.body.children[0];
+    assert.equal(unsafeMenu.children.some(element => element.tagName === "A"), false);
+    assert.equal(unsafeMenu.children[0].textContent, "Edit in Strava");
+    assert.equal(unsafeMenu.children[0].disabled, true);
+    assert.equal(unsafeMenu.children.find(element => element.textContent === "Resync activity").disabled, true);
+
+    const pagination = createSearchHarness();
+    pagination.setResponse(async query => ({
+        items: Array.from({ length: query.offset === 100 ? 26 : 50 }, (_, index) => ({ name: `Activity ${query.offset + index + 1}` })),
+        total_count: 126,
+    }));
+    pagination.window.SearchController.activate();
+    await pagination.settle();
+    assert.equal(pagination.elements.searchPageStatus.textContent, "Showing 1–50 of 126 activities");
+    await pagination.elements.searchNext.trigger("click");
+    await pagination.settle();
+    assert.equal(pagination.requests.at(-1).offset, 50);
+    assert.equal(pagination.elements.searchPageStatus.textContent, "Showing 51–100 of 126 activities");
+    await pagination.elements.searchNext.trigger("click");
+    await pagination.settle();
+    assert.equal(pagination.requests.at(-1).offset, 100);
+    assert.equal(pagination.elements.searchPageStatus.textContent, "Showing 101–126 of 126 activities");
+    assert.equal(pagination.elements.searchNext.disabled, true);
+    await pagination.elements.searchPrevious.trigger("click");
+    await pagination.settle();
+    assert.equal(pagination.requests.at(-1).offset, 50);
+
+    const singleResult = createSearchHarness();
+    singleResult.setResponse(async () => ({ items: [{ name: "Solo" }], total_count: 1 }));
+    singleResult.window.SearchController.activate();
+    await singleResult.settle();
+    assert.equal(singleResult.elements.searchPageStatus.textContent, "Showing 1 of 1 activity");
+    assert.equal(singleResult.elements.searchNext.disabled, true);
+
+    const staleOffset = createSearchHarness("http://localhost/?tab=search&search_offset=250");
+    staleOffset.setResponse(async query => query.offset === 250
+        ? { items: [], total_count: 75 }
+        : { items: Array(50).fill({ name: "Recovered" }), total_count: 75 });
+    staleOffset.window.SearchController.activate();
+    await staleOffset.settle();
+    assert.deepEqual(staleOffset.requests.map(query => query.offset), [250, 0]);
+    assert.equal(staleOffset.getUrl().searchParams.get("search_offset"), "0");
+    assert.equal(staleOffset.elements.searchPageStatus.textContent, "Showing 1–50 of 75 activities");
+
+    const staleEmptyOffset = createSearchHarness("http://localhost/?tab=search&search_offset=250");
+    staleEmptyOffset.setResponse(async () => ({ items: [], total_count: 0 }));
+    staleEmptyOffset.window.SearchController.activate();
+    await staleEmptyOffset.settle();
+    assert.deepEqual(staleEmptyOffset.requests.map(query => query.offset), [250, 0]);
+    assert.equal(staleEmptyOffset.elements.searchPageStatus.textContent, "0 activities");
 
     const restoredGear = createSearchHarness("http://localhost/?tab=search&search_gear_id=3");
     restoredGear.window.SearchController.activate();
@@ -291,8 +566,10 @@ async function main() {
 
     global.window = {};
     let requestedUrl = "";
-    global.fetch = async url => {
+    let requestedOptions = {};
+    global.fetch = async (url, options = {}) => {
         requestedUrl = String(url);
+        requestedOptions = options;
         return { ok: true, json: async () => ({ items: [] }) };
     };
     require("../static/api.js");
@@ -300,7 +577,8 @@ async function main() {
         text: "Floyd Hill",
         start_date: "2024-01-01",
         end_date: "2024-12-31",
-        sort: "highest_elevation",
+        sort_by: "elevation",
+        sort_direction: "desc",
         limit: 50,
         offset: 0,
         gear_id: "",
@@ -309,10 +587,22 @@ async function main() {
     assert.equal(params.get("text"), "Floyd Hill");
     assert.equal(params.get("start_date"), "2024-01-01");
     assert.equal(params.get("end_date"), "2024-12-31");
-    assert.equal(params.get("sort"), "highest_elevation");
+    assert.equal(params.get("sort_by"), "elevation");
+    assert.equal(params.get("sort_direction"), "desc");
+    assert.equal(params.has("sort"), false);
     assert.equal(params.get("limit"), "50");
     assert.equal(params.get("offset"), "0");
     assert.equal(params.has("gear_id"), false);
+
+    await global.window.api.fetchActivitySearchTypes();
+    assert.equal(requestedUrl, "/api/activities/search/types");
+
+    await global.window.api.resyncActivity("12345");
+    assert.equal(requestedUrl, "/api/sync/activities/12345/resync");
+    assert.equal(requestedOptions.method, "POST");
+
+    await global.window.api.fetchSyncRequestStatus(9001);
+    assert.equal(requestedUrl, "/api/sync-requests/9001");
 
     await global.window.api.fetchDaily(60, "", "2012-07-15");
     assert.match(requestedUrl, /^\/api\/daily\?/);

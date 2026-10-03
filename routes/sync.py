@@ -24,6 +24,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 MAX_DAY_RESYNC_ACTIVITIES = 25
+MAX_ACTIVITY_ID = 9_223_372_036_854_775_807
 
 
 def _parse_local_date(date_text):
@@ -344,6 +345,7 @@ def preview_day_resync(date_text: str):
 
 @router.post("/api/sync/dates/{date_text}/resync")
 def create_day_resync(date_text: str):
+    """Queue or reuse one activity_resync request for each activity on a day."""
     try:
         _parse_local_date(date_text)
         with db_conn() as conn:
@@ -373,6 +375,58 @@ def create_day_resync(date_text: str):
         "enqueued_count": len(activity_ids) - already_active_count,
         "already_active_count": already_active_count,
         "request_ids": request_ids,
+    })
+
+
+@router.post("/api/sync/activities/{activity_id}/resync")
+def create_activity_resync(activity_id: str):
+    """Queue or reuse exactly one verified activity_resync request for Search."""
+    if not activity_id.isascii() or not activity_id.isdigit() or len(activity_id) > 19:
+        return JSONResponse({"detail": "Invalid activity id."}, status_code=400)
+
+    normalized_id = int(activity_id)
+    if normalized_id <= 0 or normalized_id > MAX_ACTIVITY_ID:
+        return JSONResponse({"detail": "Invalid activity id."}, status_code=400)
+    try:
+        with db_conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT activity_id
+                    FROM public.strava_activities
+                    WHERE activity_id = %s
+                    LIMIT 1
+                    """,
+                    (normalized_id,),
+                )
+                if not cur.fetchone():
+                    return JSONResponse({"detail": "Activity not found."}, status_code=404)
+
+                request_id, already_active = _enqueue_activity_resync(cur, normalized_id)
+                cur.execute(
+                    """
+                    SELECT status
+                    FROM public.sync_request
+                    WHERE id = %s
+                      AND request_type = 'activity_resync'
+                    LIMIT 1
+                    """,
+                    (request_id,),
+                )
+                request = cur.fetchone()
+                if not request:
+                    raise RuntimeError("Unable to read queued activity resync status")
+                status = str(request["status"])
+                conn.commit()
+    except Exception:
+        logger.exception("Failed to enqueue activity resync")
+        return JSONResponse({"detail": "Activity resync could not be queued."}, status_code=503)
+
+    return JSONResponse({
+        "activity_id": normalized_id,
+        "request_id": request_id,
+        "status": status,
+        "already_active": already_active,
     })
 
 

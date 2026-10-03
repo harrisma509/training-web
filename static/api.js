@@ -135,6 +135,10 @@
       return fetchJson(`/api/activities/search?${params.toString()}`);
     },
 
+    async fetchActivitySearchTypes() {
+      return fetchJson("/api/activities/search/types");
+    },
+
     async fetchActivityNarrative(activityId) {
       return fetchJson(`/api/activities/${encodeURIComponent(activityId)}/narrative`);
     },
@@ -437,6 +441,12 @@
 
     async resyncDay(dateText) {
       return fetchJson(`/api/sync/dates/${encodeURIComponent(dateText)}/resync`, {
+        method: "POST",
+      });
+    },
+
+    async resyncActivity(activityId) {
+      return fetchJson(`/api/sync/activities/${encodeURIComponent(activityId)}/resync`, {
         method: "POST",
       });
     },

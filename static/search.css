@@ -136,6 +136,10 @@
     color: var(--red);
 }
 
+.search-status[data-state="success"] {
+    color: var(--green);
+}
+
 .search-status[data-state="loading"] {
     color: var(--blue);
 }
@@ -166,9 +170,13 @@
 }
 
 .search-sort {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
     min-height: 28px;
     padding: 2px 4px;
     border: 0;
+    border-radius: 3px;
     background: transparent;
     color: inherit;
     font: inherit;
@@ -177,10 +185,84 @@
     cursor: pointer;
 }
 
-.search-sort:hover,
-.search-sort:focus-visible {
+.search-sort-indicator {
+    color: var(--muted);
+    font-size: 10px;
+    line-height: 1;
+}
+
+.search-sort.active {
+    color: var(--text);
+    background: rgba(96, 165, 250, 0.1);
+}
+
+.search-sort.active .search-sort-indicator {
     color: var(--blue);
-    outline: none;
+    font-size: 11px;
+    font-weight: 800;
+}
+
+.search-sortable-header:hover .search-sort {
+    background: rgba(96, 165, 250, 0.08);
+}
+
+.search-sort:focus-visible {
+    outline: 2px solid var(--blue);
+    outline-offset: 1px;
+}
+
+.search-nonsortable-header {
+    color: var(--muted);
+    cursor: default;
+}
+
+.search-actions-cell {
+    display: flex;
+    min-width: 82px;
+}
+
+.search-actions-toggle {
+    white-space: nowrap;
+}
+
+.search-actions-menu {
+    position: fixed;
+    z-index: 1200;
+    display: grid;
+    min-width: 182px;
+    padding: 4px;
+    border: 1px solid var(--line);
+    border-radius: 5px;
+    background: var(--panel);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+}
+
+.search-actions-menu a,
+.search-actions-menu button {
+    display: block;
+    width: 100%;
+    padding: 8px 10px;
+    border: 0;
+    border-radius: 3px;
+    background: transparent;
+    color: var(--text);
+    font: inherit;
+    text-align: left;
+    text-decoration: none;
+    cursor: pointer;
+}
+
+.search-actions-menu a:hover,
+.search-actions-menu button:hover:not(:disabled),
+.search-actions-menu a:focus-visible,
+.search-actions-menu button:focus-visible {
+    outline: 0;
+    background: rgba(96, 165, 250, 0.14);
+}
+
+.search-actions-menu button:disabled {
+    color: var(--muted);
+    cursor: not-allowed;
 }
 
 .search-empty {
