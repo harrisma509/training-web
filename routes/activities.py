@@ -1,9 +1,8 @@
 """Bounded browser-facing activity search routes."""
 
 import math
-from datetime import date, datetime, time
+from datetime import date, time
 from enum import Enum
-from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import JSONResponse
@@ -73,15 +72,6 @@ SELECT_SQL = """
         ON d.date = a.date_local
         AND d.main_ride_id = a.activity_id
 """
-
-
-def _default_date_range():
-    current_date = datetime.now(ZoneInfo("America/Denver")).date()
-    try:
-        start_date = current_date.replace(year=current_date.year - 1)
-    except ValueError:
-        start_date = current_date.replace(year=current_date.year - 1, day=28)
-    return start_date, current_date
 
 
 def _clean_filter_values(values, field_name, *, lowercase=False, allowed=None):
@@ -155,11 +145,7 @@ def search_activities(
 ):
     if (start_date is None) != (end_date is None):
         raise HTTPException(status_code=422, detail="start_date and end_date must be supplied together.")
-    if start_date is None:
-        applied_start_date, applied_end_date = _default_date_range()
-    else:
-        applied_start_date, applied_end_date = start_date, end_date
-    if applied_start_date > applied_end_date:
+    if start_date is not None and start_date > end_date:
         raise HTTPException(status_code=422, detail="start_date must be on or before end_date.")
 
     trimmed_text = (text or "").strip()
@@ -194,8 +180,12 @@ def search_activities(
     if start_time_from is not None and start_time_to is not None and start_time_from > start_time_to:
         raise HTTPException(status_code=422, detail="Overnight time ranges are not supported.")
 
-    conditions = ["a.date_local >= %s", "a.date_local <= %s"]
-    parameters = [applied_start_date, applied_end_date]
+    conditions = []
+    parameters = []
+
+    if start_date is not None and end_date is not None:
+        conditions.extend(("a.date_local >= %s", "a.date_local <= %s"))
+        parameters.extend((start_date, end_date))
 
     if trimmed_text:
         conditions.append("lower(a.\"name\") LIKE lower(%s) ESCAPE '\\'")
@@ -230,12 +220,11 @@ def search_activities(
         conditions.append("a.start_at_local IS NOT NULL AND a.start_at_local::time <= %s")
         parameters.append(start_time_to)
 
-    sql = (
-        SELECT_SQL
-        + "\n    WHERE " + "\n      AND ".join(conditions)
-        + "\n    ORDER BY " + SORT_SQL[sort]
-        + "\n    LIMIT %s OFFSET %s"
-    )
+    sql = SELECT_SQL
+    if conditions:
+        sql += "\n    WHERE " + "\n      AND ".join(conditions)
+    sql += "\n    ORDER BY " + SORT_SQL[sort]
+    sql += "\n    LIMIT %s OFFSET %s"
     parameters.extend((limit + 1, offset))
 
     try:
@@ -261,6 +250,6 @@ def search_activities(
         "has_more": has_more,
         "next_offset": offset + returned_count if has_more else None,
         "applied_sort": sort.value,
-        "applied_start_date": applied_start_date.isoformat(),
-        "applied_end_date": applied_end_date.isoformat(),
+        "applied_start_date": start_date.isoformat() if start_date else None,
+        "applied_end_date": end_date.isoformat() if end_date else None,
     })

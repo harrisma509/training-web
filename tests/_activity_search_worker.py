@@ -10,7 +10,7 @@ from urllib.parse import urlencode
 from unittest.mock import patch
 
 from fastapi import FastAPI
-from routes.activities import ActivitySort, _default_date_range, router as activities_router
+from routes.activities import ActivitySort, router as activities_router
 
 
 app = FastAPI()
@@ -121,7 +121,7 @@ class ActivitySearchRouteTests(unittest.TestCase):
             result = asgi_get(params=params, headers=headers)
         return result, db_mock
 
-    def test_route_is_registered_and_default_search_requires_no_new_auth(self):
+    def test_route_is_registered_and_default_search_means_all_history(self):
         route = next(route for route in app.routes if getattr(route, "path", None) == "/api/activities/search")
         self.assertIn("GET", route.methods)
         registration = subprocess.run(
@@ -135,12 +135,11 @@ class ActivitySearchRouteTests(unittest.TestCase):
             text=True,
         )
         self.assertEqual(registration.returncode, 0, registration.stderr)
-        with patch("routes.activities._default_date_range", return_value=(date(2025, 10, 2), date(2026, 10, 2))):
-            (status, payload), _ = self.response(rows=[activity_row()])
+        (status, payload), _ = self.response(rows=[activity_row()])
 
         self.assertEqual(status, 200)
-        self.assertEqual(payload["applied_start_date"], "2025-10-02")
-        self.assertEqual(payload["applied_end_date"], "2026-10-02")
+        self.assertIsNone(payload["applied_start_date"])
+        self.assertIsNone(payload["applied_end_date"])
         self.assertEqual(payload["limit"], 50)
         self.assertEqual(payload["offset"], 0)
         self.assertEqual(payload["items"][0]["start_at_local"], "2026-09-24T07:30:00")
@@ -148,33 +147,9 @@ class ActivitySearchRouteTests(unittest.TestCase):
         self.assertEqual(payload["items"][0]["distance_mi"], 12.5)
         self.assertEqual(payload["items"][0]["gear_name"], "Trail Bike")
         self.assertEqual(payload["items"][0]["activity_load"], 85)
-        self.assertEqual(self.connection.cursor_value.params[:2], (date(2025, 10, 2), date(2026, 10, 2)))
+        self.assertNotIn("a.date_local >= %s", self.connection.cursor_value.sql)
+        self.assertNotIn("a.date_local <= %s", self.connection.cursor_value.sql)
         self.assertEqual(self.connection.cursor_value.params[-2:], (51, 0))
-
-    def test_default_date_range_uses_local_date_and_handles_leap_day(self):
-        class FrozenDateTime(datetime):
-            current_utc = None
-
-            @classmethod
-            def now(cls, tz=None):
-                return cls.current_utc.astimezone(tz)
-
-        for current_utc, expected_start, expected_end in (
-            (
-                datetime(2026, 10, 2, 1, tzinfo=timezone.utc),
-                date(2025, 10, 1),
-                date(2026, 10, 1),
-            ),
-            (
-                datetime(2024, 2, 29, 18, tzinfo=timezone.utc),
-                date(2023, 2, 28),
-                date(2024, 2, 29),
-            ),
-        ):
-            with self.subTest(current_utc=current_utc):
-                FrozenDateTime.current_utc = current_utc
-                with patch("routes.activities.datetime", FrozenDateTime):
-                    self.assertEqual(_default_date_range(), (expected_start, expected_end))
 
     def test_explicit_date_range_is_inclusive_and_single_or_reversed_bounds_fail(self):
         (status, payload), database = self.response(
@@ -243,7 +218,7 @@ class ActivitySearchRouteTests(unittest.TestCase):
         self.assertIn("a.activity_category IN (%s, %s)", sql)
         self.assertIn("a.gear_id IN (%s, %s)", sql)
         self.assertEqual(
-            self.connection.cursor_value.params[2:8],
+            self.connection.cursor_value.params[:6],
             ("mountainbikeride", "run", "ride", "walk", "bike-1", "bike-2"),
         )
 
@@ -273,7 +248,7 @@ class ActivitySearchRouteTests(unittest.TestCase):
         self.assertIn("a.elevation_ft <= %s", sql)
         self.assertIn("a.moving_sec >= %s", sql)
         self.assertIn("a.moving_sec <= %s", sql)
-        self.assertEqual(self.connection.cursor_value.params[2:8], (1.5, 20.0, 10.0, 5000.0, 60, 7200))
+        self.assertEqual(self.connection.cursor_value.params[:6], (1.5, 20.0, 10.0, 5000.0, 60, 7200))
 
         for params in (
             {"min_distance_mi": "-1"},

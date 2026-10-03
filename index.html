@@ -8,6 +8,7 @@
   <link rel="icon" href="/static/favicon.ico" type="image/x-icon">
   <link rel="shortcut icon" href="/static/favicon.ico" type="image/x-icon">
   <link rel="stylesheet" href="/static/style.css?v=20260915-components-service-form-v1">
+  <link rel="stylesheet" href="/static/search.css?v=20261002-all-history-url-v1">
   <link rel="stylesheet" href="/static/components.css?v=20260916-components-css-v11">
   <link rel="stylesheet" href="/static/plan.css">
   <link rel="stylesheet" href="/static/goals.css">
@@ -819,9 +820,9 @@
     </section>
 
     <section id="searchPane" class="hidden" aria-label="Activity Search">
-      <form id="searchForm" class="activity-search-form">
-        <div class="activity-search-primary">
-          <label class="activity-search-query">
+      <form id="searchForm" class="search-form">
+        <div class="search-primary">
+          <label class="search-query">
             <span>Activity</span>
             <input id="searchText" type="search" maxlength="200" autocomplete="off">
           </label>
@@ -830,9 +831,11 @@
           <button type="submit">Search</button>
           <button id="searchClear" type="button" class="button-secondary">Reset</button>
         </div>
-        <details class="activity-search-filters">
+        <div id="searchValidationMessage" class="search-validation-message" role="alert" aria-live="polite"></div>
+        <details class="search-filters">
           <summary>More filters</summary>
-          <div class="activity-search-filter-grid">
+          <label class="search-keep-open"><input id="searchKeepFiltersOpen" type="checkbox"> Keep filters open</label>
+          <div class="search-filter-grid">
             <label><span>Sport type</span><input id="searchSportType" type="text" maxlength="100"
                 placeholder="e.g. Ride"></label>
             <label><span>Category</span>
@@ -848,7 +851,11 @@
                 <option value="other">Other</option>
               </select>
             </label>
-            <label><span>Gear ID</span><input id="searchGearId" type="text" maxlength="100"></label>
+            <label><span>Bike / gear</span>
+              <select id="searchGearId">
+                <option value="">Any bike / gear</option>
+              </select>
+            </label>
             <label><span>Distance min (mi)</span><input id="searchMinDistance" type="number" min="0" step="0.1"></label>
             <label><span>Distance max (mi)</span><input id="searchMaxDistance" type="number" min="0" step="0.1"></label>
             <label><span>Elevation min (ft)</span><input id="searchMinElevation" type="number" min="0" step="1"></label>
@@ -862,9 +869,13 @@
           </div>
         </details>
       </form>
-      <div class="activity-search-toolbar">
-        <div id="searchStatus" class="activity-search-status" role="status" aria-live="polite"></div>
-        <div class="activity-search-page-controls">
+      <div class="search-toolbar">
+        <div class="search-result-context">
+          <span id="searchScope" class="search-scope">All history</span>
+          <div id="searchActiveFilters" class="search-active-filters" aria-label="Active filters"></div>
+          <div id="searchStatus" class="search-status" role="status" aria-live="polite"></div>
+        </div>
+        <div class="search-page-controls">
           <label for="searchSort">Order</label>
           <select id="searchSort">
             <option value="newest">Newest</option>
@@ -885,8 +896,8 @@
           <button id="searchNext" type="button" class="button-secondary" disabled>Next</button>
         </div>
       </div>
-      <div class="table-wrap activity-search-table-wrap">
-        <table id="searchResults" class="activity-search-table"></table>
+      <div class="table-wrap search-table-wrap">
+        <table id="searchResults" class="search-table"></table>
       </div>
     </section>
 

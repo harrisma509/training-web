@@ -41,6 +41,21 @@ if (typeof module !== "undefined" && module.exports) {
         "start_time_from",
         "start_time_to",
     ];
+    const SEARCH_URL_KEYS = [...FILTER_KEYS, "search_gear_id", "sort", "limit", "offset"];
+    const FILTER_LABELS = {
+        text: "Activity",
+        sport_type: "Sport",
+        activity_category: "Category",
+        gear_id: "Bike",
+        min_distance_mi: "Distance min",
+        max_distance_mi: "Distance max",
+        min_elevation_ft: "Elevation min",
+        max_elevation_ft: "Elevation max",
+        min_duration_sec: "Moving time min",
+        max_duration_sec: "Moving time max",
+        start_time_from: "Start time from",
+        start_time_to: "Start time to",
+    };
     const RESULT_COLUMNS = [
         { label: "Date", key: "date_local", sort: "date" },
         { label: "Start", key: "start_at_local", sort: "start_time" },
@@ -61,10 +76,10 @@ if (typeof module !== "undefined" && module.exports) {
         sort: "newest",
         limit: 50,
         offset: 0,
-        nextOffset: null,
-        hasMore: false,
         requestId: 0,
-        activated: false,
+        initialized: false,
+        resultState: "initial",
+        lastResult: null,
     };
 
     function field(id) {
@@ -117,7 +132,8 @@ if (typeof module !== "undefined" && module.exports) {
     function readFromUrl() {
         const params = new URLSearchParams(window.location.search);
         FILTER_KEYS.forEach(key => {
-            state.filters[key] = params.get(key) || "";
+            const urlKey = key === "gear_id" && params.has("search_gear_id") ? "search_gear_id" : key;
+            state.filters[key] = params.get(urlKey) || "";
         });
         const sort = params.get("sort") || "newest";
         state.sort = SORTS.has(sort) ? sort : "newest";
@@ -125,24 +141,63 @@ if (typeof module !== "undefined" && module.exports) {
         state.limit = [25, 50, 100].includes(limit) ? limit : 50;
         const offset = Number(params.get("offset"));
         state.offset = Number.isInteger(offset) && offset >= 0 ? offset : 0;
-        state.nextOffset = null;
-        state.hasMore = false;
     }
 
-    function syncUrl() {
+    function removeSearchParameters(url) {
+        SEARCH_URL_KEYS.forEach(key => url.searchParams.delete(key));
+        return url;
+    }
+
+    function syncUrl(query = {}) {
         const url = new URL(window.location.href);
         url.searchParams.set("tab", "search");
         url.searchParams.delete("date");
+        removeSearchParameters(url);
+        const filters = query.filters || state.filters;
         FILTER_KEYS.forEach(key => {
-            const value = String(state.filters[key] || "").trim();
-            if (value) url.searchParams.set(key, value);
-            else url.searchParams.delete(key);
+            const value = String(filters[key] || "").trim();
+            if (value) url.searchParams.set(key === "gear_id" ? "search_gear_id" : key, value);
         });
-        url.searchParams.set("sort", state.sort);
-        url.searchParams.set("limit", String(state.limit));
-        if (state.offset > 0) url.searchParams.set("offset", String(state.offset));
-        else url.searchParams.delete("offset");
+        url.searchParams.set("sort", query.sort || state.sort);
+        url.searchParams.set("limit", String(query.limit || state.limit));
+        const offset = Number.isInteger(query.offset) ? query.offset : state.offset;
+        if (offset > 0) url.searchParams.set("offset", String(offset));
         window.history.replaceState({}, "", url);
+    }
+
+    function populateGearOptions() {
+        const select = field("searchGearId");
+        if (!select) return;
+        const selectedGearId = state.filters.gear_id;
+        select.replaceChildren();
+        const anyGear = document.createElement("option");
+        anyGear.value = "";
+        anyGear.textContent = "Any bike / gear";
+        select.appendChild(anyGear);
+        const rows = Array.isArray(window.AppState?.gearRows) ? window.AppState.gearRows : [];
+        rows
+            .filter(row => row && row.gear_id != null && String(row.gear_id).trim())
+            .slice()
+            .sort((left, right) => String(left.gear_name || "").localeCompare(String(right.gear_name || "")))
+            .forEach(row => {
+                const option = document.createElement("option");
+                option.value = String(row.gear_id);
+                option.textContent = String(row.gear_name || "").trim() || String(row.gear_id);
+                select.appendChild(option);
+            });
+        if (selectedGearId && !rows.some(row => String(row?.gear_id || "") === selectedGearId)) {
+            const option = document.createElement("option");
+            option.value = selectedGearId;
+            option.textContent = selectedGearId;
+            select.appendChild(option);
+        }
+        select.value = selectedGearId;
+    }
+
+    function gearDisplayName(gearId) {
+        const rows = Array.isArray(window.AppState?.gearRows) ? window.AppState.gearRows : [];
+        const gear = rows.find(row => String(row?.gear_id ?? "") === String(gearId));
+        return String(gear?.gear_name || "").trim() || String(gearId);
     }
 
     function syncInputs() {
@@ -162,16 +217,13 @@ if (typeof module !== "undefined" && module.exports) {
             start_time_from: "searchStartTimeFrom",
             start_time_to: "searchStartTimeTo",
         };
+        populateGearOptions();
         Object.entries(ids).forEach(([key, id]) => {
             const input = field(id);
             if (input) input.value = state.filters[key];
         });
         if (field("searchSort")) field("searchSort").value = state.sort;
         if (field("searchLimit")) field("searchLimit").value = String(state.limit);
-        const filters = document.querySelector(".activity-search-filters");
-        if (filters) {
-            filters.open = FILTER_KEYS.slice(3).some(key => Boolean(state.filters[key]));
-        }
     }
 
     function collectInputs() {
@@ -197,7 +249,12 @@ if (typeof module !== "undefined" && module.exports) {
         state.sort = SORTS.has(field("searchSort")?.value) ? field("searchSort").value : "newest";
         const limit = Number(field("searchLimit")?.value);
         state.limit = [25, 50, 100].includes(limit) ? limit : 50;
-        state.offset = 0;
+        return {
+            filters: { ...state.filters },
+            sort: state.sort,
+            limit: state.limit,
+            offset: 0,
+        };
     }
 
     function setStatus(message, kind = "") {
@@ -207,27 +264,86 @@ if (typeof module !== "undefined" && module.exports) {
         status.dataset.state = kind;
     }
 
+    function setValidationMessage(message = "") {
+        const validation = field("searchValidationMessage");
+        if (validation) validation.textContent = message;
+    }
+
+    function renderScope(filters = state.filters) {
+        const scope = field("searchScope");
+        if (!scope) return;
+        scope.textContent = Boolean(filters.start_date) !== Boolean(filters.end_date)
+            ? "Date range incomplete"
+            : filters.start_date && filters.end_date
+                ? `${filters.start_date} – ${filters.end_date}`
+                : "All history";
+    }
+
+    function renderActiveFilters(filters = state.filters) {
+        const container = field("searchActiveFilters");
+        if (!container) return;
+        container.replaceChildren();
+        const active = [];
+        if (filters.start_date && filters.end_date) {
+            active.push({ key: "date_range", label: `${filters.start_date} – ${filters.end_date}` });
+        }
+        FILTER_KEYS.forEach(key => {
+            if (key === "start_date" || key === "end_date" || !filters[key]) return;
+            let value = filters[key];
+            if (key === "activity_category") value = value[0].toUpperCase() + value.slice(1);
+            if (key === "gear_id") value = gearDisplayName(value);
+            active.push({ key, label: `${FILTER_LABELS[key]}: ${value}` });
+        });
+        active.forEach(({ key, label }) => {
+            const chip = document.createElement("button");
+            chip.type = "button";
+            chip.className = "search-chip";
+            chip.textContent = `${label} ×`;
+            chip.setAttribute("aria-label", `Remove ${label} filter`);
+            chip.addEventListener("click", () => {
+                if (key === "date_range") {
+                    state.filters.start_date = "";
+                    state.filters.end_date = "";
+                } else {
+                    state.filters[key] = "";
+                }
+                const query = {
+                    filters: { ...state.filters },
+                    sort: state.sort,
+                    limit: state.limit,
+                    offset: 0,
+                };
+                syncInputs();
+                syncUrl(query);
+                loadResults(query);
+            });
+            container.appendChild(chip);
+        });
+        renderScope(filters);
+    }
+
     function makeSortButton(column) {
         const button = document.createElement("button");
         button.type = "button";
-        button.className = "activity-search-sort";
+        button.className = "search-sort";
         button.textContent = column.label;
         button.setAttribute("aria-label", `Sort by ${column.label}`);
         button.addEventListener("click", () => {
+            const query = collectInputs();
             if (column.sort === "date") {
-                state.sort = state.sort === "newest" ? "oldest" : "newest";
+                query.sort = query.sort === "newest" ? "oldest" : "newest";
             } else {
-                state.sort = column.sort;
+                query.sort = column.sort;
             }
-            state.offset = 0;
-            if (field("searchSort")) field("searchSort").value = state.sort;
-            syncUrl();
-            loadResults();
+            state.sort = query.sort;
+            if (field("searchSort")) field("searchSort").value = query.sort;
+            syncUrl(query);
+            loadResults(query);
         });
         return button;
     }
 
-    function renderRows(items) {
+    function renderRows(items, mode = "results") {
         const table = field("searchResults");
         if (!table) return;
         table.replaceChildren();
@@ -252,6 +368,19 @@ if (typeof module !== "undefined" && module.exports) {
         table.appendChild(head);
 
         const body = document.createElement("tbody");
+        if (mode !== "results" || !items.length) {
+            const row = document.createElement("tr");
+            const cell = document.createElement("td");
+            cell.colSpan = RESULT_COLUMNS.length;
+            cell.className = "search-empty";
+            cell.textContent = mode === "empty"
+                ? "No activities match these filters."
+                : "Run a search to see activities.";
+            row.appendChild(cell);
+            body.appendChild(row);
+            table.appendChild(body);
+            return;
+        }
         items.forEach(row => {
             const tr = document.createElement("tr");
             RESULT_COLUMNS.forEach(column => {
@@ -280,98 +409,131 @@ if (typeof module !== "undefined" && module.exports) {
             });
             body.appendChild(tr);
         });
-        if (!items.length) {
-            const row = document.createElement("tr");
-            const cell = document.createElement("td");
-            cell.colSpan = RESULT_COLUMNS.length;
-            cell.className = "activity-search-empty";
-            cell.textContent = "No activities match these filters.";
-            row.appendChild(cell);
-            body.appendChild(row);
-        }
         table.appendChild(body);
     }
 
-    function updatePagination(returnedCount) {
-        const first = returnedCount ? state.offset + 1 : 0;
-        const last = state.offset + returnedCount;
-        const moreText = state.hasMore ? "; more results available" : "";
+    function updatePagination(result = state.lastResult) {
         const pageStatus = field("searchPageStatus");
-        if (pageStatus) pageStatus.textContent = `Showing ${first}–${last}${moreText}`;
         const previous = field("searchPrevious");
         const next = field("searchNext");
-        if (previous) previous.disabled = state.offset === 0;
-        if (next) next.disabled = !state.hasMore || state.nextOffset === null;
-    }
-
-    async function loadResults() {
-        const dateStart = state.filters.start_date;
-        const dateEnd = state.filters.end_date;
-        if (Boolean(dateStart) !== Boolean(dateEnd)) {
-            setStatus("Choose both a start date and an end date, or leave both blank.", "error");
-            renderRows([]);
-            updatePagination(0);
+        if (!result || !result.items.length) {
+            if (pageStatus) pageStatus.textContent = "";
+            if (previous) previous.disabled = true;
+            if (next) next.disabled = true;
             return;
         }
+        const { offset, items, has_more: hasMore, next_offset: nextOffset } = result;
+        const first = offset + 1;
+        const last = offset + items.length;
+        const moreText = hasMore ? " · More activities available" : "";
+        if (pageStatus) pageStatus.textContent = `Showing ${first}–${last}${moreText}`;
+        if (previous) previous.disabled = offset === 0;
+        if (next) next.disabled = !hasMore || nextOffset === null;
+    }
 
+    function validateQuery(query) {
+        const startDate = query.filters.start_date;
+        const endDate = query.filters.end_date;
+        if (Boolean(startDate) !== Boolean(endDate)) {
+            return "Choose both a start date and an end date, or leave both blank.";
+        }
+        if (startDate && endDate && startDate > endDate) {
+            return "Start date must be on or before end date.";
+        }
+        return "";
+    }
+
+    async function loadResults(query = {
+        filters: { ...state.filters },
+        sort: state.sort,
+        limit: state.limit,
+        offset: state.offset,
+    }) {
         const requestId = ++state.requestId;
-        setStatus("Searching activities…", "loading");
-        const previous = field("searchPrevious");
-        const next = field("searchNext");
-        if (previous) previous.disabled = true;
-        if (next) next.disabled = true;
+        state.filters = { ...query.filters };
+        state.sort = query.sort;
+        state.limit = query.limit;
+        state.offset = query.offset;
+        renderActiveFilters(query.filters);
+        if (window.AppState?.activeTab === "search") syncUrl(query);
 
+        const validationMessage = validateQuery(query);
+        if (validationMessage) {
+            state.resultState = "validation-error";
+            setValidationMessage(validationMessage);
+            setStatus(state.lastResult ? "Last valid results remain shown." : "", state.lastResult ? "stale" : "");
+            if (!state.lastResult) renderRows([], "initial");
+            updatePagination(state.lastResult);
+            return false;
+        }
+
+        setValidationMessage("");
+        state.resultState = "loading";
+        setStatus(state.lastResult ? "Searching · previous results remain shown." : "Searching activities…", "loading");
         try {
-            const filters = { ...state.filters, sort: state.sort, limit: state.limit, offset: state.offset };
-            const payload = await window.api.searchActivities(filters);
-            if (requestId !== state.requestId) return;
+            const payload = await window.api.searchActivities({
+                ...query.filters,
+                sort: query.sort,
+                limit: query.limit,
+                offset: query.offset,
+            });
+            if (requestId !== state.requestId) return false;
             const items = Array.isArray(payload?.items) ? payload.items : [];
-            if (!state.filters.start_date && !state.filters.end_date
-                && !field("searchStartDate")?.value && !field("searchEndDate")?.value
-                && payload?.applied_start_date && payload?.applied_end_date) {
-                state.filters.start_date = String(payload.applied_start_date);
-                state.filters.end_date = String(payload.applied_end_date);
-                field("searchStartDate").value = state.filters.start_date;
-                field("searchEndDate").value = state.filters.end_date;
-                syncUrl();
-            }
-            state.hasMore = Boolean(payload?.has_more);
-            state.nextOffset = Number.isInteger(payload?.next_offset) ? payload.next_offset : null;
-            renderRows(items);
-            updatePagination(items.length);
-            const range = payload?.applied_start_date && payload?.applied_end_date
-                ? ` · ${payload.applied_start_date} to ${payload.applied_end_date}`
-                : "";
-            setStatus(`${payload?.returned_count || 0} activities${range}`, "ready");
+            const result = {
+                items,
+                returned_count: items.length,
+                offset: query.offset,
+                limit: query.limit,
+                has_more: Boolean(payload?.has_more),
+                next_offset: Number.isInteger(payload?.next_offset) ? payload.next_offset : null,
+                query: {
+                    filters: { ...query.filters },
+                    sort: query.sort,
+                    limit: query.limit,
+                    offset: query.offset,
+                },
+            };
+            state.lastResult = result;
+            state.resultState = items.length ? "valid-results" : "valid-empty";
+            renderRows(items, items.length ? "results" : "empty");
+            renderActiveFilters(query.filters);
+            updatePagination(result);
+            setStatus("", "ready");
+            const filtersPanel = document.querySelector(".search-filters");
+            if (filtersPanel && !field("searchKeepFiltersOpen")?.checked) filtersPanel.open = false;
+            return true;
         } catch (error) {
-            if (requestId !== state.requestId) return;
-            renderRows([]);
-            updatePagination(0);
-            setStatus(error?.status === 422 ? "Check the date range and filter values." : "Search is temporarily unavailable.", "error");
+            if (requestId !== state.requestId) return false;
+            state.resultState = "request-error";
+            setStatus(error?.status === 422
+                ? "Check the date range and filter values."
+                : "Search is temporarily unavailable.", "error");
+            if (!state.lastResult) renderRows([], "initial");
+            updatePagination(state.lastResult);
+            return false;
         }
     }
 
     function openDailyDate(value) {
         const date = formatActivityLocalDate(value);
         if (!date) return;
-        const url = new URL(window.location.href);
-        url.searchParams.set("tab", "daily");
-        url.searchParams.set("date", date);
-        window.history.replaceState({}, "", url);
         window.AppState.dailyExactDate = date;
         window.AppState.dailyAppliedQuery = "";
         window.AppState.dailyDraftQuery = "";
         window.AppState.dailySearchMatchCount = 0;
         window.AppState.dailySearchTotalCount = 0;
         window.showTab("daily");
+        const url = new URL(window.location.href);
+        url.searchParams.set("date", date);
+        window.history.replaceState({}, "", url);
         window.DailyController?.load();
     }
 
     function submitSearch(event) {
         event?.preventDefault();
-        collectInputs();
-        syncUrl();
-        loadResults();
+        const query = collectInputs();
+        syncUrl(query);
+        loadResults(query);
     }
 
     function clearSearch() {
@@ -379,18 +541,48 @@ if (typeof module !== "undefined" && module.exports) {
         state.sort = "newest";
         state.limit = 50;
         state.offset = 0;
+        state.requestId += 1;
+        state.lastResult = null;
+        state.resultState = "initial";
+        setValidationMessage("");
+        setStatus("", "");
+        if (field("searchKeepFiltersOpen")) field("searchKeepFiltersOpen").checked = false;
         syncInputs();
-        syncUrl();
-        loadResults();
+        const query = { filters: { ...state.filters }, sort: state.sort, limit: state.limit, offset: 0 };
+        syncUrl(query);
+        renderRows([], "initial");
+        updatePagination(null);
+        loadResults(query);
+    }
+
+    function queryMatches(left, right) {
+        return Boolean(left && right)
+            && JSON.stringify(left.filters) === JSON.stringify(right.filters)
+            && left.sort === right.sort
+            && left.limit === right.limit
+            && left.offset === right.offset;
     }
 
     function activate() {
-        if (!state.activated) {
+        if (!state.initialized) {
             readFromUrl();
-            syncInputs();
-            state.activated = true;
+            state.initialized = true;
         }
-        loadResults();
+        syncInputs();
+        const query = {
+            filters: { ...state.filters },
+            sort: state.sort,
+            limit: state.limit,
+            offset: state.offset,
+        };
+        syncUrl(query);
+        renderActiveFilters(query.filters);
+        if (!queryMatches(query, state.lastResult?.query)) {
+            loadResults(query);
+        } else {
+            setValidationMessage("");
+            updatePagination(state.lastResult);
+        }
     }
 
     function openAdvancedSearch(values = {}) {
@@ -403,52 +595,96 @@ if (typeof module !== "undefined" && module.exports) {
         state.sort = "newest";
         state.limit = 50;
         state.offset = 0;
-        state.activated = true;
+        state.initialized = true;
+        state.lastResult = null;
+        state.resultState = "initial";
+        setValidationMessage("");
+        setStatus("", "");
         syncInputs();
-        syncUrl();
+        renderRows([], "initial");
+        updatePagination(null);
         window.showTab("search");
     }
 
     function restoreFromUrl() {
         readFromUrl();
+        state.initialized = true;
         syncInputs();
-        state.activated = true;
+        renderActiveFilters(state.filters);
     }
 
     function attach() {
         const form = field("searchForm");
         if (!form) return;
         form.addEventListener("submit", submitSearch);
+        form.querySelectorAll("input, select").forEach(control => {
+            control.addEventListener("input", captureDraft);
+            control.addEventListener("change", captureDraft);
+        });
         field("searchClear")?.addEventListener("click", clearSearch);
         field("searchPrevious")?.addEventListener("click", () => {
-            state.offset = Math.max(0, state.offset - state.limit);
-            syncUrl();
-            loadResults();
+            if (!state.lastResult) return;
+            loadPage(Math.max(0, state.lastResult.offset - state.lastResult.limit));
         });
         field("searchNext")?.addEventListener("click", () => {
-            if (!state.hasMore || state.nextOffset === null) return;
-            state.offset = state.nextOffset;
-            syncUrl();
-            loadResults();
+            if (!state.lastResult?.has_more || state.lastResult.next_offset === null) return;
+            loadPage(state.lastResult.next_offset);
         });
         field("searchSort")?.addEventListener("change", () => {
-            state.sort = SORTS.has(field("searchSort").value) ? field("searchSort").value : "newest";
-            state.offset = 0;
-            syncUrl();
-            loadResults();
+            const query = collectInputs();
+            syncUrl(query);
+            loadResults(query);
         });
         field("searchLimit")?.addEventListener("change", () => {
-            const limit = Number(field("searchLimit").value);
-            state.limit = [25, 50, 100].includes(limit) ? limit : 50;
-            state.offset = 0;
-            syncUrl();
-            loadResults();
+            const query = collectInputs();
+            syncUrl(query);
+            loadResults(query);
         });
+    }
+
+    function captureDraft() {
+        const query = collectInputs();
+        state.offset = 0;
+        renderActiveFilters(query.filters);
+        if (window.AppState?.activeTab === "search") syncUrl(query);
+        if (state.resultState === "loading") {
+            state.requestId += 1;
+            state.resultState = state.lastResult
+                ? state.lastResult.items.length ? "valid-results" : "valid-empty"
+                : "initial";
+            setStatus(state.lastResult ? "Last valid results remain shown." : "", state.lastResult ? "stale" : "");
+        }
+    }
+
+    function loadPage(offset) {
+        if (!state.lastResult) {
+            renderRows([], "initial");
+            updatePagination(null);
+        }
+        if (!state.lastResult) return;
+        const query = {
+            ...state.lastResult.query,
+            offset,
+            filters: { ...state.lastResult.query.filters },
+        };
+        state.filters = { ...query.filters };
+        state.sort = query.sort;
+        state.limit = query.limit;
+        state.offset = query.offset;
+        syncInputs();
+        setValidationMessage("");
+        syncUrl(query);
+        loadResults(query);
     }
 
     window.SearchController = {
         activate,
         openAdvancedSearch,
+        removeSearchParameters,
+        refreshGearOptions() {
+            populateGearOptions();
+            renderActiveFilters();
+        },
         restoreFromUrl,
     };
     attach();

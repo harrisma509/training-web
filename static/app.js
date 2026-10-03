@@ -364,14 +364,19 @@ function showServiceSubtab(subtab) {
 
 window.showServiceSubtab = showServiceSubtab;
 
-function showTab(tab) {
+function showTab(tab, { fromHistory = false } = {}) {
   const normalizedTab = ["plan", "goals", "kpis", "charts", "daily", "search", "weekly", "zones", "service", "yearly", "coach"].includes(tab) ? tab : "daily";
+  const previousTab = state.activeTab;
   state.activeTab = normalizedTab;
   persistPreferences();
   const url = new URL(window.location.href);
   url.searchParams.set("tab", normalizedTab);
   if (normalizedTab !== "daily") url.searchParams.delete("date");
-  window.history.replaceState({}, "", url);
+  if (normalizedTab !== "search") window.SearchController?.removeSearchParameters(url);
+  const crossesSearchBoundary = previousTab !== normalizedTab
+    && (previousTab === "search" || normalizedTab === "search");
+  if (crossesSearchBoundary && !fromHistory) window.history.pushState({}, "", url);
+  else window.history.replaceState({}, "", url);
 
   const isPlan = normalizedTab === "plan";
   const isGoals = normalizedTab === "goals";
@@ -732,15 +737,15 @@ const validTabs = ["plan", "goals", "kpis", "charts", "daily", "search", "weekly
 if (requestedTab === "daily" && /^\d{4}-\d{2}-\d{2}$/.test(initialUrlParams.get("date") || "")) {
   window.AppState.dailyExactDate = initialUrlParams.get("date");
 }
-showTab(validTabs.includes(requestedTab) ? requestedTab : (window.AppState.activeTab || "daily"));
+showTab(validTabs.includes(requestedTab) ? requestedTab : (window.AppState.activeTab || "daily"), { fromHistory: true });
 window.addEventListener("popstate", () => {
   const params = new URLSearchParams(window.location.search);
-  if (window.SearchController) window.SearchController.restoreFromUrl();
   const tab = params.get("tab");
+  if (tab === "search") window.SearchController?.restoreFromUrl();
   if (tab === "daily" && /^\d{4}-\d{2}-\d{2}$/.test(params.get("date") || "")) {
     window.AppState.dailyExactDate = params.get("date");
     window.DailyController?.load();
   }
-  showTab(validTabs.includes(tab) ? tab : "daily");
+  showTab(validTabs.includes(tab) ? tab : "daily", { fromHistory: true });
 });
 loadData();
