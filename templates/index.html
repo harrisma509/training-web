@@ -7,25 +7,25 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <link rel="icon" href="/static/favicon.ico" type="image/x-icon">
   <link rel="shortcut icon" href="/static/favicon.ico" type="image/x-icon">
-  <link rel="stylesheet" href="/static/style.css?v=20260915-components-service-form-v1">
-  <link rel="stylesheet" href="/static/daily.css?v=20261003-daily-css-v1">
-  <link rel="stylesheet" href="/static/gear.css?v=20261003-gear-css-v1">
-  <link rel="stylesheet" href="/static/zones.css?v=20261003-zones-css-v1">
-  <link rel="stylesheet" href="/static/search.css?v=20261002-search-actions-v1">
-  <link rel="stylesheet" href="/static/components.css?v=20260916-components-css-v11">
-  <link rel="stylesheet" href="/static/plan.css">
-  <link rel="stylesheet" href="/static/goals.css">
-  <link rel="stylesheet" href="/static/kpis.css">
-  <link rel="stylesheet" href="/static/charts.css">
-  <link rel="stylesheet" href="/static/settings.css">
-  <link rel="stylesheet" href="/static/weekly.css">
-  <link rel="stylesheet" href="/static/yearly.css">
-  <link rel="stylesheet" href="/static/coach-layout.css">
-  <link rel="stylesheet" href="/static/coach-sessions.css">
-  <link rel="stylesheet" href="/static/coach-conversation.css">
-  <link rel="stylesheet" href="/static/coach-composer.css">
-  <link rel="stylesheet" href="/static/coach-context.css">
-  <link rel="stylesheet" href="/static/coach-responsive.css">
+  <link rel="stylesheet" href="/static/style.css?v={{ asset_version }}">
+  <link rel="stylesheet" href="/static/daily.css?v={{ asset_version }}">
+  <link rel="stylesheet" href="/static/gear.css?v={{ asset_version }}">
+  <link rel="stylesheet" href="/static/zones.css?v={{ asset_version }}">
+  <link rel="stylesheet" href="/static/search.css?v={{ asset_version }}">
+  <link rel="stylesheet" href="/static/components.css?v={{ asset_version }}">
+  <link rel="stylesheet" href="/static/plan.css?v={{ asset_version }}">
+  <link rel="stylesheet" href="/static/goals.css?v={{ asset_version }}">
+  <link rel="stylesheet" href="/static/kpis.css?v={{ asset_version }}">
+  <link rel="stylesheet" href="/static/charts.css?v={{ asset_version }}">
+  <link rel="stylesheet" href="/static/settings.css?v={{ asset_version }}">
+  <link rel="stylesheet" href="/static/weekly.css?v={{ asset_version }}">
+  <link rel="stylesheet" href="/static/yearly.css?v={{ asset_version }}">
+  <link rel="stylesheet" href="/static/coach-layout.css?v={{ asset_version }}">
+  <link rel="stylesheet" href="/static/coach-sessions.css?v={{ asset_version }}">
+  <link rel="stylesheet" href="/static/coach-conversation.css?v={{ asset_version }}">
+  <link rel="stylesheet" href="/static/coach-composer.css?v={{ asset_version }}">
+  <link rel="stylesheet" href="/static/coach-context.css?v={{ asset_version }}">
+  <link rel="stylesheet" href="/static/coach-responsive.css?v={{ asset_version }}">
 </head>
 
 <body>
@@ -148,30 +148,30 @@
     {% include "partials/overlays/weekly_drawer.html" %}
   </main>
 
-  <script src="/static/constants.js"></script>
-  <script src="/static/app-state.js?v=20260914-service-nav"></script>
-  <script src="/static/utils.js"></script>
-  <script src="/static/transient-surface.js"></script>
-  <script src="/static/api.js?v=20260915-components-service-form-v1"></script>
-  <script src="/static/weekly.js"></script>
-  <script src="/static/zones.js"></script>
-  <script src="/static/gear.js?v=20260914-service-nav"></script>
-  <script src="/static/components.js?v=20261003-components-lifecycle-v1"></script>
-  <script src="/static/sync.js"></script>
-  <script src="/static/yearly.js"></script>
-  <script src="/static/ai-coach-settings-validation.js"></script>
-  <script src="/static/ai-coach-custom-instructions-validation.js"></script>
-  <script src="/static/coach-memories.js"></script>
-  <script src="/static/settings.js?v=20260914-service-nav"></script>
-  <script src="/static/daily.js"></script>
-  <script src="/static/search.js?v=20261003-activity-resync-fix-v1"></script>
-  <script src="/static/plan.js"></script>
-  <script src="/static/goals.js"></script>
-  <script src="/static/kpis.js"></script>
-  <script src="/static/vendor/chart.umd.min.js"></script>
-  <script src="/static/charts.js"></script>
-  <script src="/static/coach.js"></script>
-  <script src="/static/app.js?v=20260914-service-nav"></script>
+  <script src="/static/constants.js?v={{ asset_version }}"></script>
+  <script src="/static/app-state.js?v={{ asset_version }}"></script>
+  <script src="/static/utils.js?v={{ asset_version }}"></script>
+  <script src="/static/transient-surface.js?v={{ asset_version }}"></script>
+  <script src="/static/api.js?v={{ asset_version }}"></script>
+  <script src="/static/weekly.js?v={{ asset_version }}"></script>
+  <script src="/static/zones.js?v={{ asset_version }}"></script>
+  <script src="/static/gear.js?v={{ asset_version }}"></script>
+  <script src="/static/components.js?v={{ asset_version }}"></script>
+  <script src="/static/sync.js?v={{ asset_version }}"></script>
+  <script src="/static/yearly.js?v={{ asset_version }}"></script>
+  <script src="/static/ai-coach-settings-validation.js?v={{ asset_version }}"></script>
+  <script src="/static/ai-coach-custom-instructions-validation.js?v={{ asset_version }}"></script>
+  <script src="/static/coach-memories.js?v={{ asset_version }}"></script>
+  <script src="/static/settings.js?v={{ asset_version }}"></script>
+  <script src="/static/daily.js?v={{ asset_version }}"></script>
+  <script src="/static/search.js?v={{ asset_version }}"></script>
+  <script src="/static/plan.js?v={{ asset_version }}"></script>
+  <script src="/static/goals.js?v={{ asset_version }}"></script>
+  <script src="/static/kpis.js?v={{ asset_version }}"></script>
+  <script src="/static/vendor/chart.umd.min.js?v={{ asset_version }}"></script>
+  <script src="/static/charts.js?v={{ asset_version }}"></script>
+  <script src="/static/coach.js?v={{ asset_version }}"></script>
+  <script src="/static/app.js?v={{ asset_version }}"></script>
 </body>
 
 </html>

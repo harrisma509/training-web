@@ -2,7 +2,7 @@
 
 ## Status and scope
 
-This document records the current `training-web` frontend architecture through F25.
+This document records the current `training-web` frontend architecture through F26.
 It is an architecture handoff, not an approval to introduce a framework or
 rewrite the dashboard. The current implementation is server-rendered HTML
 with vanilla JavaScript modules, modular CSS, shared `AppState`, and a shared
@@ -350,6 +350,24 @@ Remaining compatibility debt includes Gear's `GearController` and rendering
 helper consumers, Weekly's `WeeklyController` and loader paths, plus the
 unmigrated feature families listed above. The next bounded slice should
 investigate Gear before Weekly, after a fresh external-consumer check.
+
+### F26 implementation: deterministic static-asset versioning
+
+F26 gives each rendered root document one immutable asset version. The standard
+deployment script derives the exact clean Git `HEAD`, writes it to the generated
+untracked `.deployment-version.json` metadata included in the archive, and
+removes the local temporary file after packaging. The application reads that
+metadata once at startup and passes `asset_version` to the root template. Local
+development without deployment metadata uses the explicit `dev` fallback;
+production startup fails closed when metadata is missing or unsafe.
+
+Every first-party JavaScript and CSS URL in the root template uses the same
+`?v={{ asset_version }}` value, with script and stylesheet order unchanged.
+Root HTML and unversioned static paths are revalidated; matching versioned
+static assets use long-lived immutable caching. Rollback means deploying the
+rollback commit, which regenerates metadata and causes the root HTML to point
+back to that commit's asset version. Deployment requires a clean Git worktree
+and does not mutate tracked source files.
 
 ### Remaining inconsistencies and F20/F21 prerequisites
 

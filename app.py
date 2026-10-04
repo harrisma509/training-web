@@ -42,10 +42,12 @@ from routes.coach_settings import router as coach_settings_router
 from routes.coach_custom_instructions import router as coach_custom_instructions_router
 from routes.coach_memories import router as coach_memories_router
 from routes.coach_context_receipt import router as coach_context_receipt_router
+from asset_version import load_asset_version
 
 configure_logging("training-web")
 
 BASE_DIR = Path(__file__).resolve().parent
+ASSET_VERSION = load_asset_version(BASE_DIR)
 
 app = FastAPI(title="Training Dashboard")
 app.include_router(health_router)
@@ -73,6 +75,23 @@ app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")
 templates = Jinja2Templates(directory=BASE_DIR / "templates")
 
 
+@app.middleware("http")
+async def apply_cache_policy(request: Request, call_next):
+    response = await call_next(request)
+    if request.url.path == "/":
+        response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+    elif request.url.path.startswith("/static/"):
+        if request.query_params.get("v") == ASSET_VERSION:
+            response.headers["Cache-Control"] = "public, max-age=31536000, immutable"
+        else:
+            response.headers["Cache-Control"] = "no-cache, must-revalidate"
+    return response
+
+
 @app.get("/", response_class=HTMLResponse)
 def index(request: Request):
-    return templates.TemplateResponse(request=request, name="index.html", context={})
+    return templates.TemplateResponse(
+        request=request,
+        name="index.html",
+        context={"asset_version": ASSET_VERSION},
+    )

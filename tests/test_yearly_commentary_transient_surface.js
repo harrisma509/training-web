@@ -6,7 +6,7 @@ const yearlySource = fs.readFileSync("static/yearly.js", "utf8");
 const indexSource = fs.readFileSync("templates/index.html", "utf8");
 const transientSource = fs.readFileSync("static/transient-surface.js", "utf8");
 
-assert.match(indexSource, /src="\/static\/transient-surface\.js"/);
+assert.match(indexSource, /src="\/static\/transient-surface\.js\?v=\{\{ asset_version \}\}"/);
 assert.ok(indexSource.indexOf("/static/transient-surface.js") < indexSource.indexOf("/static/yearly.js"));
 assert.ok(indexSource.indexOf("/static/yearly.js") < indexSource.indexOf("/static/app.js"));
 assert.match(transientSource, /app\.TransientSurface = app\.TransientSurface \|\| \{ create: createTransientSurface \}/);

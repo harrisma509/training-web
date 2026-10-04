@@ -46,4 +46,4 @@ def test_runtime_composition_still_matches_the_documented_bridge_boundary() -> N
     assert "window.activateFeature = activateFeature;" in APP
     assert 'if (featureName === "plan")' not in APP
     assert "window.TrainingApp.TransientSurface" in INDEX or "window.TrainingApp.TransientSurface" in APP
-    assert INDEX.index('/static/app.js?v=20260914-service-nav') > INDEX.index('/static/coach.js')
+    assert INDEX.index('/static/app.js?v={{ asset_version }}') > INDEX.index('/static/coach.js?v={{ asset_version }}')

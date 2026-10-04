@@ -8,6 +8,7 @@ from jinja2 import Environment, FileSystemLoader
 REPO_ROOT = Path(__file__).resolve().parents[1]
 INDEX_PATH = REPO_ROOT / "templates" / "index.html"
 TEMPLATE_ENVIRONMENT = Environment(loader=FileSystemLoader(str(REPO_ROOT / "templates")))
+TEMPLATE_ENVIRONMENT.globals["asset_version"] = "dev"
 VOID_ELEMENTS = {
     "area",
     "base",

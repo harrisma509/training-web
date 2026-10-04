@@ -5,12 +5,12 @@ const indexSource = fs.readFileSync("templates/index.html", "utf8");
 const stylesheetLinks = [...indexSource.matchAll(/<link rel="stylesheet" href="([^"]+)"/g)]
     .map(match => match[1]);
 const coachStylesheets = [
-    "/static/coach-layout.css",
-    "/static/coach-sessions.css",
-    "/static/coach-conversation.css",
-    "/static/coach-composer.css",
-    "/static/coach-context.css",
-    "/static/coach-responsive.css",
+    "/static/coach-layout.css?v={{ asset_version }}",
+    "/static/coach-sessions.css?v={{ asset_version }}",
+    "/static/coach-conversation.css?v={{ asset_version }}",
+    "/static/coach-composer.css?v={{ asset_version }}",
+    "/static/coach-context.css?v={{ asset_version }}",
+    "/static/coach-responsive.css?v={{ asset_version }}",
 ];
 
 assert.deepEqual(stylesheetLinks.slice(-coachStylesheets.length), coachStylesheets);
@@ -18,11 +18,12 @@ assert.equal(stylesheetLinks.filter(path => path === "/static/coach.css").length
 assert.equal(fs.existsSync("static/coach.css"), false);
 
 const styles = Object.fromEntries(coachStylesheets.map(path => [
-    path,
-    fs.readFileSync(path.replace("/static/", "static/"), "utf8"),
+    path.split("?", 1)[0],
+    fs.readFileSync(path.split("?", 1)[0].replace("/static/", "static/"), "utf8"),
 ]));
 for (const path of coachStylesheets) {
-    assert.ok(styles[path].trim().length > 0, `${path} should not be empty`);
+    const stylesheetPath = path.split("?", 1)[0];
+    assert.ok(styles[stylesheetPath].trim().length > 0, `${path} should not be empty`);
 }
 assert.match(styles["/static/coach-responsive.css"], /@media \(max-width: 760px\)/);
 assert.match(styles["/static/coach-responsive.css"], /@media \(prefers-reduced-motion: reduce\)/);

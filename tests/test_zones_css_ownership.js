@@ -5,8 +5,8 @@ const indexSource = fs.readFileSync("templates/index.html", "utf8");
 const zonesSource = fs.readFileSync("static/zones.css", "utf8");
 const sharedSource = fs.readFileSync("static/style.css", "utf8");
 
-const gearLink = "/static/gear.css?v=20261003-gear-css-v1";
-const zonesLink = "/static/zones.css?v=20261003-zones-css-v1";
+const gearLink = "/static/gear.css?v={{ asset_version }}";
+const zonesLink = "/static/zones.css?v={{ asset_version }}";
 assert.ok(indexSource.indexOf(gearLink) < indexSource.indexOf(zonesLink));
 
 for (const selector of [

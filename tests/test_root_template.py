@@ -209,8 +209,8 @@ def test_charts_partial_is_single_authority_at_the_original_composition_point() 
         assert by_id(rendered_charts, control_id)
 
     scripts = [element.attributes.get("src") for element in by_tag(document, "script")]
-    assert scripts.index("/static/vendor/chart.umd.min.js") < scripts.index("/static/charts.js") < scripts.index(
-        "/static/app.js?v=20260914-service-nav"
+    assert scripts.index("/static/vendor/chart.umd.min.js?v=dev") < scripts.index("/static/charts.js?v=dev") < scripts.index(
+        "/static/app.js?v=dev"
     )
 
 

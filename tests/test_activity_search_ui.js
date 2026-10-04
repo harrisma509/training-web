@@ -227,7 +227,7 @@ async function main() {
     assert.doesNotMatch(htmlSource, /id="searchCategory"|>Category</);
     assert.match(htmlSource, /id="dailySearchAdvanced"/);
     assert.match(htmlSource, /search\.css/);
-    assert.match(htmlSource, /search\.js\?v=20261003-activity-resync-fix-v1/);
+    assert.match(htmlSource, /search\.js\?v=\{\{ asset_version \}\}/);
     assert.doesNotMatch(fs.readFileSync("static/style.css", "utf8"), /\.search-(?:pane|filters|results|chip)/);
     assert.match(searchCssSource, /#searchResults th:first-child,\s*#searchResults td:first-child\s*\{[^}]*width:\s*1%;[^}]*white-space:\s*nowrap;/s);
     assert.match(searchCssSource, /#searchResults th:nth-child\(2\),\s*#searchResults td:nth-child\(2\)\s*\{[^}]*width:\s*1%;[^}]*white-space:\s*nowrap;[^}]*text-align:\s*right;/s);

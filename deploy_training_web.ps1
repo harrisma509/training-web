@@ -10,6 +10,8 @@ $ProjectDir = $PSScriptRoot
 $ArchiveName = "training-web-deploy.tar.gz"
 $LocalArchive = Join-Path $env:TEMP $ArchiveName
 $RemoteArchive = "/tmp/$ArchiveName"
+$VersionMetadataPath = Join-Path $ProjectDir ".deployment-version.json"
+$VersionMetadataCreated = $false
 
 try {
     if (-not (Test-Path (Join-Path $ProjectDir "app.py"))) {
@@ -18,7 +20,37 @@ try {
 
     Write-Host ""
     Write-Host "Packaging training-web..." -ForegroundColor Cyan
-    Write-Host "Uncommitted changes are included." -ForegroundColor Yellow
+
+    Push-Location $ProjectDir
+    try {
+        $workingTree = @(git.exe status --porcelain)
+        if ($LASTEXITCODE -ne 0) {
+            throw "Unable to inspect Git working tree."
+        }
+        if ($workingTree.Count -gt 0) {
+            throw "Deployment requires a clean Git working tree."
+        }
+
+        $assetVersion = (git.exe rev-parse HEAD).Trim()
+        if ($LASTEXITCODE -ne 0 -or $assetVersion -notmatch '^[0-9a-f]{40}$') {
+            throw "Unable to determine the deployed Git revision."
+        }
+        if (Test-Path $VersionMetadataPath) {
+            throw "Deployment metadata path already exists: $VersionMetadataPath"
+        }
+
+        $metadata = @{ asset_version = $assetVersion } | ConvertTo-Json -Compress
+        [System.IO.File]::WriteAllText(
+            $VersionMetadataPath,
+            $metadata,
+            [System.Text.UTF8Encoding]::new($false)
+        )
+        $VersionMetadataCreated = $true
+        Write-Host "Deploying asset version $assetVersion" -ForegroundColor DarkCyan
+    }
+    finally {
+        Pop-Location
+    }
 
     if (Test-Path $LocalArchive) {
         Remove-Item $LocalArchive -Force
@@ -97,5 +129,8 @@ catch {
 finally {
     if (Test-Path $LocalArchive) {
         Remove-Item $LocalArchive -Force
+    }
+    if ($VersionMetadataCreated -and (Test-Path $VersionMetadataPath)) {
+        Remove-Item $VersionMetadataPath -Force
     }
 }
