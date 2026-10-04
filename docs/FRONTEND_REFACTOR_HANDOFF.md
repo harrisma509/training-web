@@ -2,7 +2,7 @@
 
 ## Status and scope
 
-This document records the current `training-web` frontend architecture through F29.
+This document records the current `training-web` frontend architecture through F30.
 It is an architecture handoff, not an approval to introduce a framework or
 rewrite the dashboard. The current implementation is server-rendered HTML
 with vanilla JavaScript modules, modular CSS, shared `AppState`, and a shared
@@ -47,7 +47,7 @@ decision changes it:
 | --- | --- | --- | --- | --- | --- |
 | Plan | `plan.js` / `PlanController` | Startup activation calls canonical `activate` | Same-key activation coalesces; `refresh` forces authoritative reload | Plan request counters | No app-level deactivation |
 | Goals, KPIs | respective module | No-op render/load controllers | No-op | None needed | None |
-| Charts | `charts.js` / `ChartsController` | `loadData()` does not load it; category activation loads selected data | `showChartsCategory()` loads selected category | Per-data request IDs and chart destruction | Charts are destroyed when their replacement/status path requires it; no tab deactivation hook |
+| Charts | `charts.js` / `TrainingApp.features.charts` | Startup/direct-link activation selects the persisted category and loads it | Same-category activation follows dispatcher coalescing; category changes load only the selected category; `refresh` forces reload | Per-data request IDs, category cache guards, and chart destruction | Charts owns replacement/status destruction and the theme observer; no tab deactivation hook |
 | Daily | `daily.js` / `DailyController` | `loadData()` calls `load` | `popstate` may call `load` for an exact date; no normal tab hook | Daily request ID; narrative request ID/cache | Local menus/dialogs/drawers close locally; no tab deactivation hook |
 | Search | `search.js` / `TrainingApp.features.search` | `init` wires listeners; activation loads the current URL-backed query when needed | Same query preserves results; `refresh` reloads the current query | Search request ID; stale-result preservation | Dynamic action menus close locally; no general deactivate hook |
 | Weekly | `weekly.js` / `TrainingApp.features.weekly` | `init` wires handlers; startup preload and activation share in-flight work | Same-key activation reuses loaded rows; `refresh` forces reload | Weekly request ID and coalesced loader | Commentary and audit drawers close locally; no tab deactivation hook |
@@ -118,6 +118,15 @@ compatibility aliases to that controller. `app.js` retains only pane and
 transition coordination plus the startup preload call through the registry.
 Yearly maintenance remains outside the dashboard lifecycle and is not part of
 the shell's data-loading path.
+
+F30 consolidated the active Charts runtime in `charts.js`. The feature now owns
+category state and tab/panel visibility, category-specific loading, Chart.js
+instances, replacement destruction, request freshness, feature controls, and
+theme redraw behavior. It self-registers one stable controller at
+`TrainingApp.features.charts`; `window.ChartsController` and
+`window.showChartsCategory` remain compatibility aliases because the existing
+public surface is still part of the tracked runtime contract. `app.js` retains
+only top-level Charts pane visibility and transition coordination.
 
 ## Listener and async ownership
 
@@ -281,8 +290,9 @@ transition. The supported source values are `startup`, `direct-url`,
    retain reload-on-call behavior; retired compatibility globals are removed
    where the consumer inventory permits.
 - Plan no longer relies on a legacy activation fallback.
-- Charts keeps `showChartsCategory` as its legacy nested-view/load fallback;
-  the dispatcher updates category visibility without loading twice.
+- Charts exposes `init`, `activate`, `refresh`, and `showCategory` through its
+   canonical registry entry; the dispatcher updates category visibility without
+   loading twice.
 - Daily keeps its existing `load` fallback only for exact-date `popstate`.
 - Goals and KPIs remain no-op placeholders. Components/Service remains on its
    F21 lifecycle adapter. Charts, Daily, Yearly, Coach, Settings, and Sync retain

@@ -23,6 +23,26 @@
     const VOLUME_YEAR_KEY = "trainingVolumeChartYear";
     const VOLUME_METRIC_KEY = "trainingVolumeChartMetric";
     const VOLUME_METRICS = ["hours", "miles", "elevation"];
+    const CHART_CATEGORIES = ["fitness", "load", "health", "volume"];
+    let chartsInitialized = false;
+
+    function normalizeChartsCategory(category) {
+        const normalized = String(category || "").trim().toLowerCase();
+        return CHART_CATEGORIES.includes(normalized) ? normalized : "fitness";
+    }
+
+    function getChartsCategory() {
+        const savedValue = window.AppState && typeof window.AppState.chartsCategory !== "undefined"
+            ? normalizeChartsCategory(window.AppState.chartsCategory)
+            : "fitness";
+
+        if (window.AppState && window.AppState.chartsCategory !== savedValue) {
+            window.AppState.chartsCategory = savedValue;
+            persistPreferences();
+        }
+
+        return savedValue;
+    }
 
     function getElements() {
         return {
@@ -139,7 +159,10 @@
         fitnessFatigueContent.classList.remove("hidden");
     }
 
-    async function loadFitnessFatigue() {
+    async function loadFitnessFatigue(force = false) {
+        if (force) {
+            fitnessFatigueLoaded = false;
+        }
         if (!fitnessFatigueLoaded) {
             const requestId = ++fitnessFatigueRequestId;
             setFitnessFatigueStatus("Loading fitness and freshness...", "is-loading");
@@ -157,7 +180,7 @@
                 setFitnessFatigueStatus("Fitness and freshness are currently unavailable.", "is-error");
             }
         }
-        loadFitnessFatigueTrend();
+        loadFitnessFatigueTrend(force);
     }
 
     function getFitnessFatigueRange() {
@@ -524,10 +547,10 @@
         });
     }
 
-    async function loadWeeklyLoad() {
+    async function loadWeeklyLoad(force = false) {
         const { range, metric } = setWeeklyLoadSelection();
         const cacheKey = `${range}:${metric}`;
-        if (weeklyLoadCache.has(cacheKey)) {
+        if (!force && weeklyLoadCache.has(cacheKey)) {
             renderWeeklyLoadChart(weeklyLoadCache.get(cacheKey));
             return;
         }
@@ -1416,6 +1439,59 @@
         updateWeightLegend(weightChart);
     }
 
+    function showChartsCategory(category, { load = true, force = false } = {}) {
+        const nextCategory = normalizeChartsCategory(category);
+        const panels = {
+            fitness: document.getElementById("chartsFitnessPanel"),
+            load: document.getElementById("chartsLoadPanel"),
+            health: document.getElementById("chartsHealthPanel"),
+            volume: document.getElementById("chartsVolumePanel"),
+        };
+        const tabs = {
+            fitness: document.getElementById("chartsFitnessTab"),
+            load: document.getElementById("chartsLoadTab"),
+            health: document.getElementById("chartsHealthTab"),
+            volume: document.getElementById("chartsVolumeTab"),
+        };
+
+        if (window.AppState) {
+            window.AppState.chartsCategory = nextCategory;
+            persistPreferences();
+        }
+
+        Object.entries(panels).forEach(([name, panel]) => {
+            if (panel) {
+                panel.classList.toggle("hidden", name !== nextCategory);
+                panel.setAttribute("aria-hidden", String(name !== nextCategory));
+            }
+        });
+        Object.entries(tabs).forEach(([name, tab]) => {
+            if (tab) {
+                const selected = name === nextCategory;
+                tab.classList.toggle("active", selected);
+                tab.setAttribute("aria-selected", String(selected));
+                tab.setAttribute("aria-controls", `charts${name[0].toUpperCase()}${name.slice(1)}Panel`);
+            }
+        });
+
+        return load ? loadChartsCategory(nextCategory, force) : Promise.resolve();
+    }
+
+    function loadChartsCategory(category, force = false) {
+        switch (normalizeChartsCategory(category)) {
+        case "fitness":
+            return loadFitnessFatigue(force);
+        case "load":
+            return loadWeeklyLoad(force);
+        case "health":
+            return loadCharts();
+        case "volume":
+            return loadVolume();
+        default:
+            return Promise.resolve();
+        }
+    }
+
     let weightChartRequestId = 0;
 
     async function loadCharts() {
@@ -1548,17 +1624,47 @@
         });
     }
 
+    function initializeChartsFeature() {
+        if (chartsInitialized) {
+            return true;
+        }
+        chartsInitialized = true;
+        ["fitness", "load", "health", "volume"].forEach((category) => {
+            document.querySelector(`[data-charts-category="${category}"]`)?.addEventListener("click", () => {
+                showChartsCategory(category);
+            });
+        });
+        showChartsCategory(getChartsCategory(), { load: false });
+        return true;
+    }
+
     setWeightChartMode(getWeightChartMode());
     setFitnessFatigueRange(getFitnessFatigueRange());
     setWeeklyLoadSelection();
     setVolumeMetric(getVolumeMetric());
-    window.ChartsController = {
+    initializeChartsFeature();
+    const chartsController = {
+        init: initializeChartsFeature,
+        activate: () => showChartsCategory(getChartsCategory()),
+        refresh: () => showChartsCategory(getChartsCategory(), { force: true }),
+        showCategory: showChartsCategory,
         load: loadCharts,
         loadFitnessFatigue,
         loadWeeklyLoad,
         loadVolume,
         render: renderWeightChart,
     };
+    window.ChartsController = chartsController;
+    window.showChartsCategory = showChartsCategory;
+    window.TrainingApp = window.TrainingApp || { features: {} };
+    window.TrainingApp.features = window.TrainingApp.features || {};
+    window.TrainingApp.registerFeature = window.TrainingApp.registerFeature || function (name, feature) {
+        if (!feature || typeof feature !== "object") return;
+        if (!Object.prototype.hasOwnProperty.call(window.TrainingApp.features, name)) {
+            window.TrainingApp.features[name] = feature;
+        }
+    };
+    window.TrainingApp.registerFeature("charts", chartsController);
 
     new MutationObserver(() => {
         if (weightChart) {

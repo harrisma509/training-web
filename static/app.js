@@ -151,9 +151,6 @@ if (window.GoalsController) {
 if (window.KPIsController) {
   window.TrainingApp.registerFeature("kpis", window.KPIsController);
 }
-if (window.ChartsController) {
-  window.TrainingApp.registerFeature("charts", window.ChartsController);
-}
 if (window.DailyController) {
   window.TrainingApp.registerFeature("daily", window.DailyController);
 }
@@ -175,10 +172,6 @@ const planTab = document.getElementById("planTab");
 const goalsTab = document.getElementById("goalsTab");
 const kpisTab = document.getElementById("kpisTab");
 const chartsTab = document.getElementById("chartsTab");
-const chartsFitnessTab = document.getElementById("chartsFitnessTab");
-const chartsLoadTab = document.getElementById("chartsLoadTab");
-const chartsHealthTab = document.getElementById("chartsHealthTab");
-const chartsVolumeTab = document.getElementById("chartsVolumeTab");
 const dailyTab = document.getElementById("dailyTab");
 const searchTab = document.getElementById("searchTab");
 const weeklyTab = document.getElementById("weeklyTab");
@@ -192,10 +185,6 @@ const planPane = document.getElementById("planPane");
 const goalsPane = document.getElementById("goalsPane");
 const kpisPane = document.getElementById("kpisPane");
 const chartsPane = document.getElementById("chartsPane");
-const chartsFitnessPanel = document.getElementById("chartsFitnessPanel");
-const chartsLoadPanel = document.getElementById("chartsLoadPanel");
-const chartsHealthPanel = document.getElementById("chartsHealthPanel");
-const chartsVolumePanel = document.getElementById("chartsVolumePanel");
 const dailyPane = document.getElementById("dailyPane");
 const searchPane = document.getElementById("searchPane");
 const weeklyPane = document.getElementById("weeklyPane");
@@ -326,85 +315,6 @@ function statusPill(value) {
   }
   return `<span class="pill status-${status}">${status}</span>`;
 }
-
-function normalizeChartsCategory(category) {
-  const normalized = String(category || "").trim().toLowerCase();
-  return ["fitness", "load", "health", "volume"].includes(normalized) ? normalized : "fitness";
-}
-
-function getChartsCategory() {
-  const savedValue = window.AppState && typeof window.AppState.chartsCategory !== "undefined"
-    ? normalizeChartsCategory(window.AppState.chartsCategory)
-    : "load";
-
-  if (window.AppState && window.AppState.chartsCategory !== savedValue) {
-    window.AppState.chartsCategory = savedValue;
-    persistPreferences();
-  }
-
-  return savedValue;
-}
-
-function showChartsCategory(category, { load = true } = {}) {
-  const nextCategory = normalizeChartsCategory(category);
-
-  if (window.AppState) {
-    window.AppState.chartsCategory = nextCategory;
-    persistPreferences();
-  }
-
-  const panels = {
-    fitness: chartsFitnessPanel,
-    load: chartsLoadPanel,
-    health: chartsHealthPanel,
-    volume: chartsVolumePanel,
-  };
-
-  const tabs = {
-    fitness: chartsFitnessTab,
-    load: chartsLoadTab,
-    health: chartsHealthTab,
-    volume: chartsVolumeTab,
-  };
-
-  Object.entries(panels).forEach(([name, panel]) => {
-    if (panel) {
-      panel.classList.toggle("hidden", name !== nextCategory);
-      panel.setAttribute("aria-hidden", String(name !== nextCategory));
-    }
-  });
-
-  Object.entries(tabs).forEach(([name, tab]) => {
-    if (tab) {
-      const selected = name === nextCategory;
-      tab.classList.toggle("active", selected);
-      tab.setAttribute("aria-selected", String(selected));
-      tab.setAttribute("aria-controls", `charts${name[0].toUpperCase()}${name.slice(1)}Panel`);
-    }
-  });
-
-  if (load && window.ChartsController) {
-    if (nextCategory === "fitness" && typeof window.ChartsController.loadFitnessFatigue === "function") {
-      window.ChartsController.loadFitnessFatigue();
-    }
-    if (nextCategory === "load" && typeof window.ChartsController.loadWeeklyLoad === "function") {
-      window.ChartsController.loadWeeklyLoad();
-    }
-    if (nextCategory === "health" && typeof window.ChartsController.load === "function") {
-      window.ChartsController.load();
-    }
-    if (nextCategory === "volume" && typeof window.ChartsController.loadVolume === "function") {
-      window.ChartsController.loadVolume();
-    }
-  }
-}
-
-window.showChartsCategory = showChartsCategory;
-
-chartsFitnessTab?.addEventListener("click", () => showChartsCategory("fitness"));
-chartsLoadTab?.addEventListener("click", () => showChartsCategory("load"));
-chartsHealthTab?.addEventListener("click", () => showChartsCategory("health"));
-chartsVolumeTab?.addEventListener("click", () => showChartsCategory("volume"));
 
 function showServiceSubtab(subtab) {
   const normalizedSubtab = ["components", "gear"].includes(subtab) ? subtab : "components";
@@ -564,15 +474,11 @@ function commitFeatureTransition(context) {
     gearControls.classList.add("hidden");
   }
 
-  if (isCharts) showChartsCategory(getChartsCategory(), { load: false });
+  if (isCharts) window.TrainingApp?.features?.charts?.showCategory?.(state.chartsCategory, { load: false });
   if (isYearly) window.TrainingApp?.features?.yearly?.showView?.(state.yearlyView || "annual");
 }
 
 async function activateLegacyFeature(featureName, context, feature) {
-  if (featureName === "charts") {
-    showChartsCategory(getChartsCategory());
-    return;
-  }
   if (featureName === "daily" && context.source === "popstate" && context.route.date) {
     if (typeof feature?.load === "function") await feature.load.call(feature, context);
     else if (typeof window.loadDaily === "function") await window.loadDaily();
