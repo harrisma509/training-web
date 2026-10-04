@@ -139,6 +139,7 @@ function createSearchHarness(initialHref = "http://localhost/?tab=search") {
         innerHeight: 768,
         showTab(tab) { this.AppState.activeTab = tab; },
         DailyController: { load() { } },
+        TrainingApp: { features: {} },
         location: {
             get href() { return currentUrl.href; },
             get search() { return currentUrl.search; },
@@ -214,7 +215,10 @@ async function main() {
     assert.match(searchSource, /Last valid results remain shown\./);
     assert.match(appSource, /removeSearchParameters\(url\)/);
     assert.match(appSource, /history\.pushState/);
-    assert.match(appSource, /context\.source === "popstate"\) \{\s*window\.SearchController\?\.restoreFromUrl/);
+    assert.match(appSource, /context\.source === "popstate"\) \{\s*window\.TrainingApp\?\.features\?\.search\?\.restoreFromUrl/);
+    assert.doesNotMatch(searchSource, /window\.SearchController/);
+    assert.doesNotMatch(appSource, /window\.SearchController/);
+    assert.doesNotMatch(dailySource, /window\.SearchController/);
     assert.match(dailySource, /dailySearchAdvanced/);
     assert.match(dailySource, /openAdvancedSearch\(\{ text:/);
     assert.match(htmlSource, /id="searchTab"/);
@@ -242,7 +246,7 @@ async function main() {
         })),
         total_count: 126,
     }));
-    harness.window.SearchController.activate();
+    harness.window.TrainingApp.features.search.activate();
     await harness.settle();
     assert.equal(harness.requests.length, 1);
     assert.equal(harness.requests[0].sort_by, "date");
@@ -286,10 +290,10 @@ async function main() {
     harness.getUrl().searchParams.set("start_date", "2024-01-01");
     harness.getUrl().searchParams.set("end_date", "2024-01-31");
     harness.getUrl().searchParams.set("keep", "1");
-    harness.window.SearchController.restoreFromUrl();
+    harness.window.TrainingApp.features.search.restoreFromUrl();
     assert.equal(harness.elements.searchStartDate.value, "2024-01-01");
     assert.equal(harness.elements.searchEndDate.value, "2024-01-31");
-    harness.window.SearchController.removeSearchParameters(harness.getUrl());
+    harness.window.TrainingApp.features.search.removeSearchParameters(harness.getUrl());
     assert.equal(harness.getUrl().searchParams.has("start_date"), false);
     assert.equal(harness.getUrl().searchParams.has("sort"), false);
     assert.equal(harness.getUrl().searchParams.get("keep"), "1");
@@ -345,7 +349,7 @@ async function main() {
 
     const restored = createSearchHarness("http://localhost/?tab=search&search_text=climb&search_start_date=2024-02-01&search_end_date=2024-02-29&search_sort_by=load&search_sort_direction=asc&search_limit=25&search_offset=25&keep=1");
     restored.setResponse(async () => ({ items: Array(25).fill({ name: "Climb" }), total_count: 100 }));
-    restored.window.SearchController.activate();
+    restored.window.TrainingApp.features.search.activate();
     await restored.settle();
     assert.equal(restored.requests[0].text, "climb");
     assert.equal(restored.requests[0].start_date, "2024-02-01");
@@ -360,7 +364,7 @@ async function main() {
 
     const legacySort = createSearchHarness("http://localhost/?tab=search&sort=oldest");
     legacySort.setResponse(async () => ({ items: [], total_count: 0 }));
-    legacySort.window.SearchController.activate();
+    legacySort.window.TrainingApp.features.search.activate();
     await legacySort.settle();
     assert.equal(legacySort.requests[0].sort_by, "date");
     assert.equal(legacySort.requests[0].sort_direction, "asc");
@@ -376,7 +380,7 @@ async function main() {
     ];
     const sorting = createSearchHarness();
     sorting.setResponse(async () => ({ items: [], total_count: 0 }));
-    sorting.window.SearchController.activate();
+    sorting.window.TrainingApp.features.search.activate();
     await sorting.settle();
     assert.equal(tableRows(sorting.elements.searchResults)[0].children[0].colSpan, 10, "empty state should span all Search columns");
     sorting.elements.searchText.value = "tempo";
@@ -419,14 +423,14 @@ async function main() {
     }
 
     const invalidInitial = createSearchHarness("http://localhost/?tab=search&search_start_date=2024-01-01");
-    invalidInitial.window.SearchController.activate();
+    invalidInitial.window.TrainingApp.features.search.activate();
     await invalidInitial.settle();
     assert.equal(invalidInitial.requests.length, 0, "an incomplete initial date range must not request results");
     assert.equal(tableRows(invalidInitial.elements.searchResults)[0].children[0].colSpan, 10, "validation placeholder should span all Search columns");
 
     const failedInitial = createSearchHarness();
     failedInitial.setResponse(async () => { throw new Error("offline"); });
-    failedInitial.window.SearchController.activate();
+    failedInitial.window.TrainingApp.features.search.activate();
     await failedInitial.settle();
     assert.equal(tableRows(failedInitial.elements.searchResults)[0].children[0].colSpan, 10, "request-error placeholder should span all Search columns");
 
@@ -449,7 +453,7 @@ async function main() {
         ],
         total_count: 2,
     }));
-    actions.window.SearchController.activate();
+    actions.window.TrainingApp.features.search.activate();
     await actions.settle();
     const resultRows = tableRows(actions.elements.searchResults);
     assert.equal(resultRows.length, 2);
@@ -532,7 +536,7 @@ async function main() {
     assert.equal(actions.body.children.length, 0, "the menu should close before queueing and polling");
 
     const unknownType = createSearchHarness("http://localhost/?tab=search&search_sport_type=UnmappedActivityType&search_activity_category=run&activity_category=run");
-    unknownType.window.SearchController.activate();
+    unknownType.window.TrainingApp.features.search.activate();
     await unknownType.settle();
     assert.equal(unknownType.elements.searchSportType.value, "UnmappedActivityType");
     assert.ok(unknownType.elements.searchSportType.children.some(option => option.value === "UnmappedActivityType"));
@@ -546,7 +550,7 @@ async function main() {
         items: [{ activity_id: "12/34", name: "Unsafe id", date_local: "2024-04-03" }],
         total_count: 1,
     }));
-    unsafeActivity.window.SearchController.activate();
+    unsafeActivity.window.TrainingApp.features.search.activate();
     await unsafeActivity.settle();
     const unsafeButton = descendants(unsafeActivity.elements.searchResults)
         .find(element => element.className.includes("search-actions-toggle"));
@@ -563,7 +567,7 @@ async function main() {
         items: Array.from({ length: query.offset === 100 ? 26 : 50 }, (_, index) => ({ name: `Activity ${query.offset + index + 1}` })),
         total_count: 126,
     }));
-    pagination.window.SearchController.activate();
+    pagination.window.TrainingApp.features.search.activate();
     await pagination.settle();
     assert.equal(pagination.elements.searchPageStatus.textContent, "Showing 1–50 of 126 activities");
     await pagination.elements.searchNext.trigger("click");
@@ -581,7 +585,7 @@ async function main() {
 
     const singleResult = createSearchHarness();
     singleResult.setResponse(async () => ({ items: [{ name: "Solo" }], total_count: 1 }));
-    singleResult.window.SearchController.activate();
+    singleResult.window.TrainingApp.features.search.activate();
     await singleResult.settle();
     assert.equal(singleResult.elements.searchPageStatus.textContent, "Showing 1 of 1 activity");
     assert.equal(singleResult.elements.searchNext.disabled, true);
@@ -590,7 +594,7 @@ async function main() {
     staleOffset.setResponse(async query => query.offset === 250
         ? { items: [], total_count: 75 }
         : { items: Array(50).fill({ name: "Recovered" }), total_count: 75 });
-    staleOffset.window.SearchController.activate();
+    staleOffset.window.TrainingApp.features.search.activate();
     await staleOffset.settle();
     assert.deepEqual(staleOffset.requests.map(query => query.offset), [250, 0]);
     assert.equal(staleOffset.getUrl().searchParams.get("search_offset"), "0");
@@ -598,28 +602,28 @@ async function main() {
 
     const staleEmptyOffset = createSearchHarness("http://localhost/?tab=search&search_offset=250");
     staleEmptyOffset.setResponse(async () => ({ items: [], total_count: 0 }));
-    staleEmptyOffset.window.SearchController.activate();
+    staleEmptyOffset.window.TrainingApp.features.search.activate();
     await staleEmptyOffset.settle();
     assert.deepEqual(staleEmptyOffset.requests.map(query => query.offset), [250, 0]);
     assert.equal(staleEmptyOffset.elements.searchPageStatus.textContent, "0 activities");
 
     const restoredGear = createSearchHarness("http://localhost/?tab=search&search_gear_id=3");
-    restoredGear.window.SearchController.activate();
+    restoredGear.window.TrainingApp.features.search.activate();
     await restoredGear.settle();
     assert.equal(restoredGear.requests[0].gear_id, "3");
     assert.match(restoredGear.elements.searchActiveFilters.children[0].textContent, /^Bike: Trail Bike ×$/);
 
     const lateGear = createSearchHarness("http://localhost/?tab=search&search_gear_id=3");
     lateGear.window.AppState.gearRows = [];
-    lateGear.window.SearchController.activate();
+    lateGear.window.TrainingApp.features.search.activate();
     await lateGear.settle();
     assert.match(lateGear.elements.searchActiveFilters.children[0].textContent, /^Bike: 3 ×$/);
     lateGear.window.AppState.gearRows = [{ gear_id: 3, gear_name: "Rallon" }];
-    lateGear.window.SearchController.refreshGearOptions();
+    lateGear.window.TrainingApp.features.search.refreshGearOptions();
     assert.match(lateGear.elements.searchActiveFilters.children[0].textContent, /^Bike: Rallon ×$/);
 
     const legacyGear = createSearchHarness("http://localhost/?tab=search&gear_id=3");
-    legacyGear.window.SearchController.activate();
+    legacyGear.window.TrainingApp.features.search.activate();
     await legacyGear.settle();
     assert.equal(legacyGear.requests[0].gear_id, "3");
     assert.equal(legacyGear.getUrl().searchParams.get("search_gear_id"), "3");
@@ -627,7 +631,7 @@ async function main() {
 
     const unknownGear = createSearchHarness("http://localhost/?tab=search&search_gear_id=retired-bike");
     unknownGear.window.AppState.gearRows = [];
-    unknownGear.window.SearchController.activate();
+    unknownGear.window.TrainingApp.features.search.activate();
     await unknownGear.settle();
     assert.equal(unknownGear.requests[0].gear_id, "retired-bike");
     assert.match(unknownGear.elements.searchActiveFilters.children[0].textContent, /^Bike: retired-bike ×$/);

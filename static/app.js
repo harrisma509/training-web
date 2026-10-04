@@ -157,9 +157,6 @@ if (window.ChartsController) {
 if (window.DailyController) {
   window.TrainingApp.registerFeature("daily", window.DailyController);
 }
-if (window.SearchController) {
-  window.TrainingApp.registerFeature("search", window.SearchController);
-}
 if (window.WeeklyController) {
   window.TrainingApp.registerFeature("weekly", window.WeeklyController);
 }
@@ -532,7 +529,7 @@ function buildFeatureUrl(tab) {
   const url = new URL(window.location.href);
   url.searchParams.set("tab", tab);
   if (tab !== "daily") url.searchParams.delete("date");
-  if (tab !== "search") window.SearchController?.removeSearchParameters(url);
+  if (tab !== "search") window.TrainingApp?.features?.search?.removeSearchParameters(url);
   return url;
 }
 
@@ -582,7 +579,7 @@ function commitFeatureTransition(context) {
     state.dailyExactDate = context.route.date;
   }
   if (isSearch && context.source === "popstate") {
-    window.SearchController?.restoreFromUrl?.();
+    window.TrainingApp?.features?.search?.restoreFromUrl?.();
   }
   persistPreferences();
 

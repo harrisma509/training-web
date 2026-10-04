@@ -804,7 +804,7 @@ function renderDailySearchResults(payload = { rows: [], total_count: 0 }, query 
   advancedButton.className = "button-secondary small";
   advancedButton.textContent = "Open in Advanced Search";
   advancedButton.addEventListener("click", () => {
-    window.SearchController?.openAdvancedSearch({ text: String(query).trim() });
+    window.TrainingApp?.features?.search?.openAdvancedSearch({ text: String(query).trim() });
   });
   summary.append(summaryLabel, advancedButton);
   results.appendChild(summary);
@@ -1024,7 +1024,7 @@ function attachDailySearch() {
   clearBtn?.addEventListener("click", clearAppliedDailySearch);
   advancedBtn?.addEventListener("click", () => {
     const query = String(window.AppState.dailyAppliedQuery || "").trim();
-    if (query) window.SearchController?.openAdvancedSearch({ text: query });
+    if (query) window.TrainingApp?.features?.search?.openAdvancedSearch({ text: query });
   });
 
   document.addEventListener("click", (event) => {

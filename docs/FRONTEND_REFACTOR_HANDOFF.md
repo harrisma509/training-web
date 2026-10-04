@@ -2,7 +2,7 @@
 
 ## Status and scope
 
-This document records the current `training-web` frontend architecture through F22.
+This document records the current `training-web` frontend architecture through F24.
 It is an architecture handoff, not an approval to introduce a framework or
 rewrite the dashboard. The current implementation is server-rendered HTML
 with vanilla JavaScript modules, modular CSS, shared `AppState`, and a shared
@@ -21,7 +21,7 @@ Dynamic surfaces remain module-owned when their markup depends on runtime data.
 
 `static/app.js` is the app-shell owner. It owns:
 
-- `TrainingApp` registry population from module globals;
+- `TrainingApp` registry population and shell wiring;
 - top-level tab visibility and active-tab state;
 - URL and `popstate` handling;
 - shared header controls, mobile navigation, service subtabs, and chart/yearly
@@ -49,7 +49,7 @@ decision changes it:
 | Goals, KPIs | respective module | No-op render/load controllers | No-op | None needed | None |
 | Charts | `charts.js` / `ChartsController` | `loadData()` does not load it; category activation loads selected data | `showChartsCategory()` loads selected category | Per-data request IDs and chart destruction | Charts are destroyed when their replacement/status path requires it; no tab deactivation hook |
 | Daily | `daily.js` / `DailyController` | `loadData()` calls `load` | `popstate` may call `load` for an exact date; no normal tab hook | Daily request ID; narrative request ID/cache | Local menus/dialogs/drawers close locally; no tab deactivation hook |
-| Search | `search.js` / `SearchController` | `init` wires listeners; activation loads the current URL-backed query when needed | Same query preserves results; `refresh` reloads the current query | Search request ID; stale-result preservation | Dynamic action menus close locally; no general deactivate hook |
+| Search | `search.js` / `TrainingApp.features.search` | `init` wires listeners; activation loads the current URL-backed query when needed | Same query preserves results; `refresh` reloads the current query | Search request ID; stale-result preservation | Dynamic action menus close locally; no general deactivate hook |
 | Weekly | `weekly.js` / `WeeklyController` | `init` wires handlers; startup preload and activation share in-flight work | Same-key activation reuses loaded rows; `refresh` forces reload | Weekly request ID and coalesced loader | Commentary and audit drawers close locally; no tab deactivation hook |
 | Zones | `zones.js` / `ZonesController` | `init` binds the limit selector; startup preload and activation share in-flight work | Same-key activation reuses loaded rows; `refresh` forces reload | Zones request ID and coalesced loader | No app-level deactivation |
 | Service / Gear | `components.js`, `gear.js` | Components remains F21 lifecycle-owned; Gear `init` binds filters and its startup preload is coalesced with activation | Gear activation reuses loaded rows; `refresh` forces reload | Components F21 guards; Gear request ID and stale-response protection | Component menus/drawers close locally; no tab deactivation hook |
@@ -102,6 +102,13 @@ objects remain aliases until all callers move. The bridge has these rules:
    not receive an unhandled Promise rejection merely because the implementation
    became asynchronous.
 
+F24 retired the proven-internal `window.SearchController` compatibility global.
+`search.js` registers its controller in `TrainingApp.features.search` before
+`app.js` loads, and the shell, Daily, Gear, and Search contract harness use
+that canonical reference. Search request construction, URL/history state,
+filters, form state, pagination, stale-result protection, and visible behavior
+remain unchanged.
+
 ## Listener and async ownership
 
 Listeners attached to static controls are installed during script evaluation
@@ -118,7 +125,8 @@ the page:
   Escape handling;
 - `daily.js`: day-menu/narrative delegated table handling, dialog handling,
   and `beforeunload` status-timer cleanup;
-- `search.js`: Search delegated controls and URL synchronization;
+- `search.js`: Search delegated controls, URL synchronization, and canonical
+   registry registration;
 - other modules: static-control listeners and dynamic-render listeners local to
   their feature.
 

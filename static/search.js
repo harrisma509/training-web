@@ -1006,7 +1006,7 @@ if (typeof module !== "undefined" && module.exports) {
         loadResults(query);
     }
 
-    window.SearchController = {
+    const searchController = {
         init,
         activate,
         refresh,
@@ -1018,5 +1018,14 @@ if (typeof module !== "undefined" && module.exports) {
         },
         restoreFromUrl,
     };
+    window.TrainingApp = window.TrainingApp || { features: {} };
+    window.TrainingApp.features = window.TrainingApp.features || {};
+    window.TrainingApp.registerFeature = window.TrainingApp.registerFeature || function (name, feature) {
+        if (!feature || typeof feature !== "object") return;
+        if (!Object.prototype.hasOwnProperty.call(window.TrainingApp.features, name)) {
+            window.TrainingApp.features[name] = feature;
+        }
+    };
+    window.TrainingApp.registerFeature("search", searchController);
     init();
 })();

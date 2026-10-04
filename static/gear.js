@@ -175,7 +175,7 @@ async function loadGearData() {
   }
   window.AppState.gearRows = Array.isArray(rows) ? rows : [];
   renderGearTable();
-  window.SearchController?.refreshGearOptions?.();
+  window.TrainingApp?.features?.search?.refreshGearOptions?.();
 
   if (window.AppState.activeTab === "service" && window.AppState.serviceSubtab === "gear") {
     renderHeaderSummary();
