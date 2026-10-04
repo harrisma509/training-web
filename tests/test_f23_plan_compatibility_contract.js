@@ -17,6 +17,7 @@ assert.match(planSource, /load: \(\) => loadPlan\(true\)/);
 assert.match(planSource, /PLAN_LOAD_REQUESTS/);
 
 assert.match(weeklySource, /window\.loadWeekly\s*=\s*loadWeekly;/);
-assert.match(zonesSource, /window\.loadZones\s*=\s*loadZones;/);
+assert.doesNotMatch(zonesSource, /window\.loadZones\s*=\s*loadZones;/);
+assert.doesNotMatch(zonesSource, /window\.ZonesController\s*=/);
 
 console.log("F23 Plan compatibility-global contract tests passed.");

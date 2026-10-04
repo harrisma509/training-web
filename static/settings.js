@@ -1076,8 +1076,8 @@
       settingsZonesLimit.addEventListener("change", (event) => {
         const value = Number(event.target.value);
         updateLimitPreference("zonesLimit", value, () => {
-          if (window.AppState.activeTab === "zones" && typeof window.loadZones === "function") {
-            window.loadZones();
+          if (window.AppState.activeTab === "zones") {
+            window.TrainingApp?.features?.zones?.refresh?.();
           }
         });
       });

@@ -4,175 +4,176 @@
  * Owns zone table rendering and the threshold-based highlighting logic. It reads AppState and fetches data via the
  * shared API layer, while leaving the main tab shell and global theme styling elsewhere.
  */
-let zonesLoadRequestId = 0;
-let zonesLimitListenerBound = false;
-let zonesInitialized = false;
-let zonesLoadPromise = null;
-let zonesLoaded = false;
+(function () {
+  let zonesLoadRequestId = 0;
+  let zonesLimitListenerBound = false;
+  let zonesInitialized = false;
+  let zonesLoadPromise = null;
+  let zonesLoaded = false;
 
-function formatPercent(value) {
-  if (value === null || value === undefined || value === "") {
-    return "";
-  }
-
-  const pct = Number(value);
-  if (Number.isNaN(pct)) {
-    return "";
-  }
-
-  return `${Math.round(pct)}%`;
-}
-
-function zonePctClass(metric, value) {
-  const pct = Number(value);
-
-  if (Number.isNaN(pct)) {
-    return "";
-  }
-
-  const thresholds = window.APP_CONSTANTS.ZONE_THRESHOLDS[metric];
-  if (!thresholds) {
-    return "";
-  }
-
-  if (metric === "z1_z2_pct") {
-    if (pct < thresholds.targetMin) return "zone-bad";
-    if (pct <= thresholds.targetMax) return "zone-good";
-    return "zone-strong";
-  }
-
-  if (metric === "z3_pct") {
-    if (pct < thresholds.targetMin) return "zone-low";
-    if (pct <= thresholds.targetMax) return "zone-good";
-    return "zone-bad";
-  }
-
-  if (metric === "z4_z5_pct") {
-    if (pct <= thresholds.targetMax) return "zone-good";
-    if (pct <= thresholds.cautionMax) return "zone-caution";
-    return "zone-bad";
-  }
-
-  return "";
-}
-
-function zoneHeaderLabel(metric, title) {
-  return `${title}%(${zoneHeaderRange(metric)})`;
-}
-
-async function loadZonesData() {
-  const requestId = ++zonesLoadRequestId;
-  const limit = Number(window.AppState.zonesLimit);
-
-  try {
-    if (window.api && typeof window.api.fetchZones === "function") {
-      const rows = await window.api.fetchZones(limit);
-      if (requestId !== zonesLoadRequestId) {
-        return false;
-      }
-      window.AppState.zonesRows = rows;
-    } else {
-      const rows = await fetch(`/api/zones?limit=${limit}`).then(response => response.json());
-      if (requestId !== zonesLoadRequestId) {
-        return false;
-      }
-      window.AppState.zonesRows = rows;
+  function formatPercent(value) {
+    if (value === null || value === undefined || value === "") {
+      return "";
     }
-  } catch (error) {
-    console.error(error);
+
+    const pct = Number(value);
+    if (Number.isNaN(pct)) {
+      return "";
+    }
+
+    return `${Math.round(pct)}%`;
+  }
+
+  function zonePctClass(metric, value) {
+    const pct = Number(value);
+
+    if (Number.isNaN(pct)) {
+      return "";
+    }
+
+    const thresholds = window.APP_CONSTANTS.ZONE_THRESHOLDS[metric];
+    if (!thresholds) {
+      return "";
+    }
+
+    if (metric === "z1_z2_pct") {
+      if (pct < thresholds.targetMin) return "zone-bad";
+      if (pct <= thresholds.targetMax) return "zone-good";
+      return "zone-strong";
+    }
+
+    if (metric === "z3_pct") {
+      if (pct < thresholds.targetMin) return "zone-low";
+      if (pct <= thresholds.targetMax) return "zone-good";
+      return "zone-bad";
+    }
+
+    if (metric === "z4_z5_pct") {
+      if (pct <= thresholds.targetMax) return "zone-good";
+      if (pct <= thresholds.cautionMax) return "zone-caution";
+      return "zone-bad";
+    }
+
+    return "";
+  }
+
+  function zoneHeaderLabel(metric, title) {
+    return `${title}%(${zoneHeaderRange(metric)})`;
+  }
+
+  async function loadZonesData() {
+    const requestId = ++zonesLoadRequestId;
+    const limit = Number(window.AppState.zonesLimit);
+
+    try {
+      if (window.api && typeof window.api.fetchZones === "function") {
+        const rows = await window.api.fetchZones(limit);
+        if (requestId !== zonesLoadRequestId) {
+          return false;
+        }
+        window.AppState.zonesRows = rows;
+      } else {
+        const rows = await fetch(`/api/zones?limit=${limit}`).then(response => response.json());
+        if (requestId !== zonesLoadRequestId) {
+          return false;
+        }
+        window.AppState.zonesRows = rows;
+      }
+    } catch (error) {
+      console.error(error);
+      if (requestId !== zonesLoadRequestId) {
+        return false;
+      }
+      window.AppState.zonesRows = [];
+    }
+
     if (requestId !== zonesLoadRequestId) {
       return false;
     }
-    window.AppState.zonesRows = [];
-  }
 
-  if (requestId !== zonesLoadRequestId) {
-    return false;
-  }
+    renderZonesTable();
 
-  renderZonesTable();
-
-  if (window.AppState.activeTab === "zones") {
-    renderHeaderSummary();
-  }
-  return true;
-}
-
-function loadZones(force = true) {
-  if (!force && zonesLoaded) {
-    return Promise.resolve(true);
-  }
-  if (!force && zonesLoadPromise) {
-    return zonesLoadPromise;
-  }
-  zonesLoadPromise = loadZonesData()
-    .then(result => {
-      zonesLoaded = result === true;
-      return result === true;
-    })
-    .catch(() => false)
-    .finally(() => {
-      zonesLoadPromise = null;
-    });
-  return zonesLoadPromise;
-}
-
-function initZones() {
-  if (zonesInitialized) {
+    if (window.AppState.activeTab === "zones") {
+      renderHeaderSummary();
+    }
     return true;
   }
-  zonesInitialized = true;
-  attachZonesLimitSelector();
-  return true;
-}
 
-function attachZonesLimitSelector() {
-  if (zonesLimitListenerBound) {
-    return;
-  }
-
-  const zonesLimitSelector = document.getElementById("zonesLimit");
-  if (!zonesLimitSelector) {
-    return;
-  }
-
-  zonesLimitSelector.addEventListener("change", (event) => {
-    const nextValue = Number(event.target.value);
-    const allowedValues = Array.isArray(window.APP_ROW_LIMITS?.zones) ? window.APP_ROW_LIMITS.zones : [26, 60, 260];
-
-    if (!Number.isInteger(nextValue) || !allowedValues.includes(nextValue)) {
-      event.target.value = String(window.AppState.zonesLimit ?? 60);
-      return;
+  function loadZones(force = true) {
+    if (!force && zonesLoaded) {
+      return Promise.resolve(true);
     }
-
-    if (typeof window.updateLimitPreference === "function") {
-      window.updateLimitPreference("zonesLimit", nextValue, () => {
-        if (window.AppState.activeTab === "zones" && typeof window.loadZones === "function") {
-          window.loadZones();
-        }
+    if (!force && zonesLoadPromise) {
+      return zonesLoadPromise;
+    }
+    zonesLoadPromise = loadZonesData()
+      .then(result => {
+        zonesLoaded = result === true;
+        return result === true;
+      })
+      .catch(() => false)
+      .finally(() => {
+        zonesLoadPromise = null;
       });
+    return zonesLoadPromise;
+  }
+
+  function initZones() {
+    if (zonesInitialized) {
+      return true;
+    }
+    zonesInitialized = true;
+    attachZonesLimitSelector();
+    return true;
+  }
+
+  function attachZonesLimitSelector() {
+    if (zonesLimitListenerBound) {
       return;
     }
 
-    window.AppState.zonesLimit = nextValue;
-    if (typeof window.persistPreferences === "function") {
-      window.persistPreferences();
+    const zonesLimitSelector = document.getElementById("zonesLimit");
+    if (!zonesLimitSelector) {
+      return;
     }
-    if (window.AppState.activeTab === "zones" && typeof window.loadZones === "function") {
-      window.loadZones();
-    }
-  });
 
-  zonesLimitListenerBound = true;
-}
+    zonesLimitSelector.addEventListener("change", (event) => {
+      const nextValue = Number(event.target.value);
+      const allowedValues = Array.isArray(window.APP_ROW_LIMITS?.zones) ? window.APP_ROW_LIMITS.zones : [26, 60, 260];
 
-function renderZonesTable() {
-  const rows = window.AppState.zonesRows.map(row => {
-    const z1z2Class = zonePctClass("z1_z2_pct", row.z1_z2_pct);
-    const z3Class = zonePctClass("z3_pct", row.z3_pct);
-    const z4z5Class = zonePctClass("z4_z5_pct", row.z4_z5_pct);
+      if (!Number.isInteger(nextValue) || !allowedValues.includes(nextValue)) {
+        event.target.value = String(window.AppState.zonesLimit ?? 60);
+        return;
+      }
 
-    return `
+      if (typeof window.updateLimitPreference === "function") {
+        window.updateLimitPreference("zonesLimit", nextValue, () => {
+          if (window.AppState.activeTab === "zones") {
+            window.TrainingApp?.features?.zones?.refresh?.();
+          }
+        });
+        return;
+      }
+
+      window.AppState.zonesLimit = nextValue;
+      if (typeof window.persistPreferences === "function") {
+        window.persistPreferences();
+      }
+      if (window.AppState.activeTab === "zones") {
+        window.TrainingApp?.features?.zones?.refresh?.();
+      }
+    });
+
+    zonesLimitListenerBound = true;
+  }
+
+  function renderZonesTable() {
+    const rows = window.AppState.zonesRows.map(row => {
+      const z1z2Class = zonePctClass("z1_z2_pct", row.z1_z2_pct);
+      const z3Class = zonePctClass("z3_pct", row.z3_pct);
+      const z4z5Class = zonePctClass("z4_z5_pct", row.z4_z5_pct);
+
+      return `
       <tr>
         <td>${safe(row.week_start)}</td>
         <td>${safe(row.ride_time_hhmm)}</td>
@@ -188,9 +189,9 @@ function renderZonesTable() {
         <td>${safe(row.ride_count)}</td>
       </tr>
     `;
-  }).join("");
+    }).join("");
 
-  document.getElementById("zonesTable").innerHTML = `
+    document.getElementById("zonesTable").innerHTML = `
     <thead>
       <tr>
         <th>Week Start</th>
@@ -211,16 +212,24 @@ function renderZonesTable() {
       ${rows}
     </tbody>
   `;
-}
+  }
 
-initZones();
+  initZones();
 
-window.ZonesController = {
-  init: initZones,
-  activate: () => loadZones(false),
-  refresh: () => loadZones(true),
-  load: () => loadZones(true),
-  render: renderZonesTable,
-};
-
-window.loadZones = loadZones;
+  const zonesController = {
+    init: initZones,
+    activate: () => loadZones(false),
+    refresh: () => loadZones(true),
+    load: () => loadZones(true),
+    render: renderZonesTable,
+  };
+  window.TrainingApp = window.TrainingApp || { features: {} };
+  window.TrainingApp.features = window.TrainingApp.features || {};
+  window.TrainingApp.registerFeature = window.TrainingApp.registerFeature || function (name, feature) {
+    if (!feature || typeof feature !== "object") return;
+    if (!Object.prototype.hasOwnProperty.call(window.TrainingApp.features, name)) {
+      window.TrainingApp.features[name] = feature;
+    }
+  };
+  window.TrainingApp.registerFeature("zones", zonesController);
+})();

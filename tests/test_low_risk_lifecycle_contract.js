@@ -8,7 +8,7 @@ const source = name => fs.readFileSync(path.join(root, "static", name), "utf8");
 const candidates = [
     ["plan.js", "PlanController", "loadPlan"],
     ["search.js", "searchController", "loadResults"],
-    ["zones.js", "ZonesController", "loadZones"],
+    ["zones.js", "zonesController", "loadZones"],
     ["gear.js", "GearController", "loadGear"],
     ["weekly.js", "WeeklyController", "loadWeekly"],
 ];

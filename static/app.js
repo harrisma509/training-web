@@ -169,9 +169,6 @@ if (window.SettingsController) {
 if (window.YearlyController) {
   window.TrainingApp.registerFeature("yearly", window.YearlyController);
 }
-if (window.ZonesController) {
-  window.TrainingApp.registerFeature("zones", window.ZonesController);
-}
 if (window.ComponentsController) {
   window.TrainingApp.registerFeature("components", window.ComponentsController);
   window.TrainingApp.registerFeature("service", window.ComponentsController);
@@ -966,7 +963,7 @@ async function loadData() {
   await Promise.all([
     loadDaily(),
     window.WeeklyController?.refresh?.() ?? loadWeekly(),
-    window.ZonesController?.refresh?.() ?? loadZones(),
+    window.TrainingApp?.features?.zones?.refresh?.(),
     window.GearController?.refresh?.() ?? loadGear(),
     loadComponents(),
     loadYearly()

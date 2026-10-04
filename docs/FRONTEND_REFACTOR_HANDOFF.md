@@ -2,7 +2,7 @@
 
 ## Status and scope
 
-This document records the current `training-web` frontend architecture through F24.
+This document records the current `training-web` frontend architecture through F25.
 It is an architecture handoff, not an approval to introduce a framework or
 rewrite the dashboard. The current implementation is server-rendered HTML
 with vanilla JavaScript modules, modular CSS, shared `AppState`, and a shared
@@ -51,7 +51,7 @@ decision changes it:
 | Daily | `daily.js` / `DailyController` | `loadData()` calls `load` | `popstate` may call `load` for an exact date; no normal tab hook | Daily request ID; narrative request ID/cache | Local menus/dialogs/drawers close locally; no tab deactivation hook |
 | Search | `search.js` / `TrainingApp.features.search` | `init` wires listeners; activation loads the current URL-backed query when needed | Same query preserves results; `refresh` reloads the current query | Search request ID; stale-result preservation | Dynamic action menus close locally; no general deactivate hook |
 | Weekly | `weekly.js` / `WeeklyController` | `init` wires handlers; startup preload and activation share in-flight work | Same-key activation reuses loaded rows; `refresh` forces reload | Weekly request ID and coalesced loader | Commentary and audit drawers close locally; no tab deactivation hook |
-| Zones | `zones.js` / `ZonesController` | `init` binds the limit selector; startup preload and activation share in-flight work | Same-key activation reuses loaded rows; `refresh` forces reload | Zones request ID and coalesced loader | No app-level deactivation |
+| Zones | `zones.js` / `TrainingApp.features.zones` | `init` binds the limit selector; startup preload and activation share in-flight work | Same-key activation reuses loaded rows; `refresh` forces reload | Zones request ID and coalesced loader | No app-level deactivation |
 | Service / Gear | `components.js`, `gear.js` | Components remains F21 lifecycle-owned; Gear `init` binds filters and its startup preload is coalesced with activation | Gear activation reuses loaded rows; `refresh` forces reload | Components F21 guards; Gear request ID and stale-response protection | Component menus/drawers close locally; no tab deactivation hook |
 | Yearly | `yearly.js` plus app-owned `loadYearly` | `loadData()` calls `loadYearly` | View switch changes visibility; no normal activation load | No shared request token | Commentary drawer is dynamically created and locally closed |
 | Coach | `coach.js` / `CoachController` | Not loaded by `loadData()` | `showTab()` calls `activate` once | Session load token; interval only during response stages | Local close methods; loading interval stops on completion and `beforeunload`, but no tab deactivation hook |
@@ -328,10 +328,28 @@ because the shell registry still consumes it. The F23 contract test proves the
 removed loader is absent, canonical lifecycle methods remain present, and the
 unrelated F22 compatibility globals remain unchanged.
 
-Remaining compatibility debt includes `loadWeekly`, `loadZones`, and the
-Search controller global, each with active repository consumers. They remain
-outside this slice. The next bounded slice should select one of those only
-after a fresh repository-wide consumer and external-consumer check.
+### F25 implementation: Zones preload-global retirement
+
+F25 retires the proven-internal Zones compatibility family: `window.loadZones`
+and `window.ZonesController`. Repository search found only app-shell startup
+refresh, Settings and feature-local limit-change refreshes, lifecycle
+registration, and tests; there were no template handlers, deployment/browser
+scripts, external integrations, or unknown consumers. `zones.js` now keeps its
+loader private and registers `TrainingApp.features.zones` through the existing
+identity-preserving bootstrap pattern.
+
+Startup still calls the canonical forced `refresh`; activation remains
+cache-aware and shares an in-flight preload; explicit refresh and limit changes
+still force requests; request-generation protection, limits, persistence,
+threshold rendering, empty/error behavior, and CSS ownership are unchanged.
+The F25 contract covers registration, registry identity, preload/activation
+coalescing, cached activation, forced refresh, limit reloads, stale responses,
+rendering, and the absence of the retired globals.
+
+Remaining compatibility debt includes Gear's `GearController` and rendering
+helper consumers, Weekly's `WeeklyController` and loader paths, plus the
+unmigrated feature families listed above. The next bounded slice should
+investigate Gear before Weekly, after a fresh external-consumer check.
 
 ### Remaining inconsistencies and F20/F21 prerequisites
 
