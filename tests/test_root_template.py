@@ -351,6 +351,116 @@ def test_yearly_partial_is_single_authority_at_the_original_composition_point() 
     assert not any(descendant is weekly_drawer for descendant in all_elements(rendered_yearly))
 
 
+def test_coach_partials_are_single_authority_at_the_original_composition_points() -> None:
+    root_source = (REPO_ROOT / "templates" / "index.html").read_text(encoding="utf-8")
+    coach_source = (REPO_ROOT / "templates" / "partials" / "panes" / "coach_pane.html").read_text(
+        encoding="utf-8"
+    )
+    dialog_source = (REPO_ROOT / "templates" / "partials" / "dialogs" / "coach_delete_dialog.html").read_text(
+        encoding="utf-8"
+    )
+    rendered_source, document = parse_index()
+
+    coach_include = '{% include "partials/panes/coach_pane.html" %}'
+    dialog_include = '{% include "partials/dialogs/coach_delete_dialog.html" %}'
+    assert root_source.count(coach_include) == 1
+    assert root_source.count(dialog_include) == 1
+    assert root_source.count('id="coachPane"') == 0
+    assert root_source.count('id="coachDeleteDialog"') == 0
+    assert coach_source.count('id="coachPane"') == 1
+    assert dialog_source.count('id="coachDeleteDialog"') == 1
+    assert root_source.index(coach_include) < root_source.index(dialog_include)
+
+    main = by_tag(document, "main")[0]
+    pane_order = [child.attributes.get("id") for child in main.children if child.tag == "section"]
+    coach_index = pane_order.index("coachPane")
+    assert pane_order[coach_index - 1 : coach_index + 1] == ["yearlyPane", "coachPane"]
+
+    direct_main_children = [child.attributes.get("id") for child in main.children]
+    coach_child_index = direct_main_children.index("coachPane")
+    assert direct_main_children[coach_child_index : coach_child_index + 3] == [
+        "coachPane",
+        "coachDeleteDialog",
+        "weeklyDrawer",
+    ]
+
+    rendered_coach = by_id(document, "coachPane")
+    rendered_dialog = by_id(document, "coachDeleteDialog")
+    partial_document = parse_html(coach_source)
+    dialog_partial_document = parse_html(dialog_source)
+    assert normalized_tree(rendered_coach) == normalized_tree(by_id(partial_document, "coachPane"))
+    assert normalized_tree(rendered_dialog) == normalized_tree(by_id(dialog_partial_document, "coachDeleteDialog"))
+    assert rendered_source.count('id="coachPane"') == 1
+    assert rendered_source.count('id="coachDeleteDialog"') == 1
+
+    assert "hidden" in classes(rendered_coach)
+    assert "hidden" in classes(rendered_dialog)
+    assert [element.attributes.get("id") for element in all_elements(rendered_coach) if element.attributes.get("id")] == [
+        "coachDrawerBackdrop",
+        "coachSessionRail",
+        "coachHistoryCollapse",
+        "coachDrawerClose",
+        "coachNewChat",
+        "coachSessionStatus",
+        "coachSessions",
+        "coachDrawerOpen",
+        "coachHistoryRestore",
+        "coachOverflowToggle",
+        "coachOverflowMenu",
+        "coachUsageToggle",
+        "coachUsagePanel",
+        "coachUsageHeading",
+        "coachUsageClose",
+        "coachUsageItems",
+        "coachConversation",
+        "coachError",
+        "coachComposerWrap",
+        "coachLoadingStatus",
+        "coachComposer",
+        "coachModeSelect",
+        "coachMessageInput",
+        "coachModeStatus",
+        "coachCharacterCount",
+        "coachSend",
+    ]
+    assert [element.attributes.get("id") for element in all_elements(rendered_dialog) if element.attributes.get("id")] == [
+        "coachDeleteDialogTitle",
+        "coachDeleteDialogDescription",
+        "coachDeleteDialogError",
+        "coachDeleteCancel",
+        "coachDeleteConfirm",
+    ]
+    assert [element.attributes.get("id") for element in by_tag(rendered_coach, "form")] == ["coachComposer"]
+    assert [element.attributes.get("id") for element in by_tag(rendered_dialog, "form")] == []
+    assert by_id(rendered_coach, "coachComposer").attributes.get("class") == "coach-composer"
+    assert by_id(rendered_coach, "coachComposer").attributes.get("id") == "coachComposer"
+    assert by_id(rendered_coach, "coachSend").attributes.get("type") == "submit"
+    assert by_id(rendered_coach, "coachMessageInput").attributes.get("maxlength") == "12000"
+    assert by_id(rendered_coach, "coachModeSelect").attributes.get("aria-describedby") == "coachModeStatus"
+    assert rendered_dialog.attributes.get("role") == "dialog"
+    assert rendered_dialog.attributes.get("aria-labelledby") == "coachDeleteDialogTitle"
+    assert rendered_dialog.attributes.get("aria-describedby") == "coachDeleteDialogDescription"
+    assert by_id(rendered_dialog, "coachDeleteCancel").attributes.get("type") == "button"
+    assert by_id(rendered_dialog, "coachDeleteConfirm").attributes.get("type") == "button"
+    assert not any(
+        attribute.lower().startswith("on")
+        for element in all_elements(rendered_coach) + all_elements(rendered_dialog)
+        for attribute in element.attributes
+    )
+
+    settings_ai_coach = by_id(document, "settingsAiCoachTab")
+    assert settings_ai_coach.parent is not rendered_coach
+    assert settings_ai_coach.parent is not rendered_dialog
+    assert by_id(document, "aiCoachSettingsSave")
+    assert by_id(document, "aiCoachCustomInstructionsSave")
+    assert by_id(document, "aiCoachMemoryForm")
+
+    weekly_drawer = by_id(document, "weeklyDrawer")
+    assert weekly_drawer.parent is main
+    assert weekly_drawer not in all_elements(rendered_coach)
+    assert weekly_drawer not in all_elements(rendered_dialog)
+
+
 def test_core_pane_partials_are_single_authority_at_original_composition_points() -> None:
     root_source = (REPO_ROOT / "templates" / "index.html").read_text(encoding="utf-8")
     rendered_source, document = parse_index()
