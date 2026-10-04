@@ -160,9 +160,6 @@ if (window.DailyController) {
 if (window.SettingsController) {
   window.TrainingApp.registerFeature("settings", window.SettingsController);
 }
-if (window.YearlyController) {
-  window.TrainingApp.registerFeature("yearly", window.YearlyController);
-}
 if (window.ComponentsController) {
   window.TrainingApp.registerFeature("components", window.ComponentsController);
   window.TrainingApp.registerFeature("service", window.ComponentsController);
@@ -191,8 +188,6 @@ const componentsSubtab = document.getElementById("componentsSubtab");
 const gearSubtab = document.getElementById("gearSubtab");
 const yearlyTab = document.getElementById("yearlyTab");
 const coachTab = document.getElementById("coachTab");
-const yearlyAnnualTab = document.getElementById("yearlyAnnualTab");
-const yearlyMonthlyTab = document.getElementById("yearlyMonthlyTab");
 const planPane = document.getElementById("planPane");
 const goalsPane = document.getElementById("goalsPane");
 const kpisPane = document.getElementById("kpisPane");
@@ -210,8 +205,6 @@ const gearPane = document.getElementById("gearPane");
 const componentsPane = document.getElementById("componentsPane");
 const yearlyPane = document.getElementById("yearlyPane");
 const coachPane = document.getElementById("coachPane");
-const yearlyAnnualView = document.getElementById("yearlyAnnualView");
-const yearlyMonthlyView = document.getElementById("yearlyMonthlyView");
 
 const dailyControls = document.getElementById("dailyControls");
 const weeklyControls = document.getElementById("weeklyControls");
@@ -225,7 +218,6 @@ const zonesLimit = document.getElementById("zonesLimit");
 const hideShoesCheckbox = document.getElementById("hideShoesCheckbox");
 const hideRetiredCheckbox = document.getElementById("hideRetiredCheckbox");
 const gearRefresh = document.getElementById("gearRefresh");
-const yearlyRefresh = document.getElementById("yearlyRefresh");
 const componentsBikeSelect = document.getElementById("componentsBikeSelect");
 
 const syncNowBtn = document.getElementById("syncNowBtn");
@@ -293,26 +285,6 @@ document.addEventListener("click", event => {
   if (!event.target.closest(".mobile-navigation-bar, #mobileNavigation")) closeMobileNavigation();
 });
 
-function formatYearlyMaintenanceValue(value) {
-  if (value === null || value === undefined || value === "") {
-    return "No entry recorded.";
-  }
-  if (typeof value === "string" && value.trim() === "") {
-    return "No entry recorded.";
-  }
-  return String(value);
-}
-
-function formatYearlyMaintenanceDifference(value) {
-  if (value === null || value === undefined || value === "") {
-    return "No entry recorded.";
-  }
-  if (typeof value === "string" && value.trim() === "") {
-    return "No entry recorded.";
-  }
-  return String(value);
-}
-
 planTab?.addEventListener("click", () => showTab("plan"));
 goalsTab?.addEventListener("click", () => showTab("goals"));
 kpisTab?.addEventListener("click", () => showTab("kpis"));
@@ -336,12 +308,9 @@ document.querySelectorAll(".service-subtab").forEach((button, index, buttons) =>
 });
 yearlyTab.addEventListener("click", () => showTab("yearly"));
 coachTab?.addEventListener("click", () => showTab("coach"));
-yearlyAnnualTab?.addEventListener("click", () => showYearlyView("annual"));
-yearlyMonthlyTab?.addEventListener("click", () => showYearlyView("monthly"));
 gearRefresh.addEventListener("click", () => {
   window.TrainingApp?.features?.gear?.refresh?.();
 });
-yearlyRefresh?.addEventListener("click", loadYearly);
 componentsBikeSelect?.addEventListener("change", event => {
   const selectedGearId = String(event.target.value || "").trim();
   window.AppState.componentsSelectedGearId = selectedGearId;
@@ -356,25 +325,6 @@ function statusPill(value) {
     return "";
   }
   return `<span class="pill status-${status}">${status}</span>`;
-}
-
-function showYearlyView(view) {
-  const nextView = ["annual", "monthly"].includes(view) ? view : "annual";
-  state.yearlyView = nextView;
-  persistPreferences();
-
-  if (yearlyAnnualView) {
-    yearlyAnnualView.classList.toggle("hidden", nextView !== "annual");
-  }
-  if (yearlyMonthlyView) {
-    yearlyMonthlyView.classList.toggle("hidden", nextView !== "monthly");
-  }
-  if (yearlyAnnualTab) {
-    yearlyAnnualTab.classList.toggle("active", nextView === "annual");
-  }
-  if (yearlyMonthlyTab) {
-    yearlyMonthlyTab.classList.toggle("active", nextView === "monthly");
-  }
 }
 
 function normalizeChartsCategory(category) {
@@ -455,8 +405,6 @@ chartsFitnessTab?.addEventListener("click", () => showChartsCategory("fitness"))
 chartsLoadTab?.addEventListener("click", () => showChartsCategory("load"));
 chartsHealthTab?.addEventListener("click", () => showChartsCategory("health"));
 chartsVolumeTab?.addEventListener("click", () => showChartsCategory("volume"));
-
-window.showYearlyView = showYearlyView;
 
 function showServiceSubtab(subtab) {
   const normalizedSubtab = ["components", "gear"].includes(subtab) ? subtab : "components";
@@ -617,7 +565,7 @@ function commitFeatureTransition(context) {
   }
 
   if (isCharts) showChartsCategory(getChartsCategory(), { load: false });
-  if (isYearly) showYearlyView(state.yearlyView || "annual");
+  if (isYearly) window.TrainingApp?.features?.yearly?.showView?.(state.yearlyView || "annual");
 }
 
 async function activateLegacyFeature(featureName, context, feature) {
@@ -674,285 +622,6 @@ function renderHeaderSummary() {
   return;
 }
 
-function formatAnnualNumber(value, digits = 0) {
-  if (value === null || value === undefined || value === "") {
-    return "";
-  }
-
-  const parsed = Number(value);
-  if (!Number.isFinite(parsed)) {
-    return "";
-  }
-
-  const formatter = new Intl.NumberFormat("en-US", {
-    minimumFractionDigits: digits,
-    maximumFractionDigits: digits,
-  });
-
-  return formatter.format(parsed);
-}
-
-function formatMonthlyHours(value) {
-  if (value === null || value === undefined || value === "") {
-    return "";
-  }
-
-  const numeric = Number(value);
-  if (!Number.isFinite(numeric) || numeric < 0) {
-    return "";
-  }
-
-  const totalMinutes = Math.round(numeric * 60);
-  const hours = Math.floor(totalMinutes / 60);
-  const minutes = totalMinutes % 60;
-  return `${hours}:${String(minutes).padStart(2, "0")}`;
-}
-
-function formatRecordCell(value, digits = 0, isRecord = false) {
-  const formatted = value === null || value === undefined || value === "" ? "" : formatAnnualNumber(Number(value), digits);
-  if (!formatted) {
-    return "";
-  }
-  if (!isRecord) {
-    return formatted;
-  }
-  return `<span class="record-trophy" aria-label="Record">🏆</span> ${formatted}`;
-}
-
-function getYearlyCommentText(value) {
-  if (value === null || value === undefined || value === "") {
-    return "No entry recorded.";
-  }
-  return String(value);
-}
-
-let yearlyCommentarySurface = null;
-
-function ensureYearlyCommentaryDrawer() {
-  let drawer = document.getElementById("yearlyCommentaryDrawer");
-  if (drawer) {
-    return drawer;
-  }
-
-  drawer = document.createElement("div");
-  drawer.id = "yearlyCommentaryDrawer";
-  drawer.className = "yearly-commentary-drawer hidden";
-  drawer.setAttribute("aria-hidden", "true");
-  drawer.innerHTML = `
-    <div class="yearly-commentary-panel">
-      <div class="yearly-commentary-header">
-        <div>
-          <div class="drawer-title">Yearly Commentary</div>
-          <div class="drawer-subtitle">Annual notes for the selected year</div>
-        </div>
-        <button type="button" class="drawer-close-button" aria-label="Close yearly commentary drawer">×</button>
-      </div>
-      <div class="yearly-commentary-body">
-        <div class="yearly-commentary-section">
-          <div class="yearly-commentary-label">Year</div>
-          <div id="yearlyCommentaryYear" class="yearly-commentary-value"></div>
-        </div>
-        <div class="yearly-commentary-section">
-          <div class="yearly-commentary-label">✅ Good</div>
-          <div id="yearlyCommentaryGood" class="yearly-commentary-value"></div>
-        </div>
-        <div class="yearly-commentary-section">
-          <div class="yearly-commentary-label">⚠ Bad</div>
-          <div id="yearlyCommentaryBad" class="yearly-commentary-value"></div>
-        </div>
-        <div class="yearly-commentary-section">
-          <div class="yearly-commentary-label">📝 Annual Summary</div>
-          <div id="yearlyCommentaryAnnual" class="yearly-commentary-value"></div>
-        </div>
-      </div>
-    </div>
-  `;
-
-  const closeDrawer = () => {
-    drawer.classList.add("hidden");
-    drawer.setAttribute("aria-hidden", "true");
-  };
-  yearlyCommentarySurface = window.TrainingApp.TransientSurface.create({
-    getSurface: () => drawer,
-    onBeforeClose: closeDrawer,
-  });
-
-  drawer.addEventListener("click", event => {
-    if (event.target === drawer) {
-      yearlyCommentarySurface.requestClose("backdrop");
-    }
-  });
-
-  const closeButton = drawer.querySelector(".drawer-close-button");
-  closeButton.addEventListener("click", () => yearlyCommentarySurface.requestClose("close-button"));
-  document.addEventListener("keydown", event => {
-    if (event.key === "Escape" && yearlyCommentarySurface.isOpen()) {
-      event.preventDefault();
-      yearlyCommentarySurface.requestClose("escape");
-    }
-  });
-
-  document.body.appendChild(drawer);
-  return drawer;
-}
-
-async function openYearlyCommentaryDrawer(calendarYear, opener = null) {
-  const drawer = ensureYearlyCommentaryDrawer();
-  const yearNode = document.getElementById("yearlyCommentaryYear");
-  const goodNode = document.getElementById("yearlyCommentaryGood");
-  const badNode = document.getElementById("yearlyCommentaryBad");
-  const annualNode = document.getElementById("yearlyCommentaryAnnual");
-
-  yearNode.textContent = String(calendarYear);
-  goodNode.textContent = "Loading...";
-  badNode.textContent = "Loading...";
-  annualNode.textContent = "Loading...";
-  drawer.classList.remove("hidden");
-  drawer.setAttribute("aria-hidden", "false");
-  yearlyCommentarySurface.open({ opener });
-
-  try {
-    const payload = window.api && typeof window.api.fetchYearlyCommentary === "function"
-      ? await window.api.fetchYearlyCommentary(calendarYear)
-      : await fetch(`/api/yearly/commentary/${calendarYear}`).then(async response => {
-        if (!response.ok) {
-          const detail = response.status === 404 ? "No commentary exists for this year." : `Request failed: ${response.status}`;
-          goodNode.textContent = detail;
-          badNode.textContent = "No entry recorded.";
-          annualNode.textContent = "No entry recorded.";
-          throw new Error(detail);
-        }
-        return response.json();
-      });
-
-    goodNode.textContent = getYearlyCommentText(payload.good_summary);
-    badNode.textContent = getYearlyCommentText(payload.bad_summary);
-    annualNode.textContent = getYearlyCommentText(payload.annual_summary);
-  } catch (error) {
-    console.error(error);
-    goodNode.textContent = "No entry recorded.";
-    badNode.textContent = "No entry recorded.";
-    annualNode.textContent = "No entry recorded.";
-  }
-}
-
-function renderYearlyTable() {
-  const rows = (window.AppState.yearlyRows || []).map(row => {
-    const isYtd = row.is_ytd === true || row.is_ytd === "true" || row.is_ytd === 1 || row.is_ytd === "1";
-
-    return `
-      <tr data-calendar-year="${safe(row.calendar_year)}" class="yearly-metric-row" tabindex="0" aria-label="View commentary for ${safe(row.calendar_year)}">
-        <td>${safe(row.calendar_year)}</td>
-        <td>${formatRecordCell(row.training_hours, 1, Boolean(row.training_hours_record))}</td>
-        <td>${formatRecordCell(row.active_days, 0, Boolean(row.active_days_record))}</td>
-        <td>${formatRecordCell(row.cycling_distance_mi, 1, Boolean(row.cycling_distance_mi_record))}</td>
-        <td>${formatRecordCell(row.total_elevation_ft, 0, Boolean(row.total_elevation_ft_record))}</td>
-        <td>${formatRecordCell(row.bike_elevation_ft, 0, Boolean(row.bike_elevation_ft_record))}</td>
-        <td>${formatRecordCell(row.ride_count, 0, Boolean(row.ride_count_record))}</td>
-        <td>${formatRecordCell(row.ski_days, 0, Boolean(row.ski_days_record))}</td>
-        <td>${isYtd ? '<span class="status-pill status-active">YTD</span>' : ""}</td>
-      </tr>
-    `;
-  }).join("");
-
-  document.getElementById("yearlyTable").innerHTML = `
-    <thead>
-      <tr>
-        <th>Year</th>
-        <th>Hours</th>
-        <th>Active Days</th>
-        <th>Cycling Distance</th>
-        <th>Total Elevation</th>
-        <th>Bike Elev.</th>
-        <th>Ride Count</th>
-        <th>Ski Days</th>
-        <th>Coverage</th>
-      </tr>
-    </thead>
-    <tbody>
-      ${rows}
-    </tbody>
-  `;
-
-  document.querySelectorAll("#yearlyTable tbody tr[data-calendar-year]").forEach(row => {
-    row.addEventListener("click", () => {
-      openYearlyCommentaryDrawer(row.dataset.calendarYear, row);
-    });
-    row.addEventListener("keydown", event => {
-      if (event.key === "Enter" || event.key === " ") {
-        event.preventDefault();
-        openYearlyCommentaryDrawer(row.dataset.calendarYear, row);
-      }
-    });
-  });
-}
-
-function renderYearlyMonthlyTable() {
-  const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-  const rows = (window.AppState.yearlyMonthlyRows || []).map(row => {
-    const cells = monthNames.map((month, index) => {
-      const monthKey = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"][index];
-      const value = row[monthKey];
-      const record = Boolean(row[`${monthKey}_record`]);
-
-      return `
-        <td class="yearly-month-cell ${record ? "record-cell" : ""}">
-          ${value === null || value === undefined || value === "" ? "" : `${record ? '<span class="record-trophy" aria-label="Record">🏆</span> ' : ""}${formatMonthlyHours(value)}`}
-        </td>
-      `;
-    }).join("");
-
-    return `
-      <tr>
-        <td>${safe(row.calendar_year)}</td>
-        ${cells}
-        <td>${row.total === null || row.total === undefined || row.total === "" ? "" : formatMonthlyHours(row.total)}</td>
-      </tr>
-    `;
-  }).join("");
-
-  document.getElementById("yearlyMonthlyTable").innerHTML = `
-    <thead>
-      <tr>
-        <th>Year</th>
-        ${monthNames.map(month => `<th>${month}</th>`).join("")}
-        <th>Total</th>
-      </tr>
-    </thead>
-    <tbody>
-      ${rows}
-    </tbody>
-  `;
-}
-
-async function loadYearly() {
-  try {
-    const payload = window.api && typeof window.api.fetchYearly === "function"
-      ? await window.api.fetchYearly()
-      : await fetch("/api/yearly").then(async response => {
-        if (!response.ok) {
-          throw new Error(`Yearly endpoint failed: ${response.status}`);
-        }
-        return response.json();
-      });
-
-    const annualRows = Array.isArray(payload) ? payload : (payload.annual_metrics || []);
-    const monthlyRows = Array.isArray(payload.monthly_hours) ? payload.monthly_hours : [];
-    window.AppState.yearlyRows = annualRows;
-    window.AppState.yearlyMonthlyRows = monthlyRows;
-  } catch (error) {
-    console.error(error);
-    window.AppState.yearlyRows = [];
-    window.AppState.yearlyMonthlyRows = [];
-  }
-
-  renderYearlyTable();
-  renderYearlyMonthlyTable();
-  if (window.AppState.activeTab === "yearly") {
-    showYearlyView(window.AppState.yearlyView || "annual");
-  }
-}
-
 async function loadData() {
   await Promise.all([
     loadDaily(),
@@ -960,7 +629,7 @@ async function loadData() {
     window.TrainingApp?.features?.zones?.refresh?.(),
     window.TrainingApp?.features?.gear?.refresh?.(),
     loadComponents(),
-    loadYearly()
+    window.TrainingApp?.features?.yearly?.refresh?.()
   ]);
 
   renderHeaderSummary();

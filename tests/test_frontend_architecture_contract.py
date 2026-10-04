@@ -4,6 +4,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 HANDOFF = (ROOT / "docs" / "FRONTEND_REFACTOR_HANDOFF.md").read_text(encoding="utf-8")
 APP = (ROOT / "static" / "app.js").read_text(encoding="utf-8")
+YEARLY = (ROOT / "static" / "yearly.js").read_text(encoding="utf-8")
 INDEX = (ROOT / "templates" / "index.html").read_text(encoding="utf-8")
 
 
@@ -45,5 +46,5 @@ def test_runtime_composition_still_matches_the_documented_bridge_boundary() -> N
     assert "window.TrainingApp.activateFeature = activateFeature;" in APP
     assert "window.activateFeature = activateFeature;" in APP
     assert 'if (featureName === "plan")' not in APP
-    assert "window.TrainingApp.TransientSurface" in INDEX or "window.TrainingApp.TransientSurface" in APP
+    assert "window.TrainingApp.TransientSurface" in INDEX or "window.TrainingApp.TransientSurface" in APP or "window.TrainingApp.TransientSurface" in YEARLY
     assert INDEX.index('/static/app.js?v={{ asset_version }}') > INDEX.index('/static/coach.js?v={{ asset_version }}')

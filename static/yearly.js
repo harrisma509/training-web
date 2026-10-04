@@ -1,3 +1,4 @@
+(function () {
 /*
  * yearly.js
  * Yearly dashboard feature module.
@@ -13,6 +14,11 @@ const yearlyMaintenanceComparisonBody = document.getElementById("yearlyMaintenan
 const yearlyMaintenanceResult = document.getElementById("yearlyMaintenanceResult");
 const yearlyMaintenancePreviewBtn = document.getElementById("yearlyMaintenancePreviewBtn");
 const yearlyMaintenanceCalculateBtn = document.getElementById("yearlyMaintenanceCalculateBtn");
+let yearlyLoadRequestId = 0;
+let yearlyLoadPromise = null;
+let yearlyLoaded = false;
+let yearlyInitialized = false;
+let yearlyCommentarySurface = null;
 
 function formatYearlyMaintenanceValue(value) {
   if (value === null || value === undefined || value === "") {
@@ -383,24 +389,35 @@ function ensureYearlyCommentaryDrawer() {
     </div>
   `;
 
+  const closeDrawer = () => {
+    drawer.classList.add("hidden");
+    drawer.setAttribute("aria-hidden", "true");
+  };
+  yearlyCommentarySurface = window.TrainingApp.TransientSurface.create({
+    getSurface: () => drawer,
+    onBeforeClose: closeDrawer,
+  });
+
   drawer.addEventListener("click", event => {
     if (event.target === drawer) {
-      drawer.classList.add("hidden");
-      drawer.setAttribute("aria-hidden", "true");
+      yearlyCommentarySurface.requestClose("backdrop");
     }
   });
 
   const closeButton = drawer.querySelector(".drawer-close-button");
-  closeButton.addEventListener("click", () => {
-    drawer.classList.add("hidden");
-    drawer.setAttribute("aria-hidden", "true");
+  closeButton.addEventListener("click", () => yearlyCommentarySurface.requestClose("close-button"));
+  document.addEventListener("keydown", event => {
+    if (event.key === "Escape" && yearlyCommentarySurface.isOpen()) {
+      event.preventDefault();
+      yearlyCommentarySurface.requestClose("escape");
+    }
   });
 
   document.body.appendChild(drawer);
   return drawer;
 }
 
-async function openYearlyCommentaryDrawer(calendarYear) {
+async function openYearlyCommentaryDrawer(calendarYear, opener = null) {
   const drawer = ensureYearlyCommentaryDrawer();
   const yearNode = document.getElementById("yearlyCommentaryYear");
   const goodNode = document.getElementById("yearlyCommentaryGood");
@@ -413,6 +430,7 @@ async function openYearlyCommentaryDrawer(calendarYear) {
   annualNode.textContent = "Loading...";
   drawer.classList.remove("hidden");
   drawer.setAttribute("aria-hidden", "false");
+  yearlyCommentarySurface.open({ opener });
 
   try {
     const payload = window.api && typeof window.api.fetchYearlyCommentary === "function"
@@ -479,12 +497,12 @@ function renderYearlyTable() {
 
   document.querySelectorAll("#yearlyTable tbody tr[data-calendar-year]").forEach(row => {
     row.addEventListener("click", () => {
-      openYearlyCommentaryDrawer(row.dataset.calendarYear);
+      openYearlyCommentaryDrawer(row.dataset.calendarYear, row);
     });
     row.addEventListener("keydown", event => {
       if (event.key === "Enter" || event.key === " ") {
         event.preventDefault();
-        openYearlyCommentaryDrawer(row.dataset.calendarYear);
+        openYearlyCommentaryDrawer(row.dataset.calendarYear, row);
       }
     });
   });
@@ -528,13 +546,10 @@ function renderYearlyMonthlyTable() {
   `;
 }
 
-async function safeShowYearlyView(view) {
-  if (typeof window.showYearlyView === "function") {
-    window.showYearlyView(view);
-    return;
-  }
-
+function showYearlyView(view) {
   const nextView = ["annual", "monthly"].includes(view) ? view : "annual";
+  window.AppState.yearlyView = nextView;
+  persistPreferences();
   const yearlyAnnualView = document.getElementById("yearlyAnnualView");
   const yearlyMonthlyView = document.getElementById("yearlyMonthlyView");
   const yearlyAnnualTab = document.getElementById("yearlyAnnualTab");
@@ -546,7 +561,8 @@ async function safeShowYearlyView(view) {
   yearlyMonthlyTab?.classList.toggle("active", nextView === "monthly");
 }
 
-async function loadYearly() {
+async function loadYearlyData() {
+  const requestId = ++yearlyLoadRequestId;
   try {
     const payload = window.api && typeof window.api.fetchYearly === "function"
       ? await window.api.fetchYearly()
@@ -559,30 +575,87 @@ async function loadYearly() {
 
     const annualRows = Array.isArray(payload) ? payload : (payload.annual_metrics || []);
     const monthlyRows = Array.isArray(payload.monthly_hours) ? payload.monthly_hours : [];
+    if (requestId !== yearlyLoadRequestId) {
+      return false;
+    }
     window.AppState.yearlyRows = annualRows;
     window.AppState.yearlyMonthlyRows = monthlyRows;
   } catch (error) {
     console.error(error);
+    if (requestId !== yearlyLoadRequestId) {
+      return false;
+    }
     window.AppState.yearlyRows = [];
     window.AppState.yearlyMonthlyRows = [];
   }
 
+  if (requestId !== yearlyLoadRequestId) {
+    return false;
+  }
   renderYearlyTable();
   renderYearlyMonthlyTable();
   if (window.AppState.activeTab === "yearly") {
-    safeShowYearlyView(window.AppState.yearlyView || "annual");
+    showYearlyView(window.AppState.yearlyView || "annual");
   }
+  return true;
+}
+
+function loadYearly(force = true) {
+  if (yearlyLoadPromise) {
+    return yearlyLoadPromise;
+  }
+  if (!force && yearlyLoaded) {
+    return Promise.resolve(true);
+  }
+  yearlyLoadPromise = loadYearlyData()
+    .then(result => {
+      yearlyLoaded = result === true;
+      return result === true;
+    })
+    .catch(() => false)
+    .finally(() => {
+      yearlyLoadPromise = null;
+    });
+  return yearlyLoadPromise;
+}
+
+function initializeYearlyFeature() {
+  if (yearlyInitialized) {
+    return true;
+  }
+  yearlyInitialized = true;
+  document.getElementById("yearlyAnnualTab")?.addEventListener("click", () => showYearlyView("annual"));
+  document.getElementById("yearlyMonthlyTab")?.addEventListener("click", () => showYearlyView("monthly"));
+  document.getElementById("yearlyRefresh")?.addEventListener("click", () => loadYearly(true));
+  return true;
 }
 
 (function () {
   initializeYearlyMaintenanceSettings();
 })();
 
-window.YearlyController = {
+initializeYearlyFeature();
+const yearlyController = {
+  init: initializeYearlyFeature,
+  activate: () => loadYearly(false),
+  refresh: () => loadYearly(true),
   load: loadYearly,
-  showView: safeShowYearlyView,
+  showView: showYearlyView,
   previewMaintenance: handleYearlyMaintenancePreview,
   calculateMaintenance: handleYearlyMaintenanceCalculate,
   populateMaintenanceYearOptions: populateYearlyMaintenanceYearOptions,
   initMaintenance: initializeYearlyMaintenanceSettings,
 };
+
+window.YearlyController = yearlyController;
+window.showYearlyView = showYearlyView;
+window.TrainingApp = window.TrainingApp || { features: {} };
+window.TrainingApp.features = window.TrainingApp.features || {};
+window.TrainingApp.registerFeature = window.TrainingApp.registerFeature || function (name, feature) {
+  if (!feature || typeof feature !== "object") return;
+  if (!Object.prototype.hasOwnProperty.call(window.TrainingApp.features, name)) {
+    window.TrainingApp.features[name] = feature;
+  }
+};
+window.TrainingApp.registerFeature("yearly", yearlyController);
+})();

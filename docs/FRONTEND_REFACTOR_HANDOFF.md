@@ -2,7 +2,7 @@
 
 ## Status and scope
 
-This document records the current `training-web` frontend architecture through F28.
+This document records the current `training-web` frontend architecture through F29.
 It is an architecture handoff, not an approval to introduce a framework or
 rewrite the dashboard. The current implementation is server-rendered HTML
 with vanilla JavaScript modules, modular CSS, shared `AppState`, and a shared
@@ -24,8 +24,8 @@ Dynamic surfaces remain module-owned when their markup depends on runtime data.
 - `TrainingApp` registry population and shell wiring;
 - top-level tab visibility and active-tab state;
 - URL and `popstate` handling;
-- shared header controls, mobile navigation, service subtabs, and chart/yearly
-  view selection;
+- shared header controls, mobile navigation, service subtabs, and chart view
+   selection;
 - initial all-feature data loading through `loadData()`.
 
 `static/app-state.js` owns shared preferences and cross-feature state.
@@ -53,7 +53,7 @@ decision changes it:
 | Weekly | `weekly.js` / `TrainingApp.features.weekly` | `init` wires handlers; startup preload and activation share in-flight work | Same-key activation reuses loaded rows; `refresh` forces reload | Weekly request ID and coalesced loader | Commentary and audit drawers close locally; no tab deactivation hook |
 | Zones | `zones.js` / `TrainingApp.features.zones` | `init` binds the limit selector; startup preload and activation share in-flight work | Same-key activation reuses loaded rows; `refresh` forces reload | Zones request ID and coalesced loader | No app-level deactivation |
 | Service / Gear | `components.js`, `gear.js` | Components remains F21 lifecycle-owned; Gear `init` binds filters and its startup preload is coalesced with activation | Gear activation reuses loaded rows; `refresh` forces reload | Components F21 guards; Gear request ID and stale-response protection | Component menus/drawers close locally; no tab deactivation hook |
-| Yearly | `yearly.js` plus app-owned `loadYearly` | `loadData()` calls `loadYearly` | View switch changes visibility; no normal activation load | No shared request token | Commentary drawer is dynamically created and locally closed |
+| Yearly | `yearly.js` / `TrainingApp.features.yearly` | Startup preload and activation share in-flight work | Same-key activation reuses loaded rows; `refresh` forces reload; view selection delegates to the feature | Yearly request coalescing and freshness guard | Commentary drawer uses `TrainingApp.TransientSurface`; Settings maintenance remains separate |
 | Coach | `coach.js` / `CoachController` | Not loaded by `loadData()` | `showTab()` calls `activate` once | Session load token; interval only during response stages | Local close methods; loading interval stops on completion and `beforeunload`, but no tab deactivation hook |
 | Sync status | `sync.js` / `SyncController` | `loadData()` calls status load and app starts a 60-second interval | Not tab-scoped | None for the interval's individual fetches | Interval is app-global and has no teardown |
 | Settings | `settings.js` / `SettingsController` | Module wiring is immediate; drawer data loads on demand | Drawer opens locally | Feature-local loading flags/promises | Drawer close is local; no app-level deactivation |
@@ -108,6 +108,16 @@ F24 retired the proven-internal `window.SearchController` compatibility global.
 that canonical reference. Search request construction, URL/history state,
 filters, form state, pagination, stale-result protection, and visible behavior
 remain unchanged.
+
+F29 consolidated the active Yearly dashboard runtime in `yearly.js`. The
+feature module now owns Yearly loading, annual/monthly rendering, view state,
+commentary API usage, request freshness, and the F20 transient surface. It
+self-registers one stable controller at `TrainingApp.features.yearly`; the
+retained `window.YearlyController` and `window.showYearlyView` names are
+compatibility aliases to that controller. `app.js` retains only pane and
+transition coordination plus the startup preload call through the registry.
+Yearly maintenance remains outside the dashboard lifecycle and is not part of
+the shell's data-loading path.
 
 ## Listener and async ownership
 
