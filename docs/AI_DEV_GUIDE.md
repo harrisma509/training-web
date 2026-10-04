@@ -43,6 +43,11 @@ The Daily date actions use the existing per-activity `activity_resync` queue wit
 5. Validate the changed behavior with the smallest real runtime check.
 6. Report exactly what was validated and what was not.
 
+For frontend ownership, lifecycle, registry keys, transient surfaces, request
+and timer policy, asset versioning, deployment modes, and current baselines,
+read [FRONTEND_ARCHITECTURE.md](FRONTEND_ARCHITECTURE.md). That document is
+the permanent replacement for the retired frontend handoff.
+
 ## Secrets and logging policy
 - Never log secrets, bearer tokens, access tokens, refresh tokens, env values, or raw database credentials.
 - Never log request headers, raw payloads, or full JSON response bodies unless the user explicitly asks for diagnostic debugging.
@@ -65,6 +70,13 @@ Typical flow:
 ./deploy_to_server.sh
 curl -sS -D - http://192.168.1.100:8088/api/gear/dashboard?limit=5
 ```
+
+Ordinary source/static deployment uses the exact clean tested commit and the
+repository deployment script. Restart only `training-web` when startup-derived
+asset metadata is stale. Compose recreation is for Compose/environment/mount/
+port/network/command changes; image rebuild is for Dockerfile, requirements,
+system-package, or image-content changes. Documentation-only changes are not
+deployed or restarted.
 
 When a route or app-registration change is made, validate the live endpoint after deployment.
 

@@ -156,3 +156,58 @@ If something fails:
 - Fix the smallest exact cause.
 - Remove temporary debug output before final.
 - Report files changed and validation commands run.
+
+## Permanent architecture and execution budget
+
+For frontend ownership, lifecycle, registry keys, transient surfaces, asset
+versioning, deployment modes, and release verification, read
+`docs/FRONTEND_ARCHITECTURE.md`. It is the permanent architecture source for
+the vanilla-JavaScript frontend. Temporary prompts and chat transcripts are
+not sources of truth.
+
+The execution policy is single-pass rigor: discover once, patch narrowly,
+validate in order, deploy deterministically when required, and stop when the
+evidence is green.
+
+Discovery:
+
+- Maximum one ownership inventory per slice.
+- Maximum one focused follow-up search per unclear boundary.
+- Do not repeat discovery after context compaction; reuse recorded findings.
+- Do not broaden search after editing begins unless a failing check exposes a
+  specific unknown.
+
+Implementation:
+
+- Use at most two narrow patch attempts per boundary.
+- If formatter, indentation, or line-ending churn appears, restore the
+  affected file immediately and reapply narrowly.
+- Do not repeatedly reread entire modules or rebuild source through broad
+  PowerShell/string replacement.
+- Stop and report when a bounded change requires a broad rewrite.
+
+Validation order:
+
+1. Focused new contract.
+2. Changed-file syntax.
+3. Adjacent regression contracts.
+4. Complete Node inventory.
+5. Complete Python suite.
+6. `git diff --check`.
+7. Scope and staged-diff review.
+
+Once full suites are green, do not rerun them unless source or test code
+changes again. Before editing, always check Git cleanliness, local/remote
+equality, ancestry, and the live version. Trust an unchanged green baseline.
+
+Live validation uses small independent fresh-page scenarios with monitoring
+attached before navigation, at most two harness retries per scenario, and no
+mutating production actions. Fix a harness-only failure locally; if it remains
+blocked after two retries, report it. Do not change production source because
+of an unproven browser observation.
+
+After commit, the boundary is: push, deploy only when runtime files changed,
+restart only when startup metadata must refresh, verify version and hashes,
+run bounded live scenarios, verify final Git status, and report. No post-commit
+architecture discovery or speculative cleanup. Corrections require a new
+normal commit.

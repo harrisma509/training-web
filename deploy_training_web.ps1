@@ -74,7 +74,6 @@ try {
             --exclude=".DS_Store" `
             --exclude="tests" `
             --exclude="AI_DEV_GUIDE.md" `
-            --exclude="FRONTEND_REFACTOR_HANDOFF.md" `
             --exclude="README.md" `
             --exclude="deploy_to_nas_from_mac.sh" `
             --exclude="deploy_to_server_from_mac.sh" `

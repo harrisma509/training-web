@@ -160,6 +160,12 @@ Reasonable exceptions include documentation-only changes, comments, and genuinel
 
 Pytest covers Python, not vanilla JavaScript behavior. Continue `node --check` for changed JavaScript files. Browser validation remains required for UI changes. Do not add Playwright or a JavaScript test framework as part of this guide.
 
+The current frontend contract inventory is 34 Node test files: 33 inherited
+through F35 plus the F36 documentation/cold-start contract. The current Python
+baseline is 237 passed tests and 46 subtests. The authoritative architecture,
+registry, deployment, and release-verification rules are in
+[FRONTEND_ARCHITECTURE.md](FRONTEND_ARCHITECTURE.md).
+
 ## Failure handling
 
 Classify each validation result as follows:

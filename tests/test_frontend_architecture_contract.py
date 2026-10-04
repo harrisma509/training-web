@@ -2,40 +2,40 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-HANDOFF = (ROOT / "docs" / "FRONTEND_REFACTOR_HANDOFF.md").read_text(encoding="utf-8")
+ARCHITECTURE = (ROOT / "docs" / "FRONTEND_ARCHITECTURE.md").read_text(encoding="utf-8")
 APP = (ROOT / "static" / "app.js").read_text(encoding="utf-8")
 YEARLY = (ROOT / "static" / "yearly.js").read_text(encoding="utf-8")
 INDEX = (ROOT / "templates" / "index.html").read_text(encoding="utf-8")
 
 
-def test_frontend_handoff_defines_lifecycle_and_compatibility_contract() -> None:
+def test_frontend_architecture_defines_lifecycle_and_compatibility_contract() -> None:
     for method in ("init(context)", "activate(context)", "refresh(context, reason)", "canDeactivate(context)", "deactivate(context)"):
-        assert f"`{method}`" in HANDOFF
+        assert f"`{method}`" in ARCHITECTURE
     for phrase in (
         "idempotent",
-        "generation/request guard",
+        "Request IDs,\ngenerations, or keyed caches",
         "fails closed",
-        "canonical call",
-        "must not call both the new\n   method",
-        "unhandled Promise rejection",
+        "canonical composed-runtime call surface",
+        "Same-key activation is coalesced",
+        "stale responses",
     ):
-        assert phrase in HANDOFF
+        assert phrase in ARCHITECTURE
 
 
-def test_frontend_handoff_covers_required_observed_surfaces_and_navigation() -> None:
+def test_frontend_architecture_covers_required_observed_surfaces_and_navigation() -> None:
     for surface in (
         "Service History",
-        "Component editor",
+            "Components",
         "Weekly commentary",
         "Yearly commentary",
-        "Coach delete confirmation",
-        "Settings drawer",
+            "Coach delete/session",
+            "Settings",
     ):
-        assert f"| {surface} |" in HANDOFF
-    for interaction in ("Outside click", "Escape", "Explicit close/cancel", "Dirty changes", "Tab navigation", "Browser Back", "Focus return"):
-        assert interaction in HANDOFF
-    assert "No Save, Delete permanently," in HANDOFF
-    assert "Record Service, Recalculate" in HANDOFF
+        assert surface in ARCHITECTURE
+    for interaction in ("backdrop", "Escape", "explicit close/cancel", "dirty-state", "focus", "navigation"):
+        assert interaction in ARCHITECTURE
+    assert "dirty-state" in ARCHITECTURE
+    assert "backdrop" in ARCHITECTURE
 
 
 def test_runtime_composition_still_matches_the_documented_bridge_boundary() -> None:
