@@ -1048,8 +1048,8 @@
       settingsDailyLimit.addEventListener("change", (event) => {
         const value = Number(event.target.value);
         updateLimitPreference("dailyLimit", value, () => {
-          if (window.AppState.activeTab === "daily" && typeof window.loadDaily === "function") {
-            window.loadDaily();
+          if (window.AppState.activeTab === "daily") {
+            window.TrainingApp?.features?.daily?.refresh?.();
           }
         });
       });

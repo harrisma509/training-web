@@ -2,7 +2,7 @@
 
 ## Status and scope
 
-This document records the current `training-web` frontend architecture through F30.
+This document records the current `training-web` frontend architecture through F31.
 It is an architecture handoff, not an approval to introduce a framework or
 rewrite the dashboard. The current implementation is server-rendered HTML
 with vanilla JavaScript modules, modular CSS, shared `AppState`, and a shared
@@ -48,7 +48,7 @@ decision changes it:
 | Plan | `plan.js` / `PlanController` | Startup activation calls canonical `activate` | Same-key activation coalesces; `refresh` forces authoritative reload | Plan request counters | No app-level deactivation |
 | Goals, KPIs | respective module | No-op render/load controllers | No-op | None needed | None |
 | Charts | `charts.js` / `TrainingApp.features.charts` | Startup/direct-link activation selects the persisted category and loads it | Same-category activation follows dispatcher coalescing; category changes load only the selected category; `refresh` forces reload | Per-data request IDs, category cache guards, and chart destruction | Charts owns replacement/status destruction and the theme observer; no tab deactivation hook |
-| Daily | `daily.js` / `DailyController` | `loadData()` calls `load` | `popstate` may call `load` for an exact date; no normal tab hook | Daily request ID; narrative request ID/cache | Local menus/dialogs/drawers close locally; no tab deactivation hook |
+| Daily | `daily.js` / `TrainingApp.features.daily` | Registry `refresh` owns the preload; startup activation shares its in-flight request | Registry `activate` restores an exact route date and reuses the current key; changed dates load once | Daily request ID, keyed in-flight coalescing, narrative request ID/cache | Daily owns menus, dialogs, drawer, status timer, polling, and `beforeunload` cleanup; no tab deactivation hook |
 | Search | `search.js` / `TrainingApp.features.search` | `init` wires listeners; activation loads the current URL-backed query when needed | Same query preserves results; `refresh` reloads the current query | Search request ID; stale-result preservation | Dynamic action menus close locally; no general deactivate hook |
 | Weekly | `weekly.js` / `TrainingApp.features.weekly` | `init` wires handlers; startup preload and activation share in-flight work | Same-key activation reuses loaded rows; `refresh` forces reload | Weekly request ID and coalesced loader | Commentary and audit drawers close locally; no tab deactivation hook |
 | Zones | `zones.js` / `TrainingApp.features.zones` | `init` binds the limit selector; startup preload and activation share in-flight work | Same-key activation reuses loaded rows; `refresh` forces reload | Zones request ID and coalesced loader | No app-level deactivation |
@@ -127,6 +127,16 @@ theme redraw behavior. It self-registers one stable controller at
 `window.showChartsCategory` remain compatibility aliases because the existing
 public surface is still part of the tracked runtime contract. `app.js` retains
 only top-level Charts pane visibility and transition coordination.
+
+F31 consolidated the active Daily runtime in `daily.js`. The feature now owns
+Daily loading and rendering, exact-date state resolution, keyed request
+coalescing, day actions, narrative cache/request invalidation, resync dialog
+and operation polling, status auto-dismiss timing, and its page-lifetime
+cleanup listener. It self-registers one stable controller at
+`TrainingApp.features.daily`; `window.DailyController` and `window.loadDaily`
+remain compatibility aliases for the existing feature-local and tracked
+consumer surface. `app.js` retains only generic route parsing, pane
+coordination, and the registry-owned Daily preload call.
 
 ## Listener and async ownership
 
@@ -293,7 +303,9 @@ transition. The supported source values are `startup`, `direct-url`,
 - Charts exposes `init`, `activate`, `refresh`, and `showCategory` through its
    canonical registry entry; the dispatcher updates category visibility without
    loading twice.
-- Daily keeps its existing `load` fallback only for exact-date `popstate`.
+- Daily exposes `init`, `activate`, `refresh`, `load`, and `render` through its
+   canonical registry entry; exact-date route restoration and same-key request
+   reuse are feature-owned rather than shell fallback behavior.
 - Goals and KPIs remain no-op placeholders. Components/Service remains on its
    F21 lifecycle adapter. Charts, Daily, Yearly, Coach, Settings, and Sync retain
    their existing compatibility paths and were intentionally excluded from F22

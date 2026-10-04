@@ -151,9 +151,6 @@ if (window.GoalsController) {
 if (window.KPIsController) {
   window.TrainingApp.registerFeature("kpis", window.KPIsController);
 }
-if (window.DailyController) {
-  window.TrainingApp.registerFeature("daily", window.DailyController);
-}
 if (window.SettingsController) {
   window.TrainingApp.registerFeature("settings", window.SettingsController);
 }
@@ -424,9 +421,6 @@ function commitFeatureTransition(context) {
   const isCoach = normalizedTab === "coach";
 
   state.activeTab = normalizedTab;
-  if (isDaily && /^\d{4}-\d{2}-\d{2}$/.test(context.route.date)) {
-    state.dailyExactDate = context.route.date;
-  }
   if (isSearch && context.source === "popstate") {
     window.TrainingApp?.features?.search?.restoreFromUrl?.();
   }
@@ -479,10 +473,6 @@ function commitFeatureTransition(context) {
 }
 
 async function activateLegacyFeature(featureName, context, feature) {
-  if (featureName === "daily" && context.source === "popstate" && context.route.date) {
-    if (typeof feature?.load === "function") await feature.load.call(feature, context);
-    else if (typeof window.loadDaily === "function") await window.loadDaily();
-  }
 }
 
 const featureActivationDispatcher = createFeatureActivationDispatcher({
@@ -530,7 +520,7 @@ function renderHeaderSummary() {
 
 async function loadData() {
   await Promise.all([
-    loadDaily(),
+    window.TrainingApp?.features?.daily?.refresh?.(),
     window.TrainingApp?.features?.weekly?.refresh?.(),
     window.TrainingApp?.features?.zones?.refresh?.(),
     window.TrainingApp?.features?.gear?.refresh?.(),

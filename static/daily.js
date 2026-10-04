@@ -1,3 +1,4 @@
+(() => {
 /*
  * daily.js
  * Daily dashboard feature module.
@@ -705,6 +706,11 @@ let dailySearchResultItems = [];
 let dailySearchSelectedIndex = -1;
 let dailyLoadRequestId = 0;
 let dailyLimitListenerBound = false;
+let dailySearchListenerBound = false;
+let dailyLoadPromise = null;
+let dailyLoadPromiseKey = "";
+let dailyLoadedKey = "";
+let dailyInitialized = false;
 
 function hideDailySearchResults() {
   const results = document.getElementById("dailySearchResults");
@@ -1003,6 +1009,9 @@ function handleDailySearchKeydown(event) {
 }
 
 function attachDailySearch() {
+  if (dailySearchListenerBound) {
+    return;
+  }
   const input = document.getElementById("dailySearch");
   const results = document.getElementById("dailySearchResults");
   const applyBtn = document.getElementById("dailySearchApply");
@@ -1035,6 +1044,7 @@ function attachDailySearch() {
   });
 
   updateDailySearchControls();
+  dailySearchListenerBound = true;
 }
 
 function attachDailyLimitSelector() {
@@ -1077,13 +1087,27 @@ function attachDailyLimitSelector() {
   dailyLimitListenerBound = true;
 }
 
-attachDailySearch();
-attachDailyLimitSelector();
+function getDailyExactDate() {
+  const stateDate = String(window.AppState.dailyExactDate || "").trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(stateDate)) {
+    return stateDate;
+  }
+  const urlDate = new URLSearchParams(window.location.search).get("date") || "";
+  return /^\d{4}-\d{2}-\d{2}$/.test(urlDate) ? urlDate : "";
+}
 
-async function loadDaily() {
+function getDailyLoadKey() {
+  const query = String(window.AppState.dailyAppliedQuery || "").trim();
+  const exactDate = getDailyExactDate();
+  const limit = query ? 1000 : Number(window.AppState.dailyLimit);
+  return `${limit}|${query}|${exactDate}`;
+}
+
+async function loadDailyData() {
   const requestId = ++dailyLoadRequestId;
   const query = String(window.AppState.dailyAppliedQuery || "").trim();
-  const exactDate = String(window.AppState.dailyExactDate || "").trim();
+  const exactDate = getDailyExactDate();
+  window.AppState.dailyExactDate = exactDate;
   const limit = query ? 1000 : Number(window.AppState.dailyLimit);
   const dailyLimitSelector = document.getElementById("dailyLimit");
 
@@ -1144,10 +1168,76 @@ async function loadDaily() {
   if (window.AppState.activeTab === "daily") {
     renderHeaderSummary();
   }
+  return true;
 }
 
-window.loadDaily = loadDaily;
-window.DailyController = {
+function loadDaily(force = true) {
+  const loadKey = getDailyLoadKey();
+  if (dailyLoadPromise && dailyLoadPromiseKey === loadKey) {
+    return dailyLoadPromise;
+  }
+  if (!force && dailyLoadedKey === loadKey) {
+    return Promise.resolve(true);
+  }
+
+  dailyLoadPromiseKey = loadKey;
+  const request = loadDailyData()
+    .then(result => {
+      if (result === true) {
+        dailyLoadedKey = loadKey;
+      }
+      return result === true;
+    })
+    .catch(() => false)
+    .finally(() => {
+      if (dailyLoadPromise === request) {
+        dailyLoadPromise = null;
+        dailyLoadPromiseKey = "";
+      }
+    });
+  dailyLoadPromise = request;
+  return request;
+}
+
+function initializeDailyFeature() {
+  if (dailyInitialized) {
+    return true;
+  }
+  dailyInitialized = true;
+  attachDailySearch();
+  attachDailyLimitSelector();
+  return true;
+}
+
+function activateDailyFeature(context = {}) {
+  const routeDate = dailyDateText(context.route?.date);
+  if (routeDate) {
+    window.AppState.dailyExactDate = routeDate;
+  }
+  return loadDaily(false);
+}
+
+function refreshDailyFeature() {
+  return loadDaily(true);
+}
+
+const dailyController = {
+  init: initializeDailyFeature,
+  activate: activateDailyFeature,
+  refresh: refreshDailyFeature,
   load: loadDaily,
   render: renderDailyTable,
 };
+
+window.loadDaily = loadDaily;
+window.DailyController = dailyController;
+window.TrainingApp = window.TrainingApp || { features: {} };
+window.TrainingApp.features = window.TrainingApp.features || {};
+window.TrainingApp.registerFeature = window.TrainingApp.registerFeature || function (name, feature) {
+  if (!feature || typeof feature !== "object") return;
+  if (!Object.prototype.hasOwnProperty.call(window.TrainingApp.features, name)) {
+    window.TrainingApp.features[name] = feature;
+  }
+};
+window.TrainingApp.registerFeature("daily", dailyController);
+})();
