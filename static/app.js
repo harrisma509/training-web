@@ -177,6 +177,7 @@ if (window.ZonesController) {
 }
 if (window.ComponentsController) {
   window.TrainingApp.registerFeature("components", window.ComponentsController);
+  window.TrainingApp.registerFeature("service", window.ComponentsController);
 }
 if (window.SyncController) {
   window.TrainingApp.registerFeature("sync", window.SyncController);
@@ -333,8 +334,8 @@ searchTab?.addEventListener("click", () => showTab("search"));
 weeklyTab.addEventListener("click", () => showTab("weekly"));
 zonesTab.addEventListener("click", () => showTab("zones"));
 serviceTab?.addEventListener("click", () => showTab("service"));
-componentsSubtab?.addEventListener("click", () => showServiceSubtab("components"));
-gearSubtab?.addEventListener("click", () => showServiceSubtab("gear"));
+componentsSubtab?.addEventListener("click", () => requestServiceSubtab("components"));
+gearSubtab?.addEventListener("click", () => requestServiceSubtab("gear"));
 document.querySelectorAll(".service-subtab").forEach((button, index, buttons) => {
   button.addEventListener("keydown", event => {
     if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
@@ -342,7 +343,7 @@ document.querySelectorAll(".service-subtab").forEach((button, index, buttons) =>
     const direction = event.key === "ArrowRight" ? 1 : -1;
     const nextButton = buttons[(index + direction + buttons.length) % buttons.length];
     nextButton.focus();
-    showServiceSubtab(nextButton.id === "gearSubtab" ? "gear" : "components");
+    requestServiceSubtab(nextButton.id === "gearSubtab" ? "gear" : "components");
   });
 });
 yearlyTab.addEventListener("click", () => showTab("yearly"));
@@ -487,7 +488,36 @@ function showServiceSubtab(subtab) {
   });
 }
 
+async function requestServiceSubtab(subtab) {
+  const normalizedSubtab = ["components", "gear"].includes(subtab) ? subtab : "components";
+  const switchingAwayFromComponents = state.serviceSubtab === "components"
+    && normalizedSubtab !== "components";
+  const componentsFeature = window.TrainingApp?.features?.service || window.ComponentsController;
+
+  if (switchingAwayFromComponents && typeof componentsFeature?.canDeactivate === "function") {
+    const allowed = await componentsFeature.canDeactivate({
+      featureName: "service",
+      reason: "service-subtab",
+      source: "service-subtab",
+      destinationSubtab: normalizedSubtab,
+    });
+    if (allowed !== true) {
+      return false;
+    }
+    await componentsFeature.deactivate({
+      featureName: "service",
+      reason: "service-subtab",
+      source: "service-subtab",
+      destinationSubtab: normalizedSubtab,
+    });
+  }
+
+  showServiceSubtab(normalizedSubtab);
+  return true;
+}
+
 window.showServiceSubtab = showServiceSubtab;
+window.requestServiceSubtab = requestServiceSubtab;
 
 const VALID_FEATURE_TABS = ["plan", "goals", "kpis", "charts", "daily", "search", "weekly", "zones", "service", "yearly", "coach"];
 let lastAcceptedRoute = window.location.href;

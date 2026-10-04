@@ -16,6 +16,7 @@ const fs = require('fs');
 const vm = require('vm');
 global.window = {{}};
 global.document = {{getElementById: () => null, querySelectorAll: () => []}};
+vm.runInThisContext(fs.readFileSync({json.dumps((REPOSITORY_ROOT / 'static' / 'transient-surface.js').as_posix())}, 'utf8'));
 vm.runInThisContext(fs.readFileSync({json.dumps((REPOSITORY_ROOT / 'static' / 'components.js').as_posix())}, 'utf8'));
 process.stdout.write(JSON.stringify({expression}));
 """

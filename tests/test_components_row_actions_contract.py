@@ -46,9 +46,9 @@ class ComponentsRowActionsContractTests(unittest.TestCase):
         self.assertIn('document.addEventListener("scroll"', COMPONENTS_JS)
 
     def test_menu_reuses_existing_action_paths_without_new_api_calls(self):
-        self.assertIn('openComponentServiceDrawer(state.componentId, state.componentName)', COMPONENTS_JS)
-        self.assertIn('openComponentHistoryDrawer(state.componentId, state.componentName)', COMPONENTS_JS)
-        self.assertIn('openComponentEditor(state.componentId)', COMPONENTS_JS)
+        self.assertIn('openComponentServiceDrawer(state.componentId, state.componentName, state.trigger)', COMPONENTS_JS)
+        self.assertIn('openComponentHistoryDrawer(state.componentId, state.componentName, state.trigger)', COMPONENTS_JS)
+        self.assertIn('openComponentEditor(state.componentId, state.trigger)', COMPONENTS_JS)
         self.assertIn('archiveComponentFromRow(state.componentId, state.componentName)', COMPONENTS_JS)
         self.assertIn('restoreComponentFromRow(state.componentId, state.componentName)', COMPONENTS_JS)
         self.assertIn('window.api.archiveComponent(componentId)', COMPONENTS_JS)

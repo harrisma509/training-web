@@ -47,7 +47,7 @@ class ComponentsEditorLayoutContractTests(unittest.TestCase):
         self.assertIn('name="odometer_hours" type="number" min="0" step="0.01"', COMPONENTS_JS)
         self.assertIn('name="odometer_rides" type="number" min="0" step="1"', COMPONENTS_JS)
         self.assertIn('name="odometer_elevation_ft" type="number" min="0" step="1"', COMPONENTS_JS)
-        self.assertIn('components.js?v=20260916-components-ui-v17', INDEX_HTML)
+        self.assertIn('components.js?v=20261003-components-lifecycle-v1', INDEX_HTML)
 
     def test_service_field_groups_top_align_without_control_stretch(self):
         self.assertIn(".components-service-field-grid>.drawer-field-group {", COMPONENTS_CSS)
@@ -111,6 +111,7 @@ class ComponentsEditorLayoutContractTests(unittest.TestCase):
 const fs = require('fs');
 const vm = require('vm');
 global.window = {{}};
+vm.runInThisContext(fs.readFileSync({json.dumps((REPOSITORY_ROOT / 'static' / 'transient-surface.js').as_posix())}, 'utf8'));
 global.document = {{getElementById: () => null}};
 vm.runInThisContext(fs.readFileSync({json.dumps((REPOSITORY_ROOT / 'static' / 'components.js').as_posix())}, 'utf8'));
 process.stdout.write(JSON.stringify([

@@ -48,6 +48,7 @@ const fs = require('fs');
 const vm = require('vm');
 global.window = {{}};
 global.document = {{getElementById: () => null, querySelectorAll: () => []}};
+vm.runInThisContext(fs.readFileSync({json.dumps((ROOT / 'static' / 'transient-surface.js').as_posix())}, 'utf8'));
 vm.runInThisContext(fs.readFileSync({json.dumps((ROOT / 'static' / 'components.js').as_posix())}, 'utf8'));
 process.stdout.write(JSON.stringify([
   [...COMPONENT_CLOCK_LIFECYCLE_ACTIONS].sort(),
@@ -102,7 +103,7 @@ process.stdout.write(JSON.stringify([
         self.assertIn(".components-service-effect", COMPONENTS_CSS)
         self.assertIn(".components-editor-guidance", COMPONENTS_CSS)
         self.assertIn("components.css?v=20260916-components-css-v11", INDEX_HTML)
-        self.assertIn("components.js?v=20260916-components-ui-v17", INDEX_HTML)
+        self.assertIn("components.js?v=20261003-components-lifecycle-v1", INDEX_HTML)
 
 
 if __name__ == "__main__":

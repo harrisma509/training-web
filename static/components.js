@@ -4,6 +4,81 @@
  * This module owns the components table and its row formatting; it consumes AppState plus the API helper for
  * fetches but does not own the global app shell or cross-feature preferences.
  */
+let componentEditorDirty = false;
+let componentServiceDirty = false;
+let historyEditorDirty = false;
+function isComponentEditorDirty() {
+  return componentEditorDirty || document.querySelector("#componentEditorForm")?.dataset.dirty === "1";
+}
+
+function isComponentServiceDirty() {
+  return componentServiceDirty || document.querySelector("#componentServiceForm")?.dataset.dirty === "1";
+}
+
+function isHistoryEditorDirty() {
+  return historyEditorDirty || document.querySelector("#componentHistoryEventForm")?.dataset.dirty === "1";
+}
+
+const componentEditorSurface = window.TrainingApp.TransientSurface.create({
+  canClose: () => !isComponentEditorDirty() || window.confirm("Discard unsaved changes?"),
+  onAfterClose: () => finishCloseComponentEditor(),
+});
+const componentServiceSurface = window.TrainingApp.TransientSurface.create({
+  canClose: () => !isComponentServiceDirty() || window.confirm("Discard unsaved changes?"),
+  onAfterClose: () => finishCloseComponentServiceDrawer(),
+});
+const componentHistorySurface = window.TrainingApp.TransientSurface.create({
+  canClose: () => !isHistoryEditorDirty() || window.confirm("Discard unsaved changes?"),
+  onAfterClose: () => finishCloseComponentHistoryDrawer(),
+});
+
+function createComponentsLifecycleAdapter({
+  surfaces,
+  getDirtyState,
+  confirmDiscard,
+} = {}) {
+  let pendingConfirmation = null;
+
+  function canDeactivate() {
+    if (!Object.values(getDirtyState?.() || {}).some(Boolean)) {
+      return true;
+    }
+    if (!pendingConfirmation) {
+      pendingConfirmation = Promise.resolve(confirmDiscard?.() === true)
+        .finally(() => {
+          pendingConfirmation = null;
+        });
+    }
+    return pendingConfirmation;
+  }
+
+  function deactivate(reason = "deactivate") {
+    Object.values(surfaces || {}).forEach(surface => surface?.close(reason));
+    return true;
+  }
+
+  return {
+    init: () => true,
+    activate: () => true,
+    canDeactivate,
+    deactivate,
+  };
+}
+
+const componentsLifecycleAdapter = createComponentsLifecycleAdapter({
+  surfaces: {
+    editor: componentEditorSurface,
+    service: componentServiceSurface,
+    history: componentHistorySurface,
+  },
+  getDirtyState: () => ({
+    editor: isComponentEditorDirty(),
+    service: isComponentServiceDirty(),
+    history: isHistoryEditorDirty(),
+  }),
+  confirmDiscard: () => window.confirm("Discard unsaved changes?"),
+});
+
 function componentSafe(value, fallback = "") {
   if (value === null || value === undefined || value === "") {
     return fallback;
@@ -408,11 +483,11 @@ function ensureComponentOverflowMenu() {
     const action = item.dataset.componentAction;
     closeComponentOverflowMenu();
     if (action === "record") {
-      await openComponentServiceDrawer(state.componentId, state.componentName);
+      await openComponentServiceDrawer(state.componentId, state.componentName, state.trigger);
     } else if (action === "history") {
-      await openComponentHistoryDrawer(state.componentId, state.componentName);
+      await openComponentHistoryDrawer(state.componentId, state.componentName, state.trigger);
     } else if (action === "edit") {
-      await openComponentEditor(state.componentId);
+      await openComponentEditor(state.componentId, state.trigger);
     } else if (action === "archive") {
       await archiveComponentFromRow(state.componentId, state.componentName);
     } else if (action === "restore") {
@@ -1008,6 +1083,14 @@ function ensureComponentEditorDrawer() {
   const cancelBtn = drawer.querySelector("#componentEditorCancelBtn");
   closeBtn.addEventListener("click", () => closeComponentEditor());
   cancelBtn.addEventListener("click", () => closeComponentEditor());
+  form.addEventListener("input", () => {
+    componentEditorDirty = true;
+    form.dataset.dirty = "1";
+  });
+  form.addEventListener("change", () => {
+    componentEditorDirty = true;
+    form.dataset.dirty = "1";
+  });
   drawer.addEventListener("click", event => {
     const advancedButton = event.target.closest("#componentEditorAdvancedToggle");
     if (advancedButton && drawer.contains(advancedButton)) {
@@ -1101,6 +1184,7 @@ function ensureComponentEditorDrawer() {
         setComponentEditorStatus("Component updated.", "success");
       }
       await loadComponents();
+      componentEditorDirty = false;
       closeComponentEditor();
     } catch (error) {
       console.debug("[component-editor] request failed", error?.message || error);
@@ -1116,7 +1200,7 @@ function ensureComponentEditorDrawer() {
   return drawer;
 }
 
-async function openComponentEditor(componentId) {
+async function openComponentEditor(componentId, opener = document.activeElement) {
   const drawer = ensureComponentEditorDrawer();
   const form = drawer.querySelector("#componentEditorForm");
   const statusEl = drawer.querySelector("#componentEditorStatus");
@@ -1131,6 +1215,9 @@ async function openComponentEditor(componentId) {
   }
 
   drawer.dataset.componentId = String(componentId);
+  componentEditorDirty = false;
+  delete form.dataset.dirty;
+  componentEditorSurface.open({ opener });
   form.reset();
   setComponentEditorMode("edit");
   setComponentEditorBaselineMode("current_snapshot");
@@ -1162,6 +1249,10 @@ async function openComponentEditor(componentId) {
 }
 
 function closeComponentEditor() {
+  componentEditorSurface.requestClose("component-editor-close");
+}
+
+function finishCloseComponentEditor() {
   const drawer = document.getElementById("componentEditorDrawer");
   if (!drawer) {
     return;
@@ -1169,6 +1260,8 @@ function closeComponentEditor() {
   drawer.classList.add("hidden");
   drawer.setAttribute("aria-hidden", "true");
   delete drawer.dataset.componentId;
+  componentEditorDirty = false;
+  delete drawer.querySelector("#componentEditorForm")?.dataset.dirty;
 }
 
 function ensureComponentAddControls() {
@@ -1191,6 +1284,9 @@ function ensureComponentAddControls() {
     }
 
     drawer.dataset.componentId = "new";
+    componentEditorDirty = false;
+    delete drawer.querySelector("#componentEditorForm")?.dataset.dirty;
+    componentEditorSurface.open({ opener: document.activeElement });
     form.reset();
     setComponentEditorMode("add");
     setComponentEditorBaselineMode("current_snapshot");
@@ -1362,6 +1458,7 @@ function ensureComponentServiceDrawer() {
       if (saved && saved.service_event_id) {
         setComponentServiceStatus("Service recorded successfully.", "success");
         window.setTimeout(() => {
+          componentServiceDirty = false;
           closeComponentServiceDrawer();
           loadComponents();
         }, 300);
@@ -1380,6 +1477,14 @@ function ensureComponentServiceDrawer() {
   });
   drawer.querySelector("#componentServiceAction").addEventListener("change", () => renderComponentServiceEffect(drawer));
   drawer.querySelector("#componentServiceForm").addEventListener("input", () => updateComponentServiceSaveState(drawer));
+  drawer.querySelector("#componentServiceForm").addEventListener("input", () => {
+    componentServiceDirty = true;
+    drawer.querySelector("#componentServiceForm").dataset.dirty = "1";
+  });
+  drawer.querySelector("#componentServiceForm").addEventListener("change", () => {
+    componentServiceDirty = true;
+    drawer.querySelector("#componentServiceForm").dataset.dirty = "1";
+  });
   document.addEventListener("keydown", event => {
     if (event.key === "Escape" && !drawer.classList.contains("hidden")) {
       closeComponentServiceDrawer();
@@ -1552,7 +1657,7 @@ function setComponentServiceStatus(message, kind = "info") {
   statusEl.classList.add(kind === "error" ? "status-error" : kind === "success" ? "status-success" : "status-info");
 }
 
-async function openComponentServiceDrawer(componentId, componentName = "") {
+async function openComponentServiceDrawer(componentId, componentName = "", opener = document.activeElement) {
   const drawer = ensureComponentServiceDrawer();
   const form = drawer.querySelector("#componentServiceForm");
   const dateInput = drawer.querySelector("#componentServiceDate");
@@ -1567,7 +1672,10 @@ async function openComponentServiceDrawer(componentId, componentName = "") {
   statusEl.classList.add("hidden");
   form.reset();
   drawer.dataset.componentId = String(componentId);
-  drawer._componentServiceReturnFocus = document.activeElement;
+  componentServiceDirty = false;
+  delete form.dataset.dirty;
+  componentServiceSurface.open({ opener });
+  drawer._componentServiceReturnFocus = opener;
   delete drawer.dataset.submitting;
   drawer.dataset.snapshotRequestSequence = "0";
 
@@ -1598,6 +1706,10 @@ async function openComponentServiceDrawer(componentId, componentName = "") {
 }
 
 function closeComponentServiceDrawer() {
+  componentServiceSurface.requestClose("component-service-close");
+}
+
+function finishCloseComponentServiceDrawer() {
   const drawer = document.getElementById("componentServiceDrawer");
   if (!drawer) {
     return;
@@ -1614,6 +1726,8 @@ function closeComponentServiceDrawer() {
     returnFocus.focus();
   }
   delete drawer._componentServiceReturnFocus;
+  componentServiceDirty = false;
+  delete drawer.querySelector("#componentServiceForm")?.dataset.dirty;
 }
 
 function formatServiceHistoryDate(value) {
@@ -2148,15 +2262,17 @@ async function loadComponentHistory(componentId, options = {}) {
   }
 }
 
-async function openComponentHistoryDrawer(componentId, componentName = "") {
+async function openComponentHistoryDrawer(componentId, componentName = "", opener = document.activeElement) {
   const drawer = ensureComponentHistoryDrawer();
-  const previousFocus = document.activeElement;
+  const previousFocus = opener;
   const previousId = previousFocus && previousFocus.id ? previousFocus.id : (previousFocus && previousFocus.dataset && previousFocus.dataset.componentId ? previousFocus.dataset.componentId : "");
 
   drawer.dataset.componentId = String(componentId || "");
   drawer.dataset.componentName = componentName || "";
   drawer.dataset.componentArchived = "false";
   drawer.dataset.returnFocus = previousId || "";
+  historyEditorDirty = false;
+  componentHistorySurface.open({ opener: previousFocus });
   setComponentHistoryMode("history");
 
   const titleEl = drawer.querySelector("#componentHistoryTitle");
@@ -2178,6 +2294,10 @@ async function openComponentHistoryDrawer(componentId, componentName = "") {
 }
 
 function closeComponentHistoryDrawer() {
+  componentHistorySurface.requestClose("component-history-close");
+}
+
+function finishCloseComponentHistoryDrawer() {
   const drawer = document.getElementById("componentHistoryDrawer");
   if (!drawer) {
     return;
@@ -2200,6 +2320,8 @@ function closeComponentHistoryDrawer() {
     }
   }
   delete drawer.dataset.returnFocus;
+  historyEditorDirty = false;
+  delete drawer.querySelector("#componentHistoryEventForm")?.dataset.dirty;
 }
 
 function closeComponentHistoryEditor() {
@@ -2565,6 +2687,15 @@ async function openComponentHistoryEventEditor(componentId, serviceEventId, even
     }
   };
 
+  form.addEventListener("input", () => {
+    historyEditorDirty = true;
+    form.dataset.dirty = "1";
+  });
+  form.addEventListener("change", () => {
+    historyEditorDirty = true;
+    form.dataset.dirty = "1";
+  });
+
   recalculateBtn.addEventListener("click", () => recalculateHistoryEditorSnapshot(drawer, componentId, serviceEventId, savedSnapshot, setStatus));
   editorEl.querySelector("#historyEditorDate").addEventListener("change", event => {
     invalidateHistoryEditorSnapshot(drawer, event.currentTarget.value !== normalizedHistoryData.service_date
@@ -2592,6 +2723,11 @@ async function openComponentHistoryEventEditor(componentId, serviceEventId, even
   });
 
   cancelBtn.addEventListener("click", () => {
+    if (historyEditorDirty && !window.confirm("Discard unsaved changes?")) {
+      return;
+    }
+    historyEditorDirty = false;
+    delete form.dataset.dirty;
     closeComponentHistoryEditor();
     const titleEl = drawer.querySelector("#componentHistoryTitle");
     if (titleEl) {
@@ -2628,6 +2764,8 @@ async function openComponentHistoryEventEditor(componentId, serviceEventId, even
       const response = await window.api.updateComponentService(componentId, serviceEventId, payload);
       setStatus("Service event updated.", "success");
       await loadComponentHistory(componentId, { componentName: component.component_name || "" });
+      historyEditorDirty = false;
+      delete form.dataset.dirty;
       closeComponentHistoryEditor();
       await loadComponents();
       drawer.dataset.returnFocus = "";
@@ -2699,4 +2837,8 @@ window.ComponentsController = {
   load: loadComponents,
   render: renderComponentsTable,
   syncBikeSelect: renderComponentsBikeSelect,
+  init: componentsLifecycleAdapter.init,
+  activate: componentsLifecycleAdapter.activate,
+  canDeactivate: componentsLifecycleAdapter.canDeactivate,
+  deactivate: componentsLifecycleAdapter.deactivate,
 };
