@@ -286,6 +286,71 @@ def test_service_partial_is_single_authority_at_the_original_composition_point()
     )
 
 
+def test_yearly_partial_is_single_authority_at_the_original_composition_point() -> None:
+    root_source = (REPO_ROOT / "templates" / "index.html").read_text(encoding="utf-8")
+    partial_source = (REPO_ROOT / "templates" / "partials" / "panes" / "yearly_pane.html").read_text(
+        encoding="utf-8"
+    )
+    rendered_source, document = parse_index()
+
+    include = '{% include "partials/panes/yearly_pane.html" %}'
+    assert root_source.count(include) == 1
+    assert root_source.count('id="yearlyPane"') == 0
+    assert partial_source.count('id="yearlyPane"') == 1
+
+    main = next(element for element in by_tag(document, "main"))
+    pane_order = [child.attributes.get("id") for child in main.children if child.tag == "section"]
+    yearly_index = pane_order.index("yearlyPane")
+    assert pane_order[yearly_index - 1 : yearly_index + 2] == ["servicePane", "yearlyPane", "coachPane"]
+
+    rendered_yearly = by_id(document, "yearlyPane")
+    partial_yearly = by_id(parse_html(partial_source), "yearlyPane")
+    assert normalized_tree(rendered_yearly) == normalized_tree(partial_yearly)
+    assert rendered_source.count('id="yearlyPane"') == 1
+    assert "hidden" in classes(rendered_yearly)
+
+    assert [element.attributes.get("id") for element in all_elements(rendered_yearly) if element.tag == "button"] == [
+        "yearlyAnnualTab",
+        "yearlyMonthlyTab",
+    ]
+    assert "active" in classes(by_id(rendered_yearly, "yearlyAnnualTab"))
+    assert "active" not in classes(by_id(rendered_yearly, "yearlyMonthlyTab"))
+    assert "hidden" not in classes(by_id(rendered_yearly, "yearlyAnnualView"))
+    assert "hidden" in classes(by_id(rendered_yearly, "yearlyMonthlyView"))
+    assert [element.attributes.get("id") for element in by_tag(rendered_yearly, "table")] == [
+        "yearlyTable",
+        "yearlyMonthlyTable",
+    ]
+    assert [element.tag for element in all_elements(rendered_yearly) if element.tag == "form"] == []
+    assert not any(
+        attribute.lower().startswith("on")
+        for element in all_elements(rendered_yearly)
+        for attribute in element.attributes
+    )
+
+    settings_yearly_ids = {
+        "yearlyMaintenanceYear",
+        "yearlyMaintenancePreviewBtn",
+        "yearlyMaintenanceCalculateBtn",
+        "yearlyMaintenanceResult",
+        "yearlyMaintenanceStatus",
+        "yearlyMaintenancePreviewSummary",
+        "yearlyMaintenanceWarnings",
+        "yearlyMaintenanceComparisonWrap",
+        "yearlyMaintenanceComparisonBody",
+    }
+    for element_id in settings_yearly_ids:
+        assert not any(
+            descendant.attributes.get("id") == element_id
+            for descendant in all_elements(rendered_yearly)
+        )
+        assert by_id(document, element_id)
+
+    weekly_drawer = by_id(document, "weeklyDrawer")
+    assert weekly_drawer.parent is main
+    assert not any(descendant is weekly_drawer for descendant in all_elements(rendered_yearly))
+
+
 def test_core_pane_partials_are_single_authority_at_original_composition_points() -> None:
     root_source = (REPO_ROOT / "templates" / "index.html").read_text(encoding="utf-8")
     rendered_source, document = parse_index()
