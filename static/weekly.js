@@ -753,7 +753,7 @@
     <td class="weekly-audit-cell">
       ${row.audit_grade ? `<button class="audit-score-button ${auditScoreClass(row)}" data-week-start="${safe(row.week_start)}" type="button" title="${auditGradeTitle(row.audit_grade)}" aria-label="View weekly audit details">${auditGradeSquare(row.audit_grade)}</button>` : ""}
     </td>
-    <td class="drawer-icon-cell"><button class="drawer-open-button" data-week-start="${safe(row.week_start)}" type="button" aria-label="Edit weekly commentary"></button></td>
+    <td class="weekly-edit-notes-cell"><button class="drawer-open-button" data-week-start="${safe(row.week_start)}" type="button" aria-label="Edit weekly commentary" title="Edit weekly commentary"></button></td>
     <td>${renderWeeklyHoursCell(row.weekly_total_hours)}</td>
     <td>${formatWeeklyFixed(row.weekly_total_miles, 1)}</td>
     <td>${formatWeeklyInt(row.weekly_total_elevation_ft)}</td>
@@ -783,7 +783,7 @@
       <th>Week Start</th>
       <th>Weekly Comment</th>
       <th>Audit</th>
-      <th></th>
+      <th class="weekly-edit-notes-header">Edit Notes</th>
       <th>Hours</th>
       <th>Miles</th>
       <th>Ft</th>

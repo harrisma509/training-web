@@ -5,6 +5,7 @@ const indexSource = fs.readFileSync("templates/index.html", "utf8");
 const weeklySource = fs.readFileSync("static/weekly.css", "utf8");
 const sharedSource = fs.readFileSync("static/style.css", "utf8");
 const weeklyJsSource = fs.readFileSync("static/weekly.js", "utf8");
+const weeklyPaneSource = fs.readFileSync("templates/partials/panes/weekly_pane.html", "utf8");
 
 const styleLink = "/static/style.css";
 const weeklyLink = "/static/weekly.css";
@@ -43,5 +44,18 @@ for (const selector of [
 assert.match(weeklySource, /color: var\(--yellow\)/);
 assert.match(weeklySource, /color: var\(--green\)/);
 assert.match(weeklySource, /font-weight: 700/);
+
+assert.match(weeklyJsSource, /<td class="weekly-edit-notes-cell"><button class="drawer-open-button" data-week-start="\$\{safe\(row\.week_start\)\}" type="button" aria-label="Edit weekly commentary" title="Edit weekly commentary"><\/button><\/td>/);
+assert.match(weeklyJsSource, /<th class="weekly-edit-notes-header">Edit Notes<\/th>/);
+assert.match(weeklyJsSource, /openWeeklyDrawer\(button\.dataset\.weekStart\)/);
+assert.match(weeklyJsSource, /event\.stopPropagation\(\)/);
+assert.match(weeklyJsSource, /attachAuditScoreHandlers\(\)/);
+assert.match(weeklyJsSource, /attachWeeklyCommentHandlers\(cell\)/);
+assert.match(weeklySource, /\.weekly-edit-notes-header,\s*\.weekly-edit-notes-cell\s*\{[^}]*width:\s*48px;[^}]*min-width:\s*48px;/s);
+assert.doesNotMatch(weeklySource, /\.weekly-edit-notes-(?:header|cell)[^{]*\{[^}]*display:\s*none/);
+assert.doesNotMatch(weeklySource, /@media\s*\(max-width:\s*1050px\)[\s\S]*\.weekly-drawer[\s\S]*display:\s*none/);
+assert.doesNotMatch(weeklySource, /@media\s*\(max-width:\s*1050px\)[\s\S]*\.weekly-edit-notes-(?:header|cell)[\s\S]*display:\s*none/);
+assert.match(weeklyPaneSource, /<div class="table-wrap">\s*<table id="weeklyTable"><\/table>\s*<\/div>/);
+assert.match(sharedSource, /\.table-wrap\s*\{[^}]*overflow-x:\s*auto;/s);
 
 console.log("Weekly CSS ownership contract tests passed.");

@@ -86,8 +86,10 @@
   text-overflow: ellipsis;
 }
 
-.drawer-icon-cell {
+.weekly-edit-notes-header,
+.weekly-edit-notes-cell {
   width: 48px;
+  min-width: 48px;
   text-align: center;
 }
 
@@ -423,12 +425,6 @@
 }
 
 @media (max-width: 1050px) {
-
-  .weekly-drawer,
-  .drawer-icon-cell {
-    display: none;
-  }
-
   .weekly-comment-cell {
     min-width: auto;
   }
