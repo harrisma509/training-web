@@ -155,9 +155,6 @@ if (window.ComponentsController) {
   window.TrainingApp.registerFeature("components", window.ComponentsController);
   window.TrainingApp.registerFeature("service", window.ComponentsController);
 }
-if (window.SyncController) {
-  window.TrainingApp.registerFeature("sync", window.SyncController);
-}
 const planTab = document.getElementById("planTab");
 const goalsTab = document.getElementById("goalsTab");
 const kpisTab = document.getElementById("kpisTab");
@@ -199,7 +196,6 @@ const hideRetiredCheckbox = document.getElementById("hideRetiredCheckbox");
 const gearRefresh = document.getElementById("gearRefresh");
 const componentsBikeSelect = document.getElementById("componentsBikeSelect");
 
-const syncNowBtn = document.getElementById("syncNowBtn");
 const mobileMenuButton = document.getElementById("mobileMenuButton");
 const mobileCurrentDestination = document.getElementById("mobileCurrentDestination");
 const mobileNavigation = document.getElementById("mobileNavigation");
@@ -296,8 +292,6 @@ componentsBikeSelect?.addEventListener("change", event => {
   persistPreferences();
   loadComponents();
 });
-syncNowBtn.addEventListener("click", handleSyncNow);
-
 function statusPill(value) {
   const status = safe(value);
   if (!status) {
@@ -305,10 +299,10 @@ function statusPill(value) {
   }
   return `<span class="pill status-${status}">${status}</span>`;
 }
-
+  window.TrainingApp?.features?.sync?.init?.();
+  window.TrainingApp?.features?.sync?.refresh?.();
 function showServiceSubtab(subtab) {
   const normalizedSubtab = ["components", "gear"].includes(subtab) ? subtab : "components";
-  state.serviceSubtab = normalizedSubtab;
   persistPreferences();
 
   const isComponents = normalizedSubtab === "components";
@@ -522,10 +516,10 @@ async function loadData() {
   ]);
 
   renderHeaderSummary();
-  loadSyncStatus();
+  window.TrainingApp?.features?.sync?.init?.();
+  window.TrainingApp?.features?.sync?.refresh?.();
 }
 
-setInterval(loadSyncStatus, 60000);
 const initialUrlParams = new URLSearchParams(window.location.search);
 const requestedTab = initialUrlParams.get("tab");
 const startupTab = VALID_FEATURE_TABS.includes(requestedTab)

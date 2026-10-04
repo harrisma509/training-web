@@ -2,7 +2,7 @@
 
 ## Status and scope
 
-This document records the current `training-web` frontend architecture through F33.
+This document records the current `training-web` frontend architecture through F34.
 It is an architecture handoff, not an approval to introduce a framework or
 rewrite the dashboard. The current implementation is server-rendered HTML
 with vanilla JavaScript modules, modular CSS, shared `AppState`, and a shared
@@ -55,7 +55,7 @@ decision changes it:
 | Service / Gear | `components.js`, `gear.js` | Components remains F21 lifecycle-owned; Gear `init` binds filters and its startup preload is coalesced with activation | Gear activation reuses loaded rows; `refresh` forces reload | Components F21 guards; Gear request ID and stale-response protection | Component menus/drawers close locally; no tab deactivation hook |
 | Yearly | `yearly.js` / `TrainingApp.features.yearly` | Startup preload and activation share in-flight work | Same-key activation reuses loaded rows; `refresh` forces reload; view selection delegates to the feature | Yearly request coalescing and freshness guard | Commentary drawer uses `TrainingApp.TransientSurface`; Settings maintenance remains separate |
 | Coach | `coach.js` / `TrainingApp.features.coach` | Lazy; registry `init` wires listeners and first activation loads sessions | Registry `activate` is idempotent; `refresh` forces the session-list reload | Session load token, keyed session-load promise, and response-stage interval | Coach owns menus, delete dialog, mobile drawer, response stages, and `beforeunload` timer cleanup; no tab deactivation hook |
-| Sync status | `sync.js` / `SyncController` | `loadData()` calls status load and app starts a 60-second interval | Not tab-scoped | None for the interval's individual fetches | Interval is app-global and has no teardown |
+| Sync status | `sync.js` / `TrainingApp.features.sync` | `loadData()` requests one canonical status refresh through the registry | Not tab-scoped | In-flight status requests coalesce; generation guards protect rendering | Sync owns the 60-second interval, manual-request timer, and `beforeunload` cleanup |
 | Settings | `settings.js` / `TrainingApp.features.settings` | Idempotent registry initialization applies preferences, wires controls, and loads status/preferences on demand | Canonical `open`/`requestClose` methods preserve local drawer behavior | Feature-local loading flags/promises; one media-query listener | Drawer close is local; no app-level deactivation |
 
 The important boundary is that hiding a pane is not unmounting it. DOM nodes,
@@ -190,9 +190,34 @@ controller alias and existing Settings helper globals because tracked feature
 consumers and browser compatibility still use them; duplicate shell ownership
 and Settings registration were removed.
 
-The remaining ownership debt is the app-global Sync status interval and its
-shell-level lifecycle policy. F34 should inventory and address Sync only; no
-Sync ownership migration is included in F33.
+### F34 implementation: Sync ownership consolidation
+
+F34 makes `sync.js` the canonical Sync runtime owner. It registers one stable
+`TrainingApp.features.sync` controller with `init`, `loadStatus`, `refresh`,
+`runSync`, and `cleanup` methods; `window.SyncController`,
+`window.loadSyncStatus`, and `window.handleSyncNow` remain compatibility names
+for the tracked browser surface. Registration is idempotent and the app shell
+does not overwrite the registry entry.
+
+Sync owns the header button listener, status loading and rendering, error
+presentation, the existing 60-second status interval, the manual-request
+button reset timer, in-flight status-request coalescing, stale-response
+generation protection, and unload cleanup. Initialization is idempotent and
+does not issue a status request or a mutating operation. The shell retains only
+the startup coordination call through `TrainingApp.features.sync`; it contains
+no Sync API calls, rendering, polling, or Sync timers.
+
+The existing global Sync behavior remains distinct from Daily's single-day
+activity resync. Daily continues to own its preview/enqueue flow, request
+status polling, status dismissal timer, and reload behavior. Settings keeps its
+existing default-sync-days preference and system-status presentation; it does
+not gain a second Sync runtime path. No Sync, resync, import, maintenance, or
+other mutating operation is started by F34 initialization or passive activation.
+
+The remaining compatibility debt is the retained Sync controller and helper
+aliases. F35 may inventory and remove only aliases with no tracked runtime,
+test, template, or external compatibility consumer, alongside the broader
+compatibility-deletion slice. No final documentation cleanup is included here.
 
 ## Listener and async ownership
 
@@ -210,6 +235,8 @@ the page:
   Escape handling;
 - `daily.js`: day-menu/narrative delegated table handling, dialog handling,
   and `beforeunload` status-timer cleanup;
+- `sync.js`: header Sync listener, status interval, manual-request reset timer,
+  and `beforeunload` cleanup;
 - `search.js`: Search delegated controls, URL synchronization, and canonical
    registry registration;
 - other modules: static-control listeners and dynamic-render listeners local to
@@ -364,8 +391,8 @@ transition. The supported source values are `startup`, `direct-url`,
    reuse are feature-owned rather than shell fallback behavior.
 - Goals and KPIs remain no-op placeholders. Components/Service remains on its
    F21 lifecycle adapter. Charts, Daily, Yearly, Coach, Settings, and Sync retain
-   their existing compatibility paths and were intentionally excluded from F22
-   because their loading, transient, or nested-view behavior has higher risk.
+   their existing compatibility paths while their active runtime owners remain
+   registry-mediated.
 - `TrainingApp.features`, `TrainingApp.registerFeature`, `window.showTab`,
   `window.activateFeature`, legacy controller globals, and remaining legacy
   loaders such as `window.loadDaily` remain available.
@@ -393,8 +420,8 @@ Search keeps its URL-backed filters, paging, sorting, action menus, and stale
 result preservation; its `refresh` reloads the current query without changing
 navigation or drafts.
 
-The remaining high-risk migrations are Daily, Charts, Yearly, Coach, Settings,
-Sync, and any broader transient-surface coordination. F23 prerequisites
+The remaining work is compatibility deletion and any broader transient-surface
+coordination. F23 prerequisites
 include an explicit owner and freshness policy for each remaining feature,
 deterministic tests for any transient or dirty-state behavior it changes, and
 a browser validation plan that proves no duplicate requests or compatibility
