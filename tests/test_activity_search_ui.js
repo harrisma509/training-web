@@ -198,7 +198,8 @@ async function main() {
     const dailySource = fs.readFileSync("static/daily.js", "utf8");
     const appSource = fs.readFileSync("static/app.js", "utf8");
     const searchPartialSource = fs.readFileSync("templates/partials/panes/search_pane.html", "utf8");
-    const htmlSource = fs.readFileSync("templates/index.html", "utf8") + searchPartialSource;
+    const dailyPartialSource = fs.readFileSync("templates/partials/panes/daily_pane.html", "utf8");
+    const htmlSource = fs.readFileSync("templates/index.html", "utf8") + searchPartialSource + dailyPartialSource;
     const searchCssSource = fs.readFileSync("static/search.css", "utf8");
     assert.doesNotMatch(searchSource, /new Date|Date\.parse/);
     assert.match(searchSource, /Array\.from\(menu\.children\)\.find\(item => !item\.disabled\)/);

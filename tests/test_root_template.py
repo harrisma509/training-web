@@ -286,6 +286,52 @@ def test_service_partial_is_single_authority_at_the_original_composition_point()
     )
 
 
+def test_core_pane_partials_are_single_authority_at_original_composition_points() -> None:
+    root_source = (REPO_ROOT / "templates" / "index.html").read_text(encoding="utf-8")
+    rendered_source, document = parse_index()
+    pane_specs = (
+        ("planPane", "plan_pane.html", ["planStrip"], [], True),
+        ("goalsPane", "goals_pane.html", [], [], True),
+        ("kpisPane", "kpis_pane.html", [], [], True),
+        (
+            "dailyPane",
+            "daily_pane.html",
+            ["dailySearchStatusWrap", "dailySearchStatusText", "dailySearchAdvanced", "dailyClearSearch", "dailyTable"],
+            ["dailyTable"],
+            False,
+        ),
+        ("weeklyPane", "weekly_pane.html", ["weeklyTable"], ["weeklyTable"], True),
+        ("zonesPane", "zones_pane.html", ["zonesTable"], ["zonesTable"], True),
+    )
+
+    for pane_id, partial_name, expected_ids, expected_tables, expected_hidden in pane_specs:
+        partial_source = (REPO_ROOT / "templates" / "partials" / "panes" / partial_name).read_text(
+            encoding="utf-8"
+        )
+        include = f'{{% include "partials/panes/{partial_name}" %}}'
+        assert root_source.count(include) == 1
+        assert root_source.count(f'id="{pane_id}"') == 0
+        assert partial_source.count(f'id="{pane_id}"') == 1
+
+        rendered_pane = by_id(document, pane_id)
+        partial_pane = by_id(parse_html(partial_source), pane_id)
+        assert normalized_tree(rendered_pane) == normalized_tree(partial_pane)
+        assert rendered_source.count(f'id="{pane_id}"') == 1
+        assert [element.attributes.get("id") for element in all_elements(rendered_pane) if element.attributes.get("id")] == expected_ids
+        assert [element.attributes.get("id") for element in by_tag(rendered_pane, "table")] == expected_tables
+        assert ("hidden" in classes(rendered_pane)) is expected_hidden
+        assert not any(
+            attribute.lower().startswith("on")
+            for element in all_elements(rendered_pane)
+            for attribute in element.attributes
+        )
+
+    assert "Training Goals" in (REPO_ROOT / "templates" / "partials" / "panes" / "goals_pane.html").read_text(encoding="utf-8")
+    assert "Key Performance Indicators" in (REPO_ROOT / "templates" / "partials" / "panes" / "kpis_pane.html").read_text(encoding="utf-8")
+    assert by_id(document, "weeklyDrawer").parent is next(element for element in by_tag(document, "main"))
+    assert "hidden" in classes(by_id(document, "weeklyDrawer"))
+
+
 def normalized_tree(element):
     return (
         element.tag,

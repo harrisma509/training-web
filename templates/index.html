@@ -121,58 +121,21 @@
   {% include "partials/settings/settings_drawer.html" %}
 
   <main>
-    <section id="planPane" class="hidden">
-      <div class="plan-shell">
-        <div id="planStrip" class="plan-weeks" aria-live="polite"></div>
-      </div>
-    </section>
+    {% include "partials/panes/plan_pane.html" %}
 
-    <section id="goalsPane" class="hidden">
-      <div class="placeholder-panel goals-panel">
-        <h2 class="placeholder-title">Training Goals</h2>
-        <p class="placeholder-lead">Track progress toward annual training and health targets.</p>
-        <p class="placeholder-body">Monitor weight, training hours, elevation, cycling distance, strength consistency,
-          and other configured goals. Compare current progress with annual targets and expected pace.</p>
-        <div class="placeholder-status">Goal tracking is coming soon.</div>
-      </div>
-    </section>
+    {% include "partials/panes/goals_pane.html" %}
 
-    <section id="kpisPane" class="hidden">
-      <div class="placeholder-panel kpis-panel">
-        <h2 class="placeholder-title">Key Performance Indicators</h2>
-        <p class="placeholder-lead">See the training and recovery signals that matter most right now.</p>
-        <p class="placeholder-body">Review current load, chronic load, ramp, weight, sleep, HRV, resting heart rate,
-          strength consistency, weekly audit status, and other key indicators requiring attention.</p>
-        <div class="placeholder-status">KPI summaries are coming soon.</div>
-      </div>
-    </section>
+    {% include "partials/panes/kpis_pane.html" %}
 
     {% include "partials/panes/charts_pane.html" %}
 
-    <section id="dailyPane">
-      <div id="dailySearchStatusWrap" class="daily-search-status-wrap hidden">
-        <div id="dailySearchStatusText" class="daily-search-status-text"></div>
-        <button id="dailySearchAdvanced" type="button" class="button-secondary">Open in Advanced Search</button>
-        <button id="dailyClearSearch" type="button" class="button-secondary">Clear search</button>
-      </div>
-      <div class="table-wrap">
-        <table id="dailyTable"></table>
-      </div>
-    </section>
+    {% include "partials/panes/daily_pane.html" %}
 
     {% include "partials/panes/search_pane.html" %}
 
-    <section id="weeklyPane" class="hidden">
-      <div class="table-wrap">
-        <table id="weeklyTable"></table>
-      </div>
-    </section>
+    {% include "partials/panes/weekly_pane.html" %}
 
-    <section id="zonesPane" class="hidden">
-      <div class="table-wrap">
-        <table id="zonesTable"></table>
-      </div>
-    </section>
+    {% include "partials/panes/zones_pane.html" %}
 
     {% include "partials/panes/service_pane.html" %}
 
