@@ -11,6 +11,7 @@ from test_frontend_composition import (
     CompositionParser,
     all_elements,
     asset_path,
+    by_id,
     by_tag,
     classes,
     parse_index,
@@ -150,6 +151,67 @@ def test_search_partial_is_single_authority_at_the_original_composition_point() 
     ]
     assert next(element for element in all_elements(rendered_search) if element.attributes.get("id") == "searchResults").tag == "table"
     assert not any(element.attributes.get("open") is not None for element in all_elements(rendered_search) if element.tag == "details")
+
+
+def test_charts_partial_is_single_authority_at_the_original_composition_point() -> None:
+    root_source = (REPO_ROOT / "templates" / "index.html").read_text(encoding="utf-8")
+    partial_source = (REPO_ROOT / "templates" / "partials" / "panes" / "charts_pane.html").read_text(
+        encoding="utf-8"
+    )
+    rendered_source, document = parse_index()
+
+    include = '{% include "partials/panes/charts_pane.html" %}'
+    assert root_source.count(include) == 1
+    assert root_source.count('id="chartsPane"') == 0
+    assert partial_source.count('id="chartsPane"') == 1
+
+    main = next(element for element in by_tag(document, "main"))
+    pane_order = [child.attributes.get("id") for child in main.children if child.tag == "section"]
+    charts_index = pane_order.index("chartsPane")
+    assert pane_order[charts_index - 1 : charts_index + 2] == ["kpisPane", "chartsPane", "dailyPane"]
+
+    rendered_charts = next(element for element in all_elements(document) if element.attributes.get("id") == "chartsPane")
+    partial_document = parse_html(partial_source)
+    partial_charts = next(element for element in all_elements(partial_document) if element.attributes.get("id") == "chartsPane")
+    assert normalized_tree(rendered_charts) == normalized_tree(partial_charts)
+    assert rendered_source.count('id="chartsPane"') == 1
+
+    canvas_ids = [element.attributes.get("id") for element in all_elements(rendered_charts) if element.tag == "canvas"]
+    assert canvas_ids == [
+        "fitnessFatigueChartCanvas",
+        "weeklyLoadChartCanvas",
+        "weightChartCanvas",
+        "volumeChartCanvas",
+    ]
+
+    category_tabs = [element for element in all_elements(rendered_charts) if element.attributes.get("role") == "tab"]
+    assert [
+        (element.attributes.get("id"), element.attributes.get("aria-selected"), element.attributes.get("aria-controls"))
+        for element in category_tabs
+    ] == [
+        ("chartsFitnessTab", "true", "chartsFitnessPanel"),
+        ("chartsLoadTab", "false", "chartsLoadPanel"),
+        ("chartsHealthTab", "false", "chartsHealthPanel"),
+        ("chartsVolumeTab", "false", "chartsVolumePanel"),
+    ]
+    assert "hidden" not in classes(by_id(rendered_charts, "chartsFitnessPanel"))
+    for panel_id in ("chartsLoadPanel", "chartsHealthPanel", "chartsVolumePanel"):
+        assert "hidden" in classes(by_id(rendered_charts, panel_id))
+
+    for control_id in (
+        "fitnessFatigueChartCanvasWrap",
+        "weeklyLoadChartCanvasWrap",
+        "weightChartMonthlyMode",
+        "weightChartAnnualMode",
+        "weightChartYearSelect",
+        "volumeYearSelect",
+    ):
+        assert by_id(rendered_charts, control_id)
+
+    scripts = [element.attributes.get("src") for element in by_tag(document, "script")]
+    assert scripts.index("/static/vendor/chart.umd.min.js") < scripts.index("/static/charts.js") < scripts.index(
+        "/static/app.js?v=20260914-service-nav"
+    )
 
 
 def normalized_tree(element):
