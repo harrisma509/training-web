@@ -45,16 +45,19 @@ assert.match(weeklySource, /color: var\(--yellow\)/);
 assert.match(weeklySource, /color: var\(--green\)/);
 assert.match(weeklySource, /font-weight: 700/);
 
-assert.match(weeklyJsSource, /<td class="weekly-edit-notes-cell"><button class="drawer-open-button" data-week-start="\$\{safe\(row\.week_start\)\}" type="button" aria-label="Edit weekly commentary" title="Edit weekly commentary"><\/button><\/td>/);
-assert.match(weeklyJsSource, /<th class="weekly-edit-notes-header">N<\/th>/);
+assert.match(weeklyJsSource, /<td class="weekly-actions-cell">\s*<div class="weekly-row-actions">[\s\S]*?class="audit-score-button[\s\S]*?class="drawer-open-button"[\s\S]*?<\/div>\s*<\/td>/);
+assert.match(weeklyJsSource, /<th class="weekly-actions-header">Actions<\/th>/);
+assert.doesNotMatch(weeklyJsSource, /weekly-edit-notes-header|weekly-edit-notes-cell|<th>N<\/th>/);
+assert.match(weeklyJsSource, /<\/td>\s*<td>\$\{renderWeeklyHoursCell\(row\.weekly_total_hours\)\}<\/td>/);
 assert.match(weeklyJsSource, /openWeeklyDrawer\(button\.dataset\.weekStart\)/);
 assert.match(weeklyJsSource, /event\.stopPropagation\(\)/);
 assert.match(weeklyJsSource, /attachAuditScoreHandlers\(\)/);
 assert.match(weeklyJsSource, /attachWeeklyCommentHandlers\(cell\)/);
-assert.match(weeklySource, /\.weekly-edit-notes-header,\s*\.weekly-edit-notes-cell\s*\{[^}]*width:\s*48px;[^}]*min-width:\s*48px;/s);
-assert.doesNotMatch(weeklySource, /\.weekly-edit-notes-(?:header|cell)[^{]*\{[^}]*display:\s*none/);
+assert.match(weeklySource, /\.weekly-actions-header,\s*\.weekly-actions-cell\s*\{[^}]*width:\s*72px;[^}]*min-width:\s*72px;/s);
+assert.match(weeklySource, /\.weekly-row-actions\s*\{[^}]*display:\s*inline-flex;[^}]*gap:\s*5px;/s);
+assert.doesNotMatch(weeklySource, /\.weekly-edit-notes-(?:header|cell)[^{]*\{/);
 assert.doesNotMatch(weeklySource, /@media\s*\(max-width:\s*1050px\)[\s\S]*\.weekly-drawer[\s\S]*display:\s*none/);
-assert.doesNotMatch(weeklySource, /@media\s*\(max-width:\s*1050px\)[\s\S]*\.weekly-edit-notes-(?:header|cell)[\s\S]*display:\s*none/);
+assert.doesNotMatch(weeklySource, /@media\s*\(max-width:\s*1050px\)[\s\S]*\.weekly-actions-(?:header|cell)[\s\S]*display:\s*none/);
 assert.match(weeklyPaneSource, /<div class="table-wrap">\s*<table id="weeklyTable"><\/table>\s*<\/div>/);
 assert.match(sharedSource, /\.table-wrap\s*\{[^}]*overflow-x:\s*auto;/s);
 

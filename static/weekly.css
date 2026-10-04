@@ -86,11 +86,18 @@
   text-overflow: ellipsis;
 }
 
-.weekly-edit-notes-header,
-.weekly-edit-notes-cell {
-  width: 48px;
-  min-width: 48px;
+.weekly-actions-header,
+.weekly-actions-cell {
+  width: 72px;
+  min-width: 72px;
   text-align: center;
+}
+
+.weekly-row-actions {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
 }
 
 .drawer-open-button {
