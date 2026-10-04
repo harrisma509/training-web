@@ -9,7 +9,7 @@ const candidates = [
     ["plan.js", "PlanController", "loadPlan"],
     ["search.js", "searchController", "loadResults"],
     ["zones.js", "zonesController", "loadZones"],
-    ["gear.js", "GearController", "loadGear"],
+    ["gear.js", "gearController", "loadGear"],
     ["weekly.js", "WeeklyController", "loadWeekly"],
 ];
 

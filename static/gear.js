@@ -4,6 +4,7 @@
  * Handles the Gear tab, row filtering, render logic, and fetch integration. It stays aligned with AppState and
  * the shared API helper without owning global app behavior.
  */
+{
 function gearStatusBadge(row) {
   if (row.retired) {
     return `<span class="status-pill status-retired">Retired</span>`;
@@ -213,7 +214,7 @@ function initGear() {
 
 initGear();
 
-window.GearController = {
+const gearController = {
   init: initGear,
   activate: () => loadGear(false),
   refresh: () => loadGear(true),
@@ -221,3 +222,14 @@ window.GearController = {
   render: renderGearTable,
   syncFilters: bindGearFilterCheckboxes,
 };
+
+window.TrainingApp = window.TrainingApp || { features: {} };
+window.TrainingApp.features = window.TrainingApp.features || {};
+window.TrainingApp.registerFeature = window.TrainingApp.registerFeature || function (name, feature) {
+  if (!feature || typeof feature !== "object") return;
+  if (!Object.prototype.hasOwnProperty.call(window.TrainingApp.features, name)) {
+    window.TrainingApp.features[name] = feature;
+  }
+};
+window.TrainingApp.registerFeature("gear", gearController);
+}

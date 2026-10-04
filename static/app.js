@@ -160,9 +160,6 @@ if (window.DailyController) {
 if (window.WeeklyController) {
   window.TrainingApp.registerFeature("weekly", window.WeeklyController);
 }
-if (window.GearController) {
-  window.TrainingApp.registerFeature("gear", window.GearController);
-}
 if (window.SettingsController) {
   window.TrainingApp.registerFeature("settings", window.SettingsController);
 }
@@ -345,7 +342,7 @@ coachTab?.addEventListener("click", () => showTab("coach"));
 yearlyAnnualTab?.addEventListener("click", () => showYearlyView("annual"));
 yearlyMonthlyTab?.addEventListener("click", () => showYearlyView("monthly"));
 gearRefresh.addEventListener("click", () => {
-  window.GearController?.refresh?.();
+  window.TrainingApp?.features?.gear?.refresh?.();
 });
 yearlyRefresh?.addEventListener("click", loadYearly);
 componentsBikeSelect?.addEventListener("change", event => {
@@ -964,7 +961,7 @@ async function loadData() {
     loadDaily(),
     window.WeeklyController?.refresh?.() ?? loadWeekly(),
     window.TrainingApp?.features?.zones?.refresh?.(),
-    window.GearController?.refresh?.() ?? loadGear(),
+    window.TrainingApp?.features?.gear?.refresh?.(),
     loadComponents(),
     loadYearly()
   ]);

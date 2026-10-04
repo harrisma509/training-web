@@ -852,9 +852,7 @@
     applyAppearancePreference();
     syncLimitSelects();
     syncFormCheckboxes();
-    if (typeof window.renderGearTable === "function") {
-      window.renderGearTable();
-    }
+    window.TrainingApp?.features?.gear?.render?.();
   }
 
   function updateLimitPreference(key, value, reloadFn) {
@@ -1033,9 +1031,7 @@
         hideShoesCheckbox.checked = checked;
       }
       persistPreferences();
-      if (typeof window.renderGearTable === "function") {
-        window.renderGearTable();
-      }
+      window.TrainingApp?.features?.gear?.render?.();
     });
 
     settingsHideRetired?.addEventListener("change", (event) => {
@@ -1045,9 +1041,7 @@
         hideRetiredCheckbox.checked = checked;
       }
       persistPreferences();
-      if (typeof window.renderGearTable === "function") {
-        window.renderGearTable();
-      }
+      window.TrainingApp?.features?.gear?.render?.();
     });
 
     if (settingsDailyLimit) {

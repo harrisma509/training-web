@@ -2,7 +2,7 @@
 
 ## Status and scope
 
-This document records the current `training-web` frontend architecture through F26.
+This document records the current `training-web` frontend architecture through F27.
 It is an architecture handoff, not an approval to introduce a framework or
 rewrite the dashboard. The current implementation is server-rendered HTML
 with vanilla JavaScript modules, modular CSS, shared `AppState`, and a shared
@@ -346,10 +346,9 @@ The F25 contract covers registration, registry identity, preload/activation
 coalescing, cached activation, forced refresh, limit reloads, stale responses,
 rendering, and the absence of the retired globals.
 
-Remaining compatibility debt includes Gear's `GearController` and rendering
-helper consumers, Weekly's `WeeklyController` and loader paths, plus the
-unmigrated feature families listed above. The next bounded slice should
-investigate Gear before Weekly, after a fresh external-consumer check.
+Remaining compatibility debt includes Weekly's `WeeklyController` and loader
+paths, plus the unmigrated feature families listed above. F27 completed the
+next bounded Gear slice after a fresh external-consumer check.
 
 ### F26 implementation: deterministic static-asset versioning
 
@@ -368,6 +367,32 @@ static assets use long-lived immutable caching. Rollback means deploying the
 rollback commit, which regenerates metadata and causes the root HTML to point
 back to that commit's asset version. Deployment requires a clean Git worktree
 and does not mutate tracked source files.
+
+### F27 implementation: Gear compatibility-global retirement
+
+F27 retires the proven-internal Gear compatibility globals `window.GearController`
+and `window.renderGearTable`. Gear now creates the same identity-preserving
+`TrainingApp` bootstrap used by Zones and registers one canonical
+`TrainingApp.features.gear` controller before `app.js` loads. Its public methods
+are `init`, cache-aware `activate`, forced `refresh`, forced `load`, `render` for
+the Settings filter contract, and `syncFilters` for the existing Gear filter
+wiring. The private `loadGear` loader, renderer, filter helpers, request ID,
+and in-flight promise remain module-owned.
+
+The app shell uses the canonical Gear controller for startup preload and the
+header refresh button. Settings uses its narrow canonical `render` method for
+appearance/filter preference changes. Gear continues to refresh Search options
+through `TrainingApp.features.search.refreshGearOptions()` after successful
+loads. No template, endpoint, API, CSS, table, filter, Service/Gear subtab, or
+Search query behavior changed. The F27 contract proves registry identity,
+preload/activation coalescing, cached activation, forced refresh, stale-response
+protection, filter and table rendering, Service summary updates, and Search
+refresh integration.
+
+The remaining compatibility family explicitly deferred from F27 is Weekly's
+controller/loader surface. F28 should investigate Weekly only after a fresh
+consumer inventory and equivalent lifecycle characterization. Settings and
+other feature-family migrations remain out of scope until separately approved.
 
 ### Remaining inconsistencies and F20/F21 prerequisites
 

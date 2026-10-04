@@ -85,7 +85,8 @@ async function main() {
     assert.doesNotMatch(settingsSource, /window\.loadZones/);
     assert.doesNotMatch(searchSource, /window\.SearchController/);
     assert.doesNotMatch(appSource, /window\.loadPlan/);
-    assert.match(gearSource, /window\.GearController\s*=/);
+    assert.doesNotMatch(gearSource, /window\.GearController\s*=/);
+    assert.match(gearSource, /window\.TrainingApp\.registerFeature\("gear", gearController\);/);
     assert.match(weeklySource, /window\.WeeklyController\s*=/);
     assert.match(appSource, /window\.TrainingApp = window\.TrainingApp \|\| \{/);
 
