@@ -10,12 +10,13 @@ const readme = read("README.md");
 const aiGuide = read("docs/AI_DEV_GUIDE.md");
 const testing = read("docs/TESTING_GUIDE.md");
 const webInstructions = read(".github/copilot-instructions.md");
+const etlReadme = read("../training-etl/README.md");
 const etlInstructions = read("../training-etl/.github/copilot-instructions.md");
 const etlConstitution = read("../training-etl/docs/ENGINEERING_CONSTITUTION.md");
 const deployScript = read("deploy_training_web.ps1");
 
 for (const key of [
-    "plan", "goals", "kpis", "charts", "daily", "search", "weekly",
+    "plan", "goals", "kpis", "components", "charts", "daily", "search", "weekly",
     "zones", "service", "gear", "yearly", "coach", "sync", "settings",
 ]) {
     assert.match(architecture, new RegExp("\\\\| \\`" + key + "\\` \\\\|"), `missing registry key: ${key}`);
@@ -42,8 +43,10 @@ for (const phrase of [
     "immutable",
     "Container recreation",
     "image rebuild",
-    "237 passed, 46 subtests",
-    "34/34",
+    "238 passed, 46 subtests",
+    "35/35",
+    "15 registry keys",
+    "ENGINEERING_CONSTITUTION.md",
     "F17-F35 closeout",
 ]) {
     assert.ok(architecture.includes(phrase), `missing architecture rule: ${phrase}`);
@@ -58,7 +61,11 @@ assert.match(aiGuide, /Documentation-only changes are not/);
 assert.match(webInstructions, /Permanent architecture and execution budget/);
 assert.match(etlInstructions, /Permanent architecture and execution budget/);
 assert.match(etlConstitution, /FRONTEND_ARCHITECTURE\.md/);
-assert.match(testing, /34 Node test files/);
+assert.match(testing, /35 Node test files/);
+assert.match(architecture, /Components\/Service/);
+assert.doesNotMatch(architecture, /retired frontend handoff/);
+assert.doesNotMatch([readme, aiGuide, webInstructions, etlReadme, etlInstructions].join("\n"), /(^|[\s`])python3? -m (pytest|py_compile)\b/m);
+assert.doesNotMatch([readme, aiGuide, webInstructions, etlReadme, etlInstructions].join("\n"), /activate the repository virtual environment/);
 
 for (const stale of [
     "DailyController", "ChartsController", "YearlyController", "CoachController",

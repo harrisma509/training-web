@@ -46,7 +46,7 @@ The Daily date actions use the existing per-activity `activity_resync` queue wit
 For frontend ownership, lifecycle, registry keys, transient surfaces, request
 and timer policy, asset versioning, deployment modes, and current baselines,
 read [FRONTEND_ARCHITECTURE.md](FRONTEND_ARCHITECTURE.md). That document is
-the permanent replacement for the retired frontend handoff.
+the permanent detailed frontend contract within the repository authority hierarchy.
 
 ## Secrets and logging policy
 - Never log secrets, bearer tokens, access tokens, refresh tokens, env values, or raw database credentials.
@@ -71,8 +71,7 @@ Typical flow from macOS or Linux:
 curl -sS -D - http://192.168.1.100:8088/api/gear/dashboard?limit=5
 ```
 
-On Windows, use `.deploy_training_web.ps1`. Both scripts require a clean
-On Windows, use `.\deploy_training_web.ps1`. Both scripts require a clean
+On Windows, use `\.\deploy_training_web.ps1`. Both scripts require a clean
 worktree whose `HEAD` matches its configured upstream revision, package the
 same exact-commit archive, and support `--dry-run`/`-DryRun` without upload.
 Compose/environment/mount/port/network/command changes; image rebuild is for
@@ -92,12 +91,16 @@ If an endpoint returns HTTP 500:
 Do not guess. Do not broaden the patch while debugging a failing request.
 
 ## Python validation
-Use the available interpreter on this machine. Prefer `python3` if `python` is not present.
+Use the repository-local interpreter explicitly. On macOS/Linux:
 
 ```bash
-which python
-which python3
-python3 -m py_compile app.py routes/*.py
+./.venv/bin/python -m py_compile app.py routes/*.py
+```
+
+On Windows:
+
+```powershell
+\.\.venv\Scripts\python.exe -m py_compile app.py routes\*.py
 ```
 
 Local syntax checks are required for Python changes, but they are not a substitute for deployment and live endpoint checks.

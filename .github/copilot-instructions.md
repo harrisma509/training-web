@@ -123,8 +123,8 @@ curl -sS -D - http://192.168.1.100:8088/api/gear/dashboard?limit=5
 
 For backend changes:
 
-1. Run `python -m py_compile` on touched Python files.
- 2. Deploy with the platform-native supported deployment script.
+1. Run `\.\.venv\Scripts\python.exe -m py_compile` on touched Python files on Windows, or `./.venv/bin/python -m py_compile` on macOS/Linux.
+2. Deploy with the platform-native supported deployment script.
 3. Test affected live endpoint with `curl`.
 4. Confirm HTTP 200.
 5. Confirm JSON shape.

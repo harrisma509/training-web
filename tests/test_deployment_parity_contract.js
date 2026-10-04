@@ -14,11 +14,13 @@ const webShell = read("deploy_to_server_from_mac.sh");
 const etlPowerShell = read("../training-etl/deploy_training_etl.ps1");
 const etlShell = read("../training-etl/deploy_to_server_from_mac.sh");
 const webArchitecture = read("docs/FRONTEND_ARCHITECTURE.md");
+const webTesting = read("docs/TESTING_GUIDE.md");
 const webReadme = read("README.md");
 const webGuide = read("docs/AI_DEV_GUIDE.md");
 const webInstructions = read(".github/copilot-instructions.md");
 const etlReadme = read("../training-etl/README.md");
 const etlInstructions = read("../training-etl/.github/copilot-instructions.md");
+const etlTesting = read("../training-etl/docs/TESTING_GUIDE.md");
 const etlApi = read("../training-etl/docs/TRAINING_API.md");
 
 for (const path of [
@@ -113,6 +115,14 @@ assert.match(webInstructions, /deploy_training_web\.ps1/);
 assert.match(webInstructions, /deploy_to_server_from_mac\.sh/);
 assert.match(etlInstructions, /deploy_training_etl\.ps1/);
 assert.match(etlInstructions, /deploy_to_server_from_mac\.sh/);
+assert.match(webTesting, /35 Node test files/);
+assert.match(webTesting, /\.\\\.venv\\Scripts\\python\.exe -m pytest/);
+assert.match(etlTesting, /\.\\\.venv\\Scripts\\python\.exe -m pytest/);
+for (const guidance of [webReadme, webGuide, webInstructions, etlReadme, etlInstructions]) {
+    assert.doesNotMatch(guidance, /(^|[\s`])python3? -m (pytest|py_compile)\b/m);
+    assert.doesNotMatch(guidance, /activate the repository virtual environment/);
+    assert.doesNotMatch(guidance, /\.deploy_training_web\.ps1/);
+}
 
 console.log("Cross-platform deployment parity and NAS retirement contract tests passed.");
 

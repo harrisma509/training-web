@@ -6,18 +6,11 @@ This is the permanent current architecture guide for the `training-web`
 frontend. It describes the deployed V4 architecture after F35 and the F36
 closeout. It is not a migration handoff or permission to introduce a framework.
 
-Use the documentation hierarchy in this order:
-
-1. Permanent repository instructions and architecture documents
-2. Executable architecture and behavior contracts
-3. Current source code
-4. Deployment and testing runbooks
-5. Git history for historical context
-
-Temporary prompts and chat transcripts are not sources of truth. When documents
-conflict, the engineering constitution and current product decisions govern;
-then use repository instructions, this architecture guide, executable
-contracts, source, and runbooks in that order.
+The authority hierarchy and required-reading order are defined by
+`docs/ENGINEERING_CONSTITUTION.md`; this guide is the detailed frontend
+contract within that hierarchy. Executable contracts validate the guide and
+current source. Temporary prompts and chat transcripts are not sources of
+truth.
 
 ## Application shape
 
@@ -44,19 +37,20 @@ accepted cross-repository boundary is documented in
 Each entry is the narrow public contract for one feature; it is not a second
 state store and it does not imply that every lifecycle method exists.
 
-The current composed application has 14 registry keys:
+The current composed application has 15 registry keys:
 
 | Key | Owner | Public contract and notes |
 | --- | --- | --- |
 | `plan` | `static/plan.js` | Shell consumes the intentional `PlanController` registration bridge; `init`, `activate`, `refresh`, `load`, `render`. |
 | `goals` | `static/goals.js` | Shell consumes the intentional `GoalsController` registration bridge; no-op `load`/`render` placeholder. |
 | `kpis` | `static/kpis.js` | Shell consumes the intentional `KPIsController` registration bridge; no-op `load`/`render` placeholder. |
+| `components` | `static/components.js` | F21 Components/Service lifecycle adapter and guarded editors; registered through the intentional `ComponentsController` bridge. |
 | `charts` | `static/charts.js` | Category state, Chart.js instances, loading, replacement, freshness, and theme redraw; `init`, `activate`, `refresh`, `showCategory`. |
 | `daily` | `static/daily.js` | Daily rows, exact-date route state, narrative, day actions, resync polling, timers, and cleanup; `init`, `activate`, `refresh`, `load`, `render`. |
 | `search` | `static/search.js` | URL-backed filters, paging, sorting, results, and stale-result protection; `init`, `activate`, `refresh` and Search actions. |
 | `weekly` | `static/weekly.js` | Weekly rows, commentary, audit surfaces, limits, and freshness; `init`, `activate`, `refresh`, `load`, `render`. |
 | `zones` | `static/zones.js` | Zone rows, limits, and freshness; `init`, `activate`, `refresh`, `load`, `render`. |
-| `service` | `static/components.js` | F21 Components/Service lifecycle adapter with guarded editors and service history. The shell registers the same intentional `ComponentsController` bridge under `components` and `service`. |
+| `service` | `static/components.js` | Compatibility key for the same F21 Components/Service lifecycle adapter and guarded editors; it points to the intentional `ComponentsController` bridge. |
 | `gear` | `static/gear.js` | Gear filters, rows, freshness, and Search option refresh; `init`, `activate`, `refresh`, `load`, `render`. |
 | `yearly` | `static/yearly.js` | Annual/monthly rows, view state, commentary surface, and maintenance coordination; `init`, `activate`, `refresh`, `showView`. |
 | `coach` | `static/coach.js` | Sessions, messages, menus, delete confirmation, response stages, and cleanup; `init`, `activate`, `refresh`, `render`. |
@@ -153,17 +147,16 @@ Documentation-only changes do not require deployment or restart.
 
 The two supported scripts use the same archive include/exclude policy and
 destination. They exclude Git metadata, secrets, virtual environments, caches,
-tests, local databases, temporary archives, the retired frontend handoff, and
-deployment-only files. Both require a clean worktree and local `HEAD` equal to
-its configured upstream revision. Use the platform-native dry-run option to
+tests, local databases, temporary archives, and deployment-only files. Both
+require a clean worktree and local `HEAD` equal to its configured upstream
+revision. Use the platform-native dry-run option to
 inspect the archive without upload. No supported NAS deployment path remains.
 
 ## Testing and release evidence
 
-The inherited F35 baseline was Python `237 passed, 46 subtests` and Node
-`33/33` test files. F36 adds one documentation/cold-start contract, so the
-final Node baseline is `34/34`; the Python baseline remains `237 passed, 46
-subtests`. Tests are isolated from paid providers, production databases,
+The current baseline is Python `238 passed, 46 subtests` and Node `35/35` test
+files.
+Tests are isolated from paid providers, production databases,
 Docker, SSH, deployment, and mutating operations.
 
 A release check records local/remote equality, clean status, the exact deployed
@@ -185,4 +178,4 @@ only the verified non-self-registering shell bridge above.
 
 The frontend architecture epic closes at F36. Future work must begin from this
 permanent guide, current source, executable contracts, and the repository
-instructions; it must not resurrect the deleted handoff or retired globals.
+instructions; it must not resurrect deleted globals.

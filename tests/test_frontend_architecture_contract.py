@@ -1,4 +1,5 @@
 from pathlib import Path
+import re
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -6,6 +7,7 @@ ARCHITECTURE = (ROOT / "docs" / "FRONTEND_ARCHITECTURE.md").read_text(encoding="
 APP = (ROOT / "static" / "app.js").read_text(encoding="utf-8")
 YEARLY = (ROOT / "static" / "yearly.js").read_text(encoding="utf-8")
 INDEX = (ROOT / "templates" / "index.html").read_text(encoding="utf-8")
+STATIC = "\n".join(path.read_text(encoding="utf-8") for path in (ROOT / "static").glob("*.js"))
 
 
 def test_frontend_architecture_defines_lifecycle_and_compatibility_contract() -> None:
@@ -48,3 +50,15 @@ def test_runtime_composition_still_matches_the_documented_bridge_boundary() -> N
     assert 'if (featureName === "plan")' not in APP
     assert "window.TrainingApp.TransientSurface" in INDEX or "window.TrainingApp.TransientSurface" in APP or "window.TrainingApp.TransientSurface" in YEARLY
     assert INDEX.index('/static/app.js?v={{ asset_version }}') > INDEX.index('/static/coach.js?v={{ asset_version }}')
+
+
+def test_documented_registry_matches_composed_runtime_registrations() -> None:
+    expected = {
+        "plan", "goals", "kpis", "components", "service", "charts", "coach",
+        "daily", "gear", "search", "settings", "sync", "weekly", "zones", "yearly",
+    }
+    registered = set(re.findall(r'registerFeature\("([^"]+)"', STATIC))
+    assert registered == expected
+    assert len(registered) == 15
+    assert "Components/Service" in ARCHITECTURE
+    assert "Compatibility key for the same" in ARCHITECTURE

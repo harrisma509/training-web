@@ -126,21 +126,21 @@ Use live validation for:
 Run the automated unit tests from the repository root with the repository-local virtual environment:
 
 ```bash
-python3 -m pip install -r requirements-dev.txt
-python3 -m pytest --collect-only -q
-python3 -m pytest -q
+./.venv/bin/python -m pip install -r requirements-dev.txt
+./.venv/bin/python -m pytest --collect-only -q
+./.venv/bin/python -m pytest -q
 ```
 
 For a focused run:
 
 ```bash
-python3 -m pytest tests/test_coach_orchestration.py -q
-python3 -m pytest -k budget -q
+./.venv/bin/python -m pytest tests/test_coach_orchestration.py -q
+./.venv/bin/python -m pytest -k budget -q
 ```
 
 Existing `unittest.TestCase` tests run through pytest. The default suite uses fakes, mocks, and synthetic data; it must not contact OpenAI or other paid providers, Strava, production training-api, production PostgreSQL, Docker, SSH, or deployment operations. Automated unit tests are separate from manual runtime, provider, and deployment smoke tests.
 
-On Windows, activate the repository virtual environment first and use `python -m pytest -q` when `python3` is unavailable.
+On Windows, use `\.\.venv\Scripts\python.exe -m pytest -q`.
 
 For the complete testing and AI-assisted workflow, see [docs/TESTING_GUIDE.md](docs/TESTING_GUIDE.md). Related development notes: [docs/AI_DEV_GUIDE.md](docs/AI_DEV_GUIDE.md) and [docs/FRONTEND_ARCHITECTURE.md](docs/FRONTEND_ARCHITECTURE.md).
 
