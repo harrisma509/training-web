@@ -1147,24 +1147,24 @@
       return true;
     }
     settingsInitialized = true;
-      restorePreferences();
-      syncFormCheckboxes();
-      if (hideShoesCheckbox) {
-        hideShoesCheckbox.checked = window.AppState.hideShoes;
-      }
-      if (hideRetiredCheckbox) {
-        hideRetiredCheckbox.checked = window.AppState.hideRetired;
-      }
-      if (settingsHideShoes) {
-        settingsHideShoes.checked = window.AppState.hideShoes;
-      }
-      if (settingsHideRetired) {
-        settingsHideRetired.checked = window.AppState.hideRetired;
-      }
-      loadDefaultSyncDaysPreference();
-      attachSettingsEventListeners();
-      attachYearlyMaintenanceListeners();
-      setSettingsTab("general");
+    restorePreferences();
+    syncFormCheckboxes();
+    if (hideShoesCheckbox) {
+      hideShoesCheckbox.checked = window.AppState.hideShoes;
+    }
+    if (hideRetiredCheckbox) {
+      hideRetiredCheckbox.checked = window.AppState.hideRetired;
+    }
+    if (settingsHideShoes) {
+      settingsHideShoes.checked = window.AppState.hideShoes;
+    }
+    if (settingsHideRetired) {
+      settingsHideRetired.checked = window.AppState.hideRetired;
+    }
+    loadDefaultSyncDaysPreference();
+    attachSettingsEventListeners();
+    attachYearlyMaintenanceListeners();
+    setSettingsTab("general");
     return true;
   }
 
