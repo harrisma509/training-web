@@ -711,6 +711,8 @@ function getYearlyCommentText(value) {
   return String(value);
 }
 
+let yearlyCommentarySurface = null;
+
 function ensureYearlyCommentaryDrawer() {
   let drawer = document.getElementById("yearlyCommentaryDrawer");
   if (drawer) {
@@ -751,24 +753,35 @@ function ensureYearlyCommentaryDrawer() {
     </div>
   `;
 
+  const closeDrawer = () => {
+    drawer.classList.add("hidden");
+    drawer.setAttribute("aria-hidden", "true");
+  };
+  yearlyCommentarySurface = window.TrainingApp.TransientSurface.create({
+    getSurface: () => drawer,
+    onBeforeClose: closeDrawer,
+  });
+
   drawer.addEventListener("click", event => {
     if (event.target === drawer) {
-      drawer.classList.add("hidden");
-      drawer.setAttribute("aria-hidden", "true");
+      yearlyCommentarySurface.requestClose("backdrop");
     }
   });
 
   const closeButton = drawer.querySelector(".drawer-close-button");
-  closeButton.addEventListener("click", () => {
-    drawer.classList.add("hidden");
-    drawer.setAttribute("aria-hidden", "true");
+  closeButton.addEventListener("click", () => yearlyCommentarySurface.requestClose("close-button"));
+  document.addEventListener("keydown", event => {
+    if (event.key === "Escape" && yearlyCommentarySurface.isOpen()) {
+      event.preventDefault();
+      yearlyCommentarySurface.requestClose("escape");
+    }
   });
 
   document.body.appendChild(drawer);
   return drawer;
 }
 
-async function openYearlyCommentaryDrawer(calendarYear) {
+async function openYearlyCommentaryDrawer(calendarYear, opener = null) {
   const drawer = ensureYearlyCommentaryDrawer();
   const yearNode = document.getElementById("yearlyCommentaryYear");
   const goodNode = document.getElementById("yearlyCommentaryGood");
@@ -781,6 +794,7 @@ async function openYearlyCommentaryDrawer(calendarYear) {
   annualNode.textContent = "Loading...";
   drawer.classList.remove("hidden");
   drawer.setAttribute("aria-hidden", "false");
+  yearlyCommentarySurface.open({ opener });
 
   try {
     const payload = window.api && typeof window.api.fetchYearlyCommentary === "function"
@@ -847,12 +861,12 @@ function renderYearlyTable() {
 
   document.querySelectorAll("#yearlyTable tbody tr[data-calendar-year]").forEach(row => {
     row.addEventListener("click", () => {
-      openYearlyCommentaryDrawer(row.dataset.calendarYear);
+      openYearlyCommentaryDrawer(row.dataset.calendarYear, row);
     });
     row.addEventListener("keydown", event => {
       if (event.key === "Enter" || event.key === " ") {
         event.preventDefault();
-        openYearlyCommentaryDrawer(row.dataset.calendarYear);
+        openYearlyCommentaryDrawer(row.dataset.calendarYear, row);
       }
     });
   });

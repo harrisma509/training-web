@@ -143,7 +143,7 @@ module.
 | Daily day-actions menu/dialog/status | `daily.js` dynamic | Menu and dialog are removed on close; resync status is dismissible and success auto-dismisses after 10 seconds; polling is operation-scoped |
 | Service component overflow menu | `components.js` dynamic | One open menu; closes on outside pointer, scroll, resize, or Escape |
 | Component editor/service/history drawers | `components.js` dynamic | Local mode/editor state; explicit Cancel/Close; service/history operations own loading, error, and stale-snapshot guards |
-| Yearly commentary drawer | `app.js` dynamic helper used by yearly rendering | Created once on demand; closes by backdrop or close button; async failure becomes local empty-state text |
+| Yearly commentary drawer | `app.js` dynamic helper used by yearly rendering + `transient-surface.js` | Created once on demand; owner routes backdrop, close-button, and Escape requests; read-only close restores a connected/focusable opener when valid; async failure remains local empty-state text |
 | Coach mobile session drawer | `coach_pane.html` + `coach.js` | Previous focus is saved/restored; backdrop and Escape close; session selection closes it |
 | Coach overflow/session menus | static/dynamic Coach markup + `coach.js` | One menu state; outside click/Escape close; session delete uses a static dialog and focus trap |
 | Search advanced filters and result action menus | `search_pane.html` + `search.js` | Filter draft is URL-backed when active; action menus are dynamic and locally closed; in-flight search keeps last valid results visible |
@@ -279,14 +279,45 @@ legacy functions are invoked only when the destination has no lifecycle
 Feature controllers still do not all implement `init`, `activate`,
 `refresh`, `canDeactivate`, and `deactivate`. Hiding a pane still does not
 unmount it, cancel requests, or close feature-owned transient surfaces. Service
-History, Component editor, Weekly commentary, Yearly commentary, Coach delete
-focus restoration, Settings close focus, outside-click behavior, and shared
-dirty-editor navigation remain feature-local and inconsistent as characterized
-in F18.
+History, Component editor, Weekly commentary, Coach delete focus restoration,
+Settings close focus, outside-click behavior, and shared dirty-editor
+navigation remain feature-local and inconsistent as characterized in F18.
 
-F20 must define the shared transient-surface and dirty-close contract before
+F20 defines the shared transient-surface and dirty-close contract before
 the dispatcher gains broad dirty-editor coordination. F21 may then address
 focus return, outside-click consistency, activation-scoped cleanup, or further
 controller migration. F19 intentionally does not remove legacy globals,
 normalize fetch calls, add a shared modal manager, or migrate every controller.
 prove a user-visible defect or resource leak before expanding to other modules.
+
+## F20 implementation: transient-surface close and focus contract
+
+F20 adds `static/transient-surface.js`, a small `TrainingApp.TransientSurface`
+primitive loaded before feature modules. It owns only transient opener state and
+an open-generation token. `open({ opener })` intentionally replaces the opener
+when a surface is reopened; `requestClose(reason)` is the supported close entry
+point; `close(reason)` is idempotent; and `isOpen()` reports current transient
+state. An optional synchronous or asynchronous `canClose(reason)` hook may
+veto a request. Guard rejection fails closed and is reported without an
+unhandled rejection. Accepted close runs the feature-owned close callback
+before restoring focus, and focus is restored only to a connected, visible,
+enabled, focusable opener. The primitive stores no durable data and installs no
+document listeners.
+
+The Yearly commentary drawer is the single F20 reference migration. The active
+shell-owned drawer captures the clicked or keyboard-activated Yearly row and
+routes close-button, backdrop, and Escape events through the shared request
+path. Yearly continues to own dynamic markup, loading text, commentary API
+loading, content rendering, empty/error rendering, and hidden-state updates.
+Navigation does not restore focus into a hidden Yearly pane because the shared
+focus check rejects detached or hidden openers. The drawer remains read-only;
+no dirty confirmation policy is added.
+
+The deferred policy seam is `canClose(reason)`: future clean editors may allow
+close, while dirty editors may veto or confirm in their owning module. Dirty
+state is not inferred or persisted by the primitive, and destructive
+confirmation remains feature-owned. F21 may migrate Components and Service
+History only after focused contracts cover their editor/history ownership,
+dirty behavior, navigation cleanup, and focus targets. Weekly commentary,
+Settings, Coach delete, Daily narrative, and other transient surfaces remain
+unmigrated and retain their existing behavior.
