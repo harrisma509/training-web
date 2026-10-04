@@ -783,7 +783,7 @@
       <th>Week Start</th>
       <th>Weekly Comment</th>
       <th>Audit</th>
-      <th class="weekly-edit-notes-header">Edit Notes</th>
+      <th class="weekly-edit-notes-header">N</th>
       <th>Hours</th>
       <th>Miles</th>
       <th>Ft</th>

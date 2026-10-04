@@ -46,7 +46,7 @@ assert.match(weeklySource, /color: var\(--green\)/);
 assert.match(weeklySource, /font-weight: 700/);
 
 assert.match(weeklyJsSource, /<td class="weekly-edit-notes-cell"><button class="drawer-open-button" data-week-start="\$\{safe\(row\.week_start\)\}" type="button" aria-label="Edit weekly commentary" title="Edit weekly commentary"><\/button><\/td>/);
-assert.match(weeklyJsSource, /<th class="weekly-edit-notes-header">Edit Notes<\/th>/);
+assert.match(weeklyJsSource, /<th class="weekly-edit-notes-header">N<\/th>/);
 assert.match(weeklyJsSource, /openWeeklyDrawer\(button\.dataset\.weekStart\)/);
 assert.match(weeklyJsSource, /event\.stopPropagation\(\)/);
 assert.match(weeklyJsSource, /attachAuditScoreHandlers\(\)/);
