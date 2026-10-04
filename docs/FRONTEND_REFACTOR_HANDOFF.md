@@ -45,7 +45,7 @@ decision changes it:
 
 | Area | Current owner | Initial load | Later activation | Request protection | Cleanup/deactivation |
 | --- | --- | --- | --- | --- | --- |
-| Plan | `plan.js` / `PlanController` | Startup activation calls `activate`; legacy `loadPlan` remains a forced reload | Same-key activation coalesces; `refresh` forces authoritative reload | Plan request counters | No app-level deactivation |
+| Plan | `plan.js` / `PlanController` | Startup activation calls canonical `activate` | Same-key activation coalesces; `refresh` forces authoritative reload | Plan request counters | No app-level deactivation |
 | Goals, KPIs | respective module | No-op render/load controllers | No-op | None needed | None |
 | Charts | `charts.js` / `ChartsController` | `loadData()` does not load it; category activation loads selected data | `showChartsCategory()` loads selected category | Per-data request IDs and chart destruction | Charts are destroyed when their replacement/status path requires it; no tab deactivation hook |
 | Daily | `daily.js` / `DailyController` | `loadData()` calls `load` | `popstate` may call `load` for an exact date; no normal tab hook | Daily request ID; narrative request ID/cache | Local menus/dialogs/drawers close locally; no tab deactivation hook |
@@ -270,8 +270,8 @@ transition. The supported source values are `startup`, `direct-url`,
    their existing compatibility paths and were intentionally excluded from F22
    because their loading, transient, or nested-view behavior has higher risk.
 - `TrainingApp.features`, `TrainingApp.registerFeature`, `window.showTab`,
-  `window.activateFeature`, legacy controller globals, and legacy loaders such
-  as `window.loadPlan` and `window.loadDaily` remain available.
+  `window.activateFeature`, legacy controller globals, and remaining legacy
+  loaders such as `window.loadDaily` remain available.
 
 Registration is idempotent: an existing feature entry is not overwritten by a
 second registration. The dispatcher is the only shell transition entry point;
@@ -289,20 +289,41 @@ guards remain in place, and Gear now has the same stale-response protection
 before committing rows, filters, or summaries. Failed and superseded loads do
 not become permanently cached as successful initialization.
 
-Legacy globals are retained for compatibility. Calls such as `loadPlan()`,
-`loadWeekly()`, `loadZones()`, and `loadGear()` continue to mean an explicit
-reload, while the dispatcher calls the cache-aware lifecycle `activate` method.
+Legacy globals are retained for compatibility where repository consumers still
+exist. Calls such as `loadWeekly()`, `loadZones()`, and `loadGear()` continue
+to mean an explicit reload, while the dispatcher calls the cache-aware
+lifecycle `activate` method.
 Search keeps its URL-backed filters, paging, sorting, action menus, and stale
 result preservation; its `refresh` reloads the current query without changing
 navigation or drafts.
 
 The remaining high-risk migrations are Daily, Charts, Yearly, Coach, Settings,
-Sync, and any broader transient-surface coordination. F23 must not begin until
-F22 has focused lifecycle tests, full regression validation, live desktop and
-mobile checks, and a clean deployed commit. F23 prerequisites include an
-explicit owner and freshness policy for each remaining feature, deterministic
-tests for any transient or dirty-state behavior it changes, and a browser
-validation plan that proves no duplicate requests or compatibility regressions.
+Sync, and any broader transient-surface coordination. F23 prerequisites
+include an explicit owner and freshness policy for each remaining feature,
+deterministic tests for any transient or dirty-state behavior it changes, and
+a browser validation plan that proves no duplicate requests or compatibility
+regressions.
+
+### F23 implementation: Plan loader retirement
+
+F23 retires exactly one proven-internal compatibility alias: `window.loadPlan`.
+Repository search found no template, inline-handler, feature-local, test-harness,
+deployment, or external integration consumer. The only application reference
+was the Plan branch of `activateLegacyFeature`; that branch was unreachable
+once `PlanController.activate` became canonical in F22 and is now removed.
+
+Plan startup and tab activation continue through the registered
+`TrainingApp.features.plan` controller. `activate` remains cache-aware and
+coalesced, `refresh` and controller `load` remain forced reloads, request
+generation protection is unchanged, and `PlanController` remains available
+because the shell registry still consumes it. The F23 contract test proves the
+removed loader is absent, canonical lifecycle methods remain present, and the
+unrelated F22 compatibility globals remain unchanged.
+
+Remaining compatibility debt includes `loadWeekly`, `loadZones`, and the
+Search controller global, each with active repository consumers. They remain
+outside this slice. The next bounded slice should select one of those only
+after a fresh repository-wide consumer and external-consumer check.
 
 ### Remaining inconsistencies and F20/F21 prerequisites
 

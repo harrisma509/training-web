@@ -44,6 +44,6 @@ def test_runtime_composition_still_matches_the_documented_bridge_boundary() -> N
     assert "function createFeatureActivationDispatcher" in APP
     assert "window.TrainingApp.activateFeature = activateFeature;" in APP
     assert "window.activateFeature = activateFeature;" in APP
-    assert "else if (typeof window.loadPlan === \"function\")" in APP
+    assert 'if (featureName === "plan")' not in APP
     assert "window.TrainingApp.TransientSurface" in INDEX or "window.TrainingApp.TransientSurface" in APP
     assert INDEX.index('/static/app.js?v=20260914-service-nav') > INDEX.index('/static/coach.js')

@@ -1086,7 +1086,6 @@
     };
   }
 
-  window.loadPlan = loadPlan;
   window.PlanController = buildPlanController();
 
   initPlan();

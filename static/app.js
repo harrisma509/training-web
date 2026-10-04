@@ -633,11 +633,6 @@ function commitFeatureTransition(context) {
 }
 
 async function activateLegacyFeature(featureName, context, feature) {
-  if (featureName === "plan") {
-    if (typeof feature?.load === "function") await feature.load.call(feature, context);
-    else if (typeof window.loadPlan === "function") await window.loadPlan();
-    return;
-  }
   if (featureName === "charts") {
     showChartsCategory(getChartsCategory());
     return;
