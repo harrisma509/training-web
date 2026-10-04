@@ -4,6 +4,125 @@
  * Owns tab switching, shared header behavior, and app-level wiring; it delegates feature data loading to
  * module functions and relies on AppState plus the shared API layer for runtime state and fetch logic.
  */
+function createFeatureActivationDispatcher({
+  resolveFeature,
+  getCurrentFeatureName,
+  buildContext,
+  commitTransition,
+  restoreBlockedRoute,
+  reportError,
+  activateLegacy,
+  recordAcceptedRoute,
+}) {
+  const initializationPromises = new Map();
+  let transitionQueue = Promise.resolve();
+  let hasCommittedActivation = false;
+
+  function report(error) {
+    if (typeof reportError === "function") {
+      reportError(error);
+    } else {
+      console.error(error);
+    }
+  }
+
+  function initializeFeature(featureName, feature, context) {
+    if (typeof feature?.init !== "function") {
+      return Promise.resolve(true);
+    }
+    if (!initializationPromises.has(featureName)) {
+      const initialization = Promise.resolve()
+        .then(() => feature.init.call(feature, context))
+        .then(() => true)
+        .catch(error => {
+          report(error);
+          return false;
+        });
+      initializationPromises.set(featureName, initialization);
+    }
+    return initializationPromises.get(featureName);
+  }
+
+  async function runTransition(featureName, options = {}) {
+    const destination = resolveFeature(featureName) || {};
+    const previousFeatureName = getCurrentFeatureName();
+    const context = buildContext(featureName, previousFeatureName, options, destination);
+    const sameFeature = previousFeatureName === featureName;
+    const routeChanged = Boolean(options.routeChanged);
+
+    if (hasCommittedActivation && sameFeature && !routeChanged && options.force !== true) {
+      return { accepted: true, changed: false, reason: "same-feature" };
+    }
+
+    if (!await initializeFeature(featureName, destination, context)) {
+      restoreBlockedRoute?.(context);
+      return { accepted: false, changed: false, reason: "init-failed" };
+    }
+
+    if (!sameFeature) {
+      const currentFeature = resolveFeature(previousFeatureName);
+      if (typeof currentFeature?.canDeactivate === "function") {
+        let canDeactivate = false;
+        try {
+          canDeactivate = await currentFeature.canDeactivate.call(currentFeature, context) === true;
+        } catch (error) {
+          report(error);
+          canDeactivate = false;
+        }
+        if (!canDeactivate) {
+          restoreBlockedRoute?.(context);
+          return { accepted: false, changed: false, reason: "deactivation-blocked" };
+        }
+      }
+
+      if (typeof currentFeature?.deactivate === "function") {
+        try {
+          await currentFeature.deactivate.call(currentFeature, context);
+        } catch (error) {
+          report(error);
+        }
+      }
+    }
+
+    try {
+      await commitTransition(context, { destination, previousFeatureName });
+    } catch (error) {
+      report(error);
+      restoreBlockedRoute?.(context);
+      return { accepted: false, changed: false, reason: "commit-failed" };
+    }
+    hasCommittedActivation = true;
+
+    if (typeof destination.activate === "function") {
+      try {
+        await destination.activate.call(destination, context);
+      } catch (error) {
+        report(error);
+      }
+    } else if (typeof activateLegacy === "function") {
+      try {
+        await activateLegacy(featureName, context, destination);
+      } catch (error) {
+        report(error);
+      }
+    }
+
+    recordAcceptedRoute?.(context);
+    return { accepted: true, changed: !sameFeature };
+  }
+
+  function activateFeature(featureName, options = {}) {
+    const transition = transitionQueue.then(
+      () => runTransition(featureName, options),
+      () => runTransition(featureName, options),
+    );
+    transitionQueue = transition.catch(() => undefined);
+    return transition;
+  }
+
+  return { activateFeature };
+}
+
 const state = window.AppState;
 
 window.TrainingApp = window.TrainingApp || {
@@ -16,48 +135,54 @@ window.TrainingApp.state = window.AppState;
 window.TrainingApp.api = window.api;
 window.TrainingApp.utils = window.AppUtils;
 window.TrainingApp.features = window.TrainingApp.features || {};
+window.TrainingApp.registerFeature = window.TrainingApp.registerFeature || function (name, feature) {
+  if (!feature || typeof feature !== "object") return;
+  if (!Object.prototype.hasOwnProperty.call(window.TrainingApp.features, name)) {
+    window.TrainingApp.features[name] = feature;
+  }
+};
 
 if (window.PlanController) {
-  window.TrainingApp.features.plan = window.PlanController;
+  window.TrainingApp.registerFeature("plan", window.PlanController);
 }
 if (window.GoalsController) {
-  window.TrainingApp.features.goals = window.GoalsController;
+  window.TrainingApp.registerFeature("goals", window.GoalsController);
 }
 if (window.KPIsController) {
-  window.TrainingApp.features.kpis = window.KPIsController;
+  window.TrainingApp.registerFeature("kpis", window.KPIsController);
 }
 if (window.ChartsController) {
-  window.TrainingApp.features.charts = window.ChartsController;
+  window.TrainingApp.registerFeature("charts", window.ChartsController);
 }
 if (window.DailyController) {
-  window.TrainingApp.features.daily = window.DailyController;
+  window.TrainingApp.registerFeature("daily", window.DailyController);
 }
 if (window.SearchController) {
-  window.TrainingApp.features.search = window.SearchController;
+  window.TrainingApp.registerFeature("search", window.SearchController);
 }
 if (window.WeeklyController) {
-  window.TrainingApp.features.weekly = window.WeeklyController;
+  window.TrainingApp.registerFeature("weekly", window.WeeklyController);
 }
 if (window.GearController) {
-  window.TrainingApp.features.gear = window.GearController;
+  window.TrainingApp.registerFeature("gear", window.GearController);
 }
 if (window.SettingsController) {
-  window.TrainingApp.features.settings = window.SettingsController;
+  window.TrainingApp.registerFeature("settings", window.SettingsController);
 }
 if (window.YearlyController) {
-  window.TrainingApp.features.yearly = window.YearlyController;
+  window.TrainingApp.registerFeature("yearly", window.YearlyController);
 }
 if (window.ZonesController) {
-  window.TrainingApp.features.zones = window.ZonesController;
+  window.TrainingApp.registerFeature("zones", window.ZonesController);
 }
 if (window.ComponentsController) {
-  window.TrainingApp.features.components = window.ComponentsController;
+  window.TrainingApp.registerFeature("components", window.ComponentsController);
 }
 if (window.SyncController) {
-  window.TrainingApp.features.sync = window.SyncController;
+  window.TrainingApp.registerFeature("sync", window.SyncController);
 }
 if (window.CoachController) {
-  window.TrainingApp.features.coach = window.CoachController;
+  window.TrainingApp.registerFeature("coach", window.CoachController);
 }
 
 const planTab = document.getElementById("planTab");
@@ -156,7 +281,7 @@ function buildMobileNavigation() {
     button.dataset.tab = desktopButton.id.replace(/Tab$/, "");
     button.textContent = desktopButton.textContent.trim();
     button.addEventListener("click", () => {
-      showTab(button.dataset.tab);
+      showTab(button.dataset.tab, { source: "mobile-nav" });
       closeMobileNavigation();
     });
     mobileNavigation.appendChild(button);
@@ -279,7 +404,7 @@ function getChartsCategory() {
   return savedValue;
 }
 
-function showChartsCategory(category) {
+function showChartsCategory(category, { load = true } = {}) {
   const nextCategory = normalizeChartsCategory(category);
 
   if (window.AppState) {
@@ -317,7 +442,7 @@ function showChartsCategory(category) {
     }
   });
 
-  if (window.ChartsController) {
+  if (load && window.ChartsController) {
     if (nextCategory === "fitness" && typeof window.ChartsController.loadFitnessFatigue === "function") {
       window.ChartsController.loadFitnessFatigue();
     }
@@ -364,20 +489,50 @@ function showServiceSubtab(subtab) {
 
 window.showServiceSubtab = showServiceSubtab;
 
-function showTab(tab, { fromHistory = false } = {}) {
-  const normalizedTab = ["plan", "goals", "kpis", "charts", "daily", "search", "weekly", "zones", "service", "yearly", "coach"].includes(tab) ? tab : "daily";
-  const previousTab = state.activeTab;
-  state.activeTab = normalizedTab;
-  persistPreferences();
-  const url = new URL(window.location.href);
-  url.searchParams.set("tab", normalizedTab);
-  if (normalizedTab !== "daily") url.searchParams.delete("date");
-  if (normalizedTab !== "search") window.SearchController?.removeSearchParameters(url);
-  const crossesSearchBoundary = previousTab !== normalizedTab
-    && (previousTab === "search" || normalizedTab === "search");
-  if (crossesSearchBoundary && !fromHistory) window.history.pushState({}, "", url);
-  else window.history.replaceState({}, "", url);
+const VALID_FEATURE_TABS = ["plan", "goals", "kpis", "charts", "daily", "search", "weekly", "zones", "service", "yearly", "coach"];
+let lastAcceptedRoute = window.location.href;
 
+function normalizeFeatureTab(tab) {
+  return VALID_FEATURE_TABS.includes(tab) ? tab : "daily";
+}
+
+function buildFeatureUrl(tab) {
+  const url = new URL(window.location.href);
+  url.searchParams.set("tab", tab);
+  if (tab !== "daily") url.searchParams.delete("date");
+  if (tab !== "search") window.SearchController?.removeSearchParameters(url);
+  return url;
+}
+
+function buildFeatureActivationContext(featureName, previousFeatureName, options = {}, destination = {}) {
+  const source = options.source || (options.fromHistory ? "popstate" : "programmatic");
+  const url = buildFeatureUrl(featureName);
+  const crossesSearchBoundary = previousFeatureName !== featureName
+    && (previousFeatureName === "search" || featureName === "search");
+  const fromHistory = source === "popstate" || source === "startup" || source === "direct-url" || options.fromHistory === true;
+  const managesHistory = featureName !== "search" || typeof destination.activate !== "function";
+  const shouldPush = crossesSearchBoundary && !fromHistory && url.href !== window.location.href;
+
+  return {
+    featureName,
+    previousFeatureName,
+    source,
+    reason: options.reason || source,
+    fromHistory,
+    activationKey: `${featureName}:${url.pathname}${url.search}`,
+    route: {
+      tab: featureName,
+      date: url.searchParams.get("date") || "",
+      url,
+      params: new URLSearchParams(url.search),
+    },
+    historyMode: shouldPush ? "push" : "replace",
+    updateHistory: managesHistory,
+  };
+}
+
+function commitFeatureTransition(context) {
+  const normalizedTab = context.featureName;
   const isPlan = normalizedTab === "plan";
   const isGoals = normalizedTab === "goals";
   const isKpis = normalizedTab === "kpis";
@@ -389,6 +544,20 @@ function showTab(tab, { fromHistory = false } = {}) {
   const isService = normalizedTab === "service";
   const isYearly = normalizedTab === "yearly";
   const isCoach = normalizedTab === "coach";
+
+  state.activeTab = normalizedTab;
+  if (isDaily && /^\d{4}-\d{2}-\d{2}$/.test(context.route.date)) {
+    state.dailyExactDate = context.route.date;
+  }
+  if (isSearch && context.source === "popstate") {
+    window.SearchController?.restoreFromUrl?.();
+  }
+  persistPreferences();
+
+  if (context.updateHistory && context.route.url.href !== window.location.href) {
+    if (context.historyMode === "push") window.history.pushState({}, "", context.route.url);
+    else window.history.replaceState({}, "", context.route.url);
+  }
 
   planPane.classList.toggle("hidden", !isPlan);
   goalsPane.classList.toggle("hidden", !isGoals);
@@ -427,29 +596,63 @@ function showTab(tab, { fromHistory = false } = {}) {
     gearControls.classList.add("hidden");
   }
 
-  if (isPlan) {
-    const planFeature = window.TrainingApp?.features?.plan;
-    if (typeof planFeature?.load === "function") {
-      planFeature.load();
-    } else if (typeof window.loadPlan === "function") {
-      window.loadPlan();
-    }
-  }
+  if (isCharts) showChartsCategory(getChartsCategory(), { load: false });
+  if (isYearly) showYearlyView(state.yearlyView || "annual");
+}
 
-  if (isCharts) {
+async function activateLegacyFeature(featureName, context, feature) {
+  if (featureName === "plan") {
+    if (typeof feature?.load === "function") await feature.load.call(feature, context);
+    else if (typeof window.loadPlan === "function") await window.loadPlan();
+    return;
+  }
+  if (featureName === "charts") {
     showChartsCategory(getChartsCategory());
+    return;
   }
+  if (featureName === "daily" && context.source === "popstate" && context.route.date) {
+    if (typeof feature?.load === "function") await feature.load.call(feature, context);
+    else if (typeof window.loadDaily === "function") await window.loadDaily();
+  }
+}
 
-  if (isYearly) {
-    showYearlyView(state.yearlyView || "annual");
-  }
+const featureActivationDispatcher = createFeatureActivationDispatcher({
+  resolveFeature: featureName => window.TrainingApp?.features?.[featureName],
+  getCurrentFeatureName: () => state.activeTab || "daily",
+  buildContext: buildFeatureActivationContext,
+  commitTransition: commitFeatureTransition,
+  restoreBlockedRoute: context => {
+    if (context.source === "popstate" && lastAcceptedRoute !== window.location.href) {
+      window.history.replaceState({}, "", lastAcceptedRoute);
+    }
+  },
+  reportError: error => console.error("Feature activation failed.", error),
+  activateLegacy: activateLegacyFeature,
+  recordAcceptedRoute: () => {
+    lastAcceptedRoute = window.location.href;
+  },
+});
 
-  if (isCoach && window.CoachController && typeof window.CoachController.activate === "function") {
-    window.CoachController.activate();
-  }
-  if (isSearch && window.SearchController && typeof window.SearchController.activate === "function") {
-    window.SearchController.activate();
-  }
+function activateFeature(tab, options = {}) {
+  const normalizedTab = normalizeFeatureTab(tab);
+  const targetUrl = buildFeatureUrl(normalizedTab);
+  const source = options.source || (options.fromHistory ? "popstate" : "programmatic");
+  return featureActivationDispatcher.activateFeature(normalizedTab, {
+    ...options,
+    source,
+    reason: options.reason || source,
+    routeChanged: targetUrl.href !== lastAcceptedRoute,
+  });
+}
+
+window.TrainingApp.activateFeature = activateFeature;
+window.activateFeature = activateFeature;
+
+function showTab(tab, options = {}) {
+  return activateFeature(tab, {
+    ...options,
+    source: options.source || (options.fromHistory ? "popstate" : "programmatic"),
+  });
 }
 
 function renderHeaderSummary() {
@@ -738,19 +941,19 @@ async function loadData() {
 setInterval(loadSyncStatus, 60000);
 const initialUrlParams = new URLSearchParams(window.location.search);
 const requestedTab = initialUrlParams.get("tab");
-const validTabs = ["plan", "goals", "kpis", "charts", "daily", "search", "weekly", "zones", "service", "yearly", "coach"];
-if (requestedTab === "daily" && /^\d{4}-\d{2}-\d{2}$/.test(initialUrlParams.get("date") || "")) {
-  window.AppState.dailyExactDate = initialUrlParams.get("date");
-}
-showTab(validTabs.includes(requestedTab) ? requestedTab : (window.AppState.activeTab || "daily"), { fromHistory: true });
+const startupTab = VALID_FEATURE_TABS.includes(requestedTab)
+  ? requestedTab
+  : (window.AppState.activeTab || "daily");
+showTab(startupTab, {
+  fromHistory: true,
+  source: requestedTab ? "direct-url" : "startup",
+});
 window.addEventListener("popstate", () => {
   const params = new URLSearchParams(window.location.search);
   const tab = params.get("tab");
-  if (tab === "search") window.SearchController?.restoreFromUrl();
-  if (tab === "daily" && /^\d{4}-\d{2}-\d{2}$/.test(params.get("date") || "")) {
-    window.AppState.dailyExactDate = params.get("date");
-    window.DailyController?.load();
-  }
-  showTab(validTabs.includes(tab) ? tab : "daily", { fromHistory: true });
+  showTab(VALID_FEATURE_TABS.includes(tab) ? tab : "daily", {
+    fromHistory: true,
+    source: "popstate",
+  });
 });
 loadData();

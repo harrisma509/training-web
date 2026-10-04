@@ -2,7 +2,7 @@
 
 ## Status and scope
 
-This document records the current `training-web` frontend architecture for F18.
+This document records the current `training-web` frontend architecture for F19.
 It is an architecture handoff, not an approval to introduce a framework or
 rewrite the dashboard. The current implementation is server-rendered HTML
 with vanilla JavaScript modules, modular CSS, shared `AppState`, and a shared
@@ -32,10 +32,11 @@ Dynamic surfaces remain module-owned when their markup depends on runtime data.
 `static/api.js` owns fetch boilerplate and endpoint wrappers. Feature modules
 own their rendering, feature-local state, and feature-specific event handlers.
 
-There is currently no common lifecycle interface and no router-owned unmount.
-Controllers are compatibility objects with different method sets. A controller
-may expose `load`, `render`, `activate`, or only legacy globals; callers must
-not infer that a missing method means the feature has no initialization work.
+The shell now owns one lifecycle-aware activation dispatcher and one queued
+transition path. There is still no router-owned unmount, and controllers remain
+compatibility objects with different method sets. A controller may expose
+`init`, `activate`, `load`, `render`, or only legacy globals; callers must not
+infer that a missing method means the feature has no initialization work.
 
 ## Activation and loading facts
 
@@ -220,4 +221,72 @@ runtime behavior, controller APIs, templates, CSS, database contracts, or ETL.
 The first implementation candidate for a later increment is a narrow,
 backward-compatible `activate`/`deactivate` contract for one high-risk feature
 with measurable cleanup needs, most likely Coach or Components. That work must
+
+## F19 implementation: shell activation dispatcher
+
+F19 introduces `createFeatureActivationDispatcher` and the shell-owned
+`activateFeature(name, options)` entry point in `static/app.js`. The public
+`showTab` compatibility function delegates to that entry point, so desktop tab
+clicks, mobile navigation, startup/default selection, direct URLs, programmatic
+calls, and `popstate` all use the same queued transition path.
+
+The dispatcher performs this order:
+
+1. Resolve the registered destination controller and build a context containing
+   `featureName`, `previousFeatureName`, `source`, `reason`, `activationKey`,
+   route/query state, and history mode.
+2. Run and cache optional `init(context)` once per registered feature,
+   including overlapping activation attempts. An initialization rejection is
+   caught and reported without an unhandled rejection.
+3. For a feature change, await optional `canDeactivate(context)`. A false or
+   rejected guard fails closed before URL, state, or pane visibility changes;
+   a blocked `popstate` restores the last accepted URL without dispatching a
+   new navigation event.
+4. Run optional `deactivate(context)` only after approval.
+5. Commit active state, URL/history, pane visibility, active tab state, mobile
+   navigation state, and nested Service/Charts/Yearly view state.
+6. Run destination `activate(context)` when present. Otherwise use exactly one
+   documented legacy fallback, with no adapter-plus-fallback double invocation.
+
+The dispatcher serializes overlapping transitions and coalesces same-feature
+activations unless the route changed or the caller explicitly forces a
+transition. The supported source values are `startup`, `direct-url`,
+`tab-click`, `mobile-nav`, `popstate`, and `programmatic`.
+
+### Migrated and bridged features
+
+- Search and Coach retain their existing `activate` methods and now receive
+  the shell context. Search owns its established query normalization while
+  honoring the shell-selected push/replace mode exactly once.
+- Plan remains a legacy `load` fallback when no `activate` method exists.
+- Charts keeps `showChartsCategory` as its legacy nested-view/load fallback;
+  the dispatcher updates category visibility without loading twice.
+- Daily keeps its existing `load` fallback only for exact-date `popstate`.
+- Goals, KPIs, Weekly, Zones, Service/Gear, Yearly, and Settings retain their
+  existing no-op or initial-load behavior; no fake lifecycle methods were
+  added.
+- `TrainingApp.features`, `TrainingApp.registerFeature`, `window.showTab`,
+  `window.activateFeature`, legacy controller globals, and legacy loaders such
+  as `window.loadPlan` and `window.loadDaily` remain available.
+
+Registration is idempotent: an existing feature entry is not overwritten by a
+second registration. The dispatcher is the only shell transition entry point;
+legacy functions are invoked only when the destination has no lifecycle
+`activate` method.
+
+### Remaining inconsistencies and F20/F21 prerequisites
+
+Feature controllers still do not all implement `init`, `activate`,
+`refresh`, `canDeactivate`, and `deactivate`. Hiding a pane still does not
+unmount it, cancel requests, or close feature-owned transient surfaces. Service
+History, Component editor, Weekly commentary, Yearly commentary, Coach delete
+focus restoration, Settings close focus, outside-click behavior, and shared
+dirty-editor navigation remain feature-local and inconsistent as characterized
+in F18.
+
+F20 must define the shared transient-surface and dirty-close contract before
+the dispatcher gains broad dirty-editor coordination. F21 may then address
+focus return, outside-click consistency, activation-scoped cleanup, or further
+controller migration. F19 intentionally does not remove legacy globals,
+normalize fetch calls, add a shared modal manager, or migrate every controller.
 prove a user-visible defect or resource leak before expanding to other modules.

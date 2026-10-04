@@ -214,7 +214,7 @@ async function main() {
     assert.match(searchSource, /Last valid results remain shown\./);
     assert.match(appSource, /removeSearchParameters\(url\)/);
     assert.match(appSource, /history\.pushState/);
-    assert.match(appSource, /tab === "search"\) window\.SearchController\?\.restoreFromUrl/);
+    assert.match(appSource, /context\.source === "popstate"\) \{\s*window\.SearchController\?\.restoreFromUrl/);
     assert.match(dailySource, /dailySearchAdvanced/);
     assert.match(dailySource, /openAdvancedSearch\(\{ text:/);
     assert.match(htmlSource, /id="searchTab"/);

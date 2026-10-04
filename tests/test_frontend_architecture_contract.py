@@ -39,7 +39,10 @@ def test_frontend_handoff_covers_required_observed_surfaces_and_navigation() -> 
 
 def test_runtime_composition_still_matches_the_documented_bridge_boundary() -> None:
     assert "window.TrainingApp.features = window.TrainingApp.features || {};" in APP
-    assert "window.TrainingApp.features.plan = window.PlanController;" in APP
-    assert "const planFeature = window.TrainingApp?.features?.plan;" in APP
+    assert "window.TrainingApp.registerFeature = window.TrainingApp.registerFeature || function" in APP
+    assert 'window.TrainingApp.registerFeature("plan", window.PlanController);' in APP
+    assert "function createFeatureActivationDispatcher" in APP
+    assert "window.TrainingApp.activateFeature = activateFeature;" in APP
+    assert "window.activateFeature = activateFeature;" in APP
     assert "else if (typeof window.loadPlan === \"function\")" in APP
     assert INDEX.index('/static/app.js?v=20260914-service-nav') > INDEX.index('/static/coach.js')

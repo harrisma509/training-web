@@ -214,7 +214,7 @@ if (typeof module !== "undefined" && module.exports) {
         return url;
     }
 
-    function syncUrl(query = {}) {
+    function syncUrl(query = {}, historyMode = "replace") {
         const url = new URL(window.location.href);
         url.searchParams.set("tab", "search");
         url.searchParams.delete("date");
@@ -229,7 +229,8 @@ if (typeof module !== "undefined" && module.exports) {
         url.searchParams.set("search_limit", String(query.limit || state.limit));
         const offset = Number.isInteger(query.offset) ? query.offset : state.offset;
         url.searchParams.set("search_offset", String(offset));
-        window.history.replaceState({}, "", url);
+        if (historyMode === "push") window.history.pushState({}, "", url);
+        else window.history.replaceState({}, "", url);
     }
 
     function populateGearOptions() {
@@ -860,7 +861,7 @@ if (typeof module !== "undefined" && module.exports) {
             && left.offset === right.offset;
     }
 
-    function activate() {
+    function activate(context = {}) {
         if (!state.initialized) {
             readFromUrl();
             state.initialized = true;
@@ -873,7 +874,7 @@ if (typeof module !== "undefined" && module.exports) {
             limit: state.limit,
             offset: state.offset,
         };
-        syncUrl(query);
+        syncUrl(query, context.historyMode || "replace");
         renderActiveFilters(query.filters);
         if (!queryMatches(query, state.lastResult?.query)) {
             loadResults(query);
