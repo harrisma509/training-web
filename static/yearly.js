@@ -57,19 +57,6 @@ function populateYearlyMaintenanceYearOptions() {
   yearlyMaintenanceCalculateBtn.disabled = true;
 }
 
-function initializeYearlyMaintenanceSettings() {
-  if (!yearlyMaintenanceYear) {
-    return;
-  }
-
-  if (typeof populateYearlyMaintenanceYearOptions === "function") {
-    populateYearlyMaintenanceYearOptions();
-  }
-
-  yearlyMaintenancePreviewBtn?.addEventListener("click", handleYearlyMaintenancePreview);
-  yearlyMaintenanceCalculateBtn?.addEventListener("click", handleYearlyMaintenanceCalculate);
-}
-
 function renderYearlyMaintenancePreviewSummary(payload) {
   if (!yearlyMaintenancePreviewSummary) {
     return;
@@ -630,10 +617,6 @@ function initializeYearlyFeature() {
   return true;
 }
 
-(function () {
-  initializeYearlyMaintenanceSettings();
-})();
-
 initializeYearlyFeature();
 const yearlyController = {
   init: initializeYearlyFeature,
@@ -644,7 +627,7 @@ const yearlyController = {
   previewMaintenance: handleYearlyMaintenancePreview,
   calculateMaintenance: handleYearlyMaintenanceCalculate,
   populateMaintenanceYearOptions: populateYearlyMaintenanceYearOptions,
-  initMaintenance: initializeYearlyMaintenanceSettings,
+  initMaintenance: populateYearlyMaintenanceYearOptions,
 };
 
 window.YearlyController = yearlyController;

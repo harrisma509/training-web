@@ -2,7 +2,7 @@
 
 ## Status and scope
 
-This document records the current `training-web` frontend architecture through F31.
+This document records the current `training-web` frontend architecture through F33.
 It is an architecture handoff, not an approval to introduce a framework or
 rewrite the dashboard. The current implementation is server-rendered HTML
 with vanilla JavaScript modules, modular CSS, shared `AppState`, and a shared
@@ -56,7 +56,7 @@ decision changes it:
 | Yearly | `yearly.js` / `TrainingApp.features.yearly` | Startup preload and activation share in-flight work | Same-key activation reuses loaded rows; `refresh` forces reload; view selection delegates to the feature | Yearly request coalescing and freshness guard | Commentary drawer uses `TrainingApp.TransientSurface`; Settings maintenance remains separate |
 | Coach | `coach.js` / `TrainingApp.features.coach` | Lazy; registry `init` wires listeners and first activation loads sessions | Registry `activate` is idempotent; `refresh` forces the session-list reload | Session load token, keyed session-load promise, and response-stage interval | Coach owns menus, delete dialog, mobile drawer, response stages, and `beforeunload` timer cleanup; no tab deactivation hook |
 | Sync status | `sync.js` / `SyncController` | `loadData()` calls status load and app starts a 60-second interval | Not tab-scoped | None for the interval's individual fetches | Interval is app-global and has no teardown |
-| Settings | `settings.js` / `SettingsController` | Module wiring is immediate; drawer data loads on demand | Drawer opens locally | Feature-local loading flags/promises | Drawer close is local; no app-level deactivation |
+| Settings | `settings.js` / `TrainingApp.features.settings` | Idempotent registry initialization applies preferences, wires controls, and loads status/preferences on demand | Canonical `open`/`requestClose` methods preserve local drawer behavior | Feature-local loading flags/promises; one media-query listener | Drawer close is local; no app-level deactivation |
 
 The important boundary is that hiding a pane is not unmounting it. DOM nodes,
 module state, listeners, caches, timers, and in-flight requests generally
@@ -157,9 +157,42 @@ asserts the existing automatic conversation scrolling behavior. The current
 delete text, focus trap, pending state, responsive drawer, menus, and
 compatibility alias remain unchanged.
 
-The next bounded ownership debt is the app-global Sync status interval and its
-remaining shell-level lifecycle policy. F33 should address that only after a
-fresh consumer inventory; no F33 work is included here.
+### F33 implementation: Settings ownership consolidation
+
+F33 makes `settings.js` the canonical Settings runtime owner. It registers one
+identity-preserving `TrainingApp.features.settings` controller with `init`,
+`open`, `requestClose`, `applyAppearance`, and `updateLimitPreference` methods;
+`window.SettingsController` remains an alias for the tracked compatibility
+surface. `app.js` no longer registers Settings or contains Settings business
+logic.
+
+Settings owns idempotent initialization, drawer and tab listeners, appearance
+preference application, the single system-theme media listener, form/control
+sync, Settings-local status and validation, and the Settings-panel maintenance
+control listeners. Light, Dark, and System values remain persisted through
+`AppState` and `localStorage`; the theme mutation moved from `app-state.js` to
+the Settings owner without changing the preference schema or visible policy.
+
+Cross-feature coordination is narrow and registry-mediated: Daily, Weekly, and
+Zones row-limit changes call Settings once, and Settings calls the active
+feature's canonical `refresh` once. Gear filter changes call the canonical Gear
+`render` once. Yearly maintenance calculations remain in `yearly.js`; Settings
+owns the panel listeners and invokes Yearly's canonical `previewMaintenance` or
+`calculateMaintenance` method. Search gear-option refresh remains Gear-owned
+after successful Gear loads because filter changes do not change the underlying
+gear option set. Standalone feature test harnesses retain local fallbacks when
+the composed Settings registry is intentionally absent.
+
+Maintenance calculations, API routes, persistence, markup, CSS, and response
+contracts were unchanged. No maintenance action is executed by initialization
+or live validation. The retained compatibility exports are the Settings
+controller alias and existing Settings helper globals because tracked feature
+consumers and browser compatibility still use them; duplicate shell ownership
+and Settings registration were removed.
+
+The remaining ownership debt is the app-global Sync status interval and its
+shell-level lifecycle policy. F34 should inventory and address Sync only; no
+Sync ownership migration is included in F33.
 
 ## Listener and async ownership
 

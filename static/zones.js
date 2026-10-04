@@ -146,12 +146,8 @@
         return;
       }
 
-      if (typeof window.updateLimitPreference === "function") {
-        window.updateLimitPreference("zonesLimit", nextValue, () => {
-          if (window.AppState.activeTab === "zones") {
-            window.TrainingApp?.features?.zones?.refresh?.();
-          }
-        });
+      if (typeof window.TrainingApp?.features?.settings?.updateLimitPreference === "function") {
+        window.TrainingApp.features.settings.updateLimitPreference("zonesLimit", nextValue);
         return;
       }
 

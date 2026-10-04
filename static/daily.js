@@ -1066,12 +1066,8 @@ function attachDailyLimitSelector() {
       return;
     }
 
-    if (typeof window.updateLimitPreference === "function") {
-      window.updateLimitPreference("dailyLimit", nextValue, () => {
-        if (window.AppState.activeTab === "daily" && typeof window.loadDaily === "function") {
-          window.loadDaily();
-        }
-      });
+    if (typeof window.TrainingApp?.features?.settings?.updateLimitPreference === "function") {
+      window.TrainingApp.features.settings.updateLimitPreference("dailyLimit", nextValue);
       return;
     }
 
@@ -1079,8 +1075,8 @@ function attachDailyLimitSelector() {
     if (typeof window.persistPreferences === "function") {
       window.persistPreferences();
     }
-    if (window.AppState.activeTab === "daily" && typeof window.loadDaily === "function") {
-      window.loadDaily();
+    if (window.AppState.activeTab === "daily") {
+      loadDaily();
     }
   });
 

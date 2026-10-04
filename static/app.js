@@ -151,9 +151,6 @@ if (window.GoalsController) {
 if (window.KPIsController) {
   window.TrainingApp.registerFeature("kpis", window.KPIsController);
 }
-if (window.SettingsController) {
-  window.TrainingApp.registerFeature("settings", window.SettingsController);
-}
 if (window.ComponentsController) {
   window.TrainingApp.registerFeature("components", window.ComponentsController);
   window.TrainingApp.registerFeature("service", window.ComponentsController);

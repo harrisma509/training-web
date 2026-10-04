@@ -725,12 +725,8 @@ function attachWeeklyLimitSelector() {
       return;
     }
 
-    if (typeof window.updateLimitPreference === "function") {
-      window.updateLimitPreference("weeklyLimit", nextValue, () => {
-        if (window.AppState.activeTab === "weekly") {
-          loadWeekly(true);
-        }
-      });
+    if (typeof window.TrainingApp?.features?.settings?.updateLimitPreference === "function") {
+      window.TrainingApp.features.settings.updateLimitPreference("weeklyLimit", nextValue);
       return;
     }
 

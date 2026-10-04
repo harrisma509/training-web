@@ -170,28 +170,8 @@
     }
   }
 
-  function applyAppearancePreference() {
-    if (!document.documentElement) {
-      return;
-    }
-
-    if (window.AppState.appearance === "light") {
-      document.documentElement.setAttribute("data-theme", "light");
-      return;
-    }
-
-    if (window.AppState.appearance === "dark") {
-      document.documentElement.setAttribute("data-theme", "dark");
-      return;
-    }
-
-    const prefersDark = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
-    document.documentElement.setAttribute("data-theme", prefersDark ? "dark" : "light");
-  }
-
   window.normalizeStoredPreference = normalizeStoredPreference;
   window.sanitizePreferences = sanitizePreferences;
   window.loadSavedPreferences = loadSavedPreferences;
   window.persistPreferences = persistPreferences;
-  window.applyAppearancePreference = applyAppearancePreference;
 })();

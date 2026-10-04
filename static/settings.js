@@ -15,6 +15,9 @@
   const settingsDailyLimit = document.getElementById("settingsDailyLimit");
   const settingsWeeklyLimit = document.getElementById("settingsWeeklyLimit");
   const settingsZonesLimit = document.getElementById("settingsZonesLimit");
+  const yearlyMaintenanceYear = document.getElementById("yearlyMaintenanceYear");
+  const yearlyMaintenancePreviewBtn = document.getElementById("yearlyMaintenancePreviewBtn");
+  const yearlyMaintenanceCalculateBtn = document.getElementById("yearlyMaintenanceCalculateBtn");
   const defaultSyncDaysInput = document.getElementById("defaultSyncDaysInput");
   const saveDefaultSyncDaysBtn = document.getElementById("saveDefaultSyncDaysBtn");
   const defaultSyncDaysStatus = document.getElementById("defaultSyncDaysStatus");
@@ -113,6 +116,36 @@
   const hideShoesCheckbox = document.getElementById("hideShoesCheckbox");
   const hideRetiredCheckbox = document.getElementById("hideRetiredCheckbox");
   const systemThemeMedia = window.matchMedia ? window.matchMedia("(prefers-color-scheme: light)") : null;
+  let settingsInitialized = false;
+  let settingsListenersAttached = false;
+  let settingsMediaListenerBound = false;
+  let yearlyMaintenanceListenersAttached = false;
+
+  function applyAppearancePreference() {
+    if (!document.documentElement) {
+      return;
+    }
+
+    if (window.AppState.appearance === "light") {
+      document.documentElement.setAttribute("data-theme", "light");
+      return;
+    }
+
+    if (window.AppState.appearance === "dark") {
+      document.documentElement.setAttribute("data-theme", "dark");
+      return;
+    }
+
+    const prefersDark = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
+    document.documentElement.setAttribute("data-theme", prefersDark ? "dark" : "light");
+  }
+
+  function applyAppearance(preference = window.AppState.appearance) {
+    if (["system", "light", "dark"].includes(preference)) {
+      window.AppState.appearance = preference;
+    }
+    applyAppearancePreference();
+  }
 
   function escapeHtml(value) {
     return String(value)
@@ -667,6 +700,22 @@
     }
   }
 
+  function attachYearlyMaintenanceListeners() {
+    if (yearlyMaintenanceListenersAttached) {
+      return;
+    }
+
+    const yearlyFeature = window.TrainingApp?.features?.yearly;
+    yearlyFeature?.populateMaintenanceYearOptions?.();
+    yearlyMaintenancePreviewBtn?.addEventListener("click", () => {
+      yearlyFeature?.previewMaintenance?.();
+    });
+    yearlyMaintenanceCalculateBtn?.addEventListener("click", () => {
+      yearlyFeature?.calculateMaintenance?.();
+    });
+    yearlyMaintenanceListenersAttached = true;
+  }
+
   function setDefaultSyncDaysStatus(message, isError = false) {
     if (!defaultSyncDaysStatus) {
       return;
@@ -855,7 +904,7 @@
     window.TrainingApp?.features?.gear?.render?.();
   }
 
-  function updateLimitPreference(key, value, reloadFn) {
+  function updateLimitPreference(key, value) {
     const allowedValues = window.APP_ROW_LIMITS?.[key.replace(/Limit$/, "")];
     if (!allowedValues || !Number.isInteger(value) || !allowedValues.includes(value)) {
       return;
@@ -865,8 +914,12 @@
     syncLimitSelects();
     persistPreferences();
 
-    if (typeof reloadFn === "function") {
-      reloadFn();
+    if (key === "dailyLimit" && window.AppState.activeTab === "daily") {
+      window.TrainingApp?.features?.daily?.refresh?.();
+    } else if (key === "weeklyLimit" && window.AppState.activeTab === "weekly") {
+      window.TrainingApp?.features?.weekly?.refresh?.();
+    } else if (key === "zonesLimit" && window.AppState.activeTab === "zones") {
+      window.TrainingApp?.features?.zones?.refresh?.();
     }
   }
 
@@ -937,6 +990,10 @@
   }
 
   function attachSettingsEventListeners() {
+    if (settingsListenersAttached) {
+      return;
+    }
+
     settingsBtn?.addEventListener("click", openSettingsDrawer);
     settingsCloseBtn?.addEventListener("click", closeSettingsDrawer);
     settingsTabButtons.forEach((button) => {
@@ -990,7 +1047,7 @@
         const selectedAppearance = event.target.value;
         window.AppState.appearance = selectedAppearance;
         persistPreferences();
-        applyAppearancePreference();
+        applyAppearance();
       });
     });
 
@@ -1047,33 +1104,21 @@
     if (settingsDailyLimit) {
       settingsDailyLimit.addEventListener("change", (event) => {
         const value = Number(event.target.value);
-        updateLimitPreference("dailyLimit", value, () => {
-          if (window.AppState.activeTab === "daily") {
-            window.TrainingApp?.features?.daily?.refresh?.();
-          }
-        });
+        updateLimitPreference("dailyLimit", value);
       });
     }
 
     if (settingsWeeklyLimit) {
       settingsWeeklyLimit.addEventListener("change", (event) => {
         const value = Number(event.target.value);
-        updateLimitPreference("weeklyLimit", value, () => {
-          if (window.AppState.activeTab === "weekly") {
-            window.TrainingApp?.features?.weekly?.refresh?.();
-          }
-        });
+        updateLimitPreference("weeklyLimit", value);
       });
     }
 
     if (settingsZonesLimit) {
       settingsZonesLimit.addEventListener("change", (event) => {
         const value = Number(event.target.value);
-        updateLimitPreference("zonesLimit", value, () => {
-          if (window.AppState.activeTab === "zones") {
-            window.TrainingApp?.features?.zones?.refresh?.();
-          }
-        });
+        updateLimitPreference("zonesLimit", value);
       });
     }
 
@@ -1086,15 +1131,22 @@
       }
     });
 
-    if (systemThemeMedia && typeof systemThemeMedia.addEventListener === "function") {
+    if (!settingsMediaListenerBound && systemThemeMedia && typeof systemThemeMedia.addEventListener === "function") {
       systemThemeMedia.addEventListener("change", handleSystemAppearanceChange);
-    } else if (systemThemeMedia && typeof systemThemeMedia.addListener === "function") {
+      settingsMediaListenerBound = true;
+    } else if (!settingsMediaListenerBound && systemThemeMedia && typeof systemThemeMedia.addListener === "function") {
       systemThemeMedia.addListener(handleSystemAppearanceChange);
+      settingsMediaListenerBound = true;
     }
+
+    settingsListenersAttached = true;
   }
 
-  const SettingsController = {
-    initialize() {
+  function initializeSettings() {
+    if (settingsInitialized) {
+      return true;
+    }
+    settingsInitialized = true;
       restorePreferences();
       syncFormCheckboxes();
       if (hideShoesCheckbox) {
@@ -1111,11 +1163,31 @@
       }
       loadDefaultSyncDaysPreference();
       attachSettingsEventListeners();
+      attachYearlyMaintenanceListeners();
       setSettingsTab("general");
-    },
+    return true;
+  }
+
+  const settingsController = {
+    init: initializeSettings,
+    open: openSettingsDrawer,
+    requestClose: closeSettingsDrawer,
+    applyAppearance: applyAppearance,
+    updateLimitPreference: updateLimitPreference,
+    initialize: initializeSettings,
   };
 
-  window.SettingsController = SettingsController;
+  window.TrainingApp = window.TrainingApp || { features: {} };
+  window.TrainingApp.features = window.TrainingApp.features || {};
+  window.TrainingApp.registerFeature = window.TrainingApp.registerFeature || function (name, feature) {
+    if (!feature || typeof feature !== "object") return;
+    if (!Object.prototype.hasOwnProperty.call(window.TrainingApp.features, name)) {
+      window.TrainingApp.features[name] = feature;
+    }
+  };
+  window.TrainingApp.registerFeature("settings", settingsController);
+
+  window.SettingsController = settingsController;
   window.loadSystemStatus = loadSystemStatus;
   window.copySystemDiagnostics = copySystemDiagnostics;
   window.loadDefaultSyncDaysPreference = loadDefaultSyncDaysPreference;
@@ -1132,5 +1204,5 @@
   window.saveAiCoachSettings = saveAiCoachSettings;
   window.cancelAiCoachSettings = cancelAiCoachSettings;
 
-  SettingsController.initialize();
+  initializeSettings();
 })();
