@@ -115,9 +115,31 @@ assert.match(webInstructions, /deploy_training_web\.ps1/);
 assert.match(webInstructions, /deploy_to_server_from_mac\.sh/);
 assert.match(etlInstructions, /deploy_training_etl\.ps1/);
 assert.match(etlInstructions, /deploy_to_server_from_mac\.sh/);
+for (const [guidance, windowsScript, unixScript] of [
+    [webReadme, ".\\deploy_training_web.ps1", "./deploy_to_server_from_mac.sh"],
+    [webGuide, ".\\deploy_training_web.ps1", "./deploy_to_server_from_mac.sh"],
+    [webInstructions, ".\\deploy_training_web.ps1", "./deploy_to_server_from_mac.sh"],
+    [etlReadme, ".\\deploy_training_etl.ps1", "./deploy_to_server_from_mac.sh"],
+    [etlInstructions, ".\\deploy_training_etl.ps1", "./deploy_to_server_from_mac.sh"],
+]) {
+    assert.match(guidance, new RegExp(escapeRegExp(windowsScript)));
+    assert.match(guidance, new RegExp(escapeRegExp(unixScript)));
+    assert.match(guidance, /-DryRun/);
+    assert.match(guidance, /--dry-run/);
+}
 assert.match(webTesting, /35 Node test files/);
 assert.match(webTesting, /\.\\\.venv\\Scripts\\python\.exe -m pytest/);
 assert.match(etlTesting, /\.\\\.venv\\Scripts\\python\.exe -m pytest/);
+assert.match(etlTesting, /94 passed tests and 52 subtests/);
+assert.match(webReadme, /local development environment/);
+assert.match(webGuide, /Ordinary source\/static changes use the platform-native deployment script/);
+assert.match(webGuide, /Recreate containers for Compose/);
+assert.match(webGuide, /Rebuild the image for\s+Dockerfile/);
+assert.match(webGuide, /Documentation-only changes are not deployed or restarted/);
+assert.match(webInstructions, /platform-native repository-local interpreter documented in `docs\/TESTING_GUIDE\.md`/);
+assert.match(etlInstructions, /platform-native repository-local interpreter documented in `docs\/TESTING_GUIDE\.md`/);
+assert.doesNotMatch(etlReadme, /(^|[\s`])python src[\\/]resync_activity\.py/m);
+assert.match(etlReadme, /HarrisNAS backup storage/);
 for (const guidance of [webReadme, webGuide, webInstructions, etlReadme, etlInstructions]) {
     assert.doesNotMatch(guidance, /(^|[\s`])python3? -m (pytest|py_compile)\b/m);
     assert.doesNotMatch(guidance, /activate the repository virtual environment/);

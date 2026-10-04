@@ -71,11 +71,15 @@ Typical flow from macOS or Linux:
 curl -sS -D - http://192.168.1.100:8088/api/gear/dashboard?limit=5
 ```
 
-On Windows, use `\.\deploy_training_web.ps1`. Both scripts require a clean
+On Windows, use `.\deploy_training_web.ps1`. Both scripts require a clean
 worktree whose `HEAD` matches its configured upstream revision, package the
 same exact-commit archive, and support `--dry-run`/`-DryRun` without upload.
-Compose/environment/mount/port/network/command changes; image rebuild is for
-Dockerfile, requirements, system-package, or image-content changes.
+Ordinary source/static changes use the platform-native deployment script. If
+startup-derived commit or asset metadata is stale, restart only the scoped
+`training-web` application process. Recreate containers for Compose,
+environment, mount, port, network, or command changes. Rebuild the image for
+Dockerfile, requirements or dependency, system-package, or image-content
+changes.
 Documentation-only changes are not deployed or restarted.
 
 When a route or app-registration change is made, validate the live endpoint after deployment.
@@ -100,7 +104,7 @@ Use the repository-local interpreter explicitly. On macOS/Linux:
 On Windows:
 
 ```powershell
-\.\.venv\Scripts\python.exe -m py_compile app.py routes\*.py
+.\.venv\Scripts\python.exe -m py_compile app.py routes\*.py
 ```
 
 Local syntax checks are required for Python changes, but they are not a substitute for deployment and live endpoint checks.

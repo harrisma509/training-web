@@ -65,7 +65,8 @@ Deploy from macOS or Linux with:
 
 On Windows, use `.\deploy_training_web.ps1`. Both supported scripts require
 a clean worktree whose `HEAD` equals its configured upstream revision, package
-the same exact commit, and support a local dry run without upload.
+the same exact commit, and support `-DryRun` on Windows or `--dry-run` on
+macOS/Linux to inspect the archive without uploading it.
 
 After deploy, validate live endpoints with `curl`.
 
@@ -123,7 +124,7 @@ curl -sS -D - http://192.168.1.100:8088/api/gear/dashboard?limit=5
 
 For backend changes:
 
-1. Run `\.\.venv\Scripts\python.exe -m py_compile` on touched Python files on Windows, or `./.venv/bin/python -m py_compile` on macOS/Linux.
+1. Run `.\.venv\Scripts\python.exe -m py_compile` on touched Python files on Windows, or `./.venv/bin/python -m py_compile` on macOS/Linux.
 2. Deploy with the platform-native supported deployment script.
 3. Test affected live endpoint with `curl`.
 4. Confirm HTTP 200.
@@ -145,7 +146,7 @@ For frontend changes:
 - Read [docs/TESTING_GUIDE.md](../docs/TESTING_GUIDE.md) before changing Python behavior.
 - Every new or changed Python behavior and every bug fix should add or update focused deterministic tests unless the completion report documents a concrete exception.
 - When Mike says he is done with manual edits and asks GHC to update tests, inspect and preserve his uncommitted diff, add the smallest tests that prove the intended behavior, and do not merely update expectations to force green.
-- Run focused tests first, then the full suite with `./.venv/bin/python -m pytest -q`.
+- Run focused tests first, then the full suite using the platform-native repository-local interpreter documented in `docs/TESTING_GUIDE.md`.
 - Default tests must not access paid providers, external services, production data, Docker, SSH, or deployment.
 - `rg` is available on Mike's Mac for focused repository searches. Use it when helpful, but fall back to `grep` or `find` rather than treating it as a required dependency.
 - Report exact commands and results.

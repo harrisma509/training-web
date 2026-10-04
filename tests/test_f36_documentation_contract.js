@@ -11,8 +11,11 @@ const aiGuide = read("docs/AI_DEV_GUIDE.md");
 const testing = read("docs/TESTING_GUIDE.md");
 const webInstructions = read(".github/copilot-instructions.md");
 const etlReadme = read("../training-etl/README.md");
+const etlTesting = read("../training-etl/docs/TESTING_GUIDE.md");
 const etlInstructions = read("../training-etl/.github/copilot-instructions.md");
 const etlConstitution = read("../training-etl/docs/ENGINEERING_CONSTITUTION.md");
+const webConstitution = read("docs/ENGINEERING_CONSTITUTION.md");
+const personalization = read("docs/AI_COACH_PERSONALIZATION.md");
 const deployScript = read("deploy_training_web.ps1");
 
 for (const key of [
@@ -47,7 +50,8 @@ for (const phrase of [
     "35/35",
     "15 registry keys",
     "ENGINEERING_CONSTITUTION.md",
-    "F17-F35 closeout",
+    "Historical closeout context",
+    "all first-party asset references discovered from the rendered root",
 ]) {
     assert.ok(architecture.includes(phrase), `missing architecture rule: ${phrase}`);
 }
@@ -62,8 +66,15 @@ assert.match(webInstructions, /Permanent architecture and execution budget/);
 assert.match(etlInstructions, /Permanent architecture and execution budget/);
 assert.match(etlConstitution, /FRONTEND_ARCHITECTURE\.md/);
 assert.match(testing, /35 Node test files/);
+assert.match(etlTesting, /94 passed tests and 52 subtests/);
 assert.match(architecture, /Components\/Service/);
 assert.doesNotMatch(architecture, /retired frontend handoff/);
+assert.doesNotMatch(architecture, /F35 runtime remains deployed/);
+assert.doesNotMatch(architecture, /all 43 first-party assets/);
+assert.equal(webConstitution, etlConstitution, "repository constitutions must remain byte-identical");
+assert.match(etlInstructions, /Feature documents define detailed contracts and current behavior\.\r?\n\r?\n# GitHub Copilot Instructions for training-etl/);
+assert.match(personalization, /conversation “remember this” action/);
+assert.match(personalization, /Generic words such as/);
 assert.doesNotMatch([readme, aiGuide, webInstructions, etlReadme, etlInstructions].join("\n"), /(^|[\s`])python3? -m (pytest|py_compile)\b/m);
 assert.doesNotMatch([readme, aiGuide, webInstructions, etlReadme, etlInstructions].join("\n"), /activate the repository virtual environment/);
 

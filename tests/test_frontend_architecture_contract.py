@@ -62,3 +62,8 @@ def test_documented_registry_matches_composed_runtime_registrations() -> None:
     assert len(registered) == 15
     assert "Components/Service" in ARCHITECTURE
     assert "Compatibility key for the same" in ARCHITECTURE
+    assert "all first-party asset references discovered from the rendered root" in ARCHITECTURE
+    assert "Documentation-only repository commits may advance `HEAD` without" in ARCHITECTURE
+    assert "F35 runtime remains deployed" not in ARCHITECTURE
+    assert "all 43 first-party assets" not in ARCHITECTURE
+    assert "## Historical closeout context" in ARCHITECTURE

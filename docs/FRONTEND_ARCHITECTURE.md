@@ -137,7 +137,7 @@ Ordinary code or static deployment:
 1. Test a clean, pushed commit.
 2. Run `deploy_training_web.ps1` on Windows or `deploy_to_server_from_mac.sh` on macOS/Linux for that exact commit.
 3. If runtime metadata is stale, perform only the scoped `training-web` restart: `cd /opt/training/web && docker compose restart training-web`.
-4. Verify the root advertises the commit, all 43 first-party assets use it, changed-asset hashes match, cache headers are correct, and root/API health is 200.
+4. Verify the root advertises the commit, all first-party asset references discovered from the rendered root use it, changed-asset hashes match, cache headers are correct, and root/API health is 200.
 
 Container recreation is reserved for Compose, environment, mount, port,
 network, or command configuration changes. An image rebuild is reserved for a
@@ -162,20 +162,14 @@ Docker, SSH, deployment, and mutating operations.
 A release check records local/remote equality, clean status, the exact deployed
 commit, rollback commit, root/API health, asset-version consistency,
 changed-asset hash parity, bounded fresh-page browser scenarios, and final Git
-status. F35 runtime remains deployed while F36 documentation-only commits
-advance repository HEAD.
+status. Documentation-only repository commits may advance `HEAD` without
+changing the deployed runtime commit; record both explicitly.
 
-## F17-F35 closeout
+## Historical closeout context
 
-F17-F22 established server-rendered composition, lifecycle contracts,
-transient-surface behavior, guarded Components/Service editors, and the shell
-activation dispatcher. F23-F28 retired proven-internal Plan, Search, Zones,
-Gear, and Weekly compatibility-global families and established full-commit
-asset versioning. F29-F34 consolidated Yearly, Charts, Daily, Coach, Settings,
-and Sync ownership with request/timer/focus protections. F35 removed the
-remaining obsolete feature aliases and the empty shell bridge while retaining
-only the verified non-self-registering shell bridge above.
-
-The frontend architecture epic closes at F36. Future work must begin from this
-permanent guide, current source, executable contracts, and the repository
+The F17-F36 frontend architecture work established the current server-rendered
+composition, lifecycle, transient-surface, ownership, compatibility, and
+asset-versioning contracts. This historical note does not override the
+current registry and ownership rules above. Future work must begin from this
+permanent guide, current source, executable contracts, and repository
 instructions; it must not resurrect deleted globals.

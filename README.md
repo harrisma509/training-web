@@ -51,7 +51,7 @@ Its browser-facing routes may read the shared PostgreSQL database directly on th
 - If a request touches service placement, internal APIs, or cross-repository database access, read `training-etl/docs/ARD/TRAINING_SYSTEM_SERVICE_BOUNDARIES.md`.
 
 ## Production runtime
-The real runtime is the HarrisServer Docker deployment, not the local macOS environment.
+The real runtime is the HarrisServer Docker deployment, not the local development environment.
 
 Typical model:
 - PostgreSQL is the shared runtime database
@@ -140,7 +140,7 @@ For a focused run:
 
 Existing `unittest.TestCase` tests run through pytest. The default suite uses fakes, mocks, and synthetic data; it must not contact OpenAI or other paid providers, Strava, production training-api, production PostgreSQL, Docker, SSH, or deployment operations. Automated unit tests are separate from manual runtime, provider, and deployment smoke tests.
 
-On Windows, use `\.\.venv\Scripts\python.exe -m pytest -q`.
+On Windows, use `.\.venv\Scripts\python.exe -m pytest -q`.
 
 For the complete testing and AI-assisted workflow, see [docs/TESTING_GUIDE.md](docs/TESTING_GUIDE.md). Related development notes: [docs/AI_DEV_GUIDE.md](docs/AI_DEV_GUIDE.md) and [docs/FRONTEND_ARCHITECTURE.md](docs/FRONTEND_ARCHITECTURE.md).
 
