@@ -1109,9 +1109,6 @@ function ensureComponentEditorDrawer() {
       }
       return;
     }
-    if (event.target === drawer) {
-      closeComponentEditor();
-    }
   });
 
   if (form.dataset.submitBound === "1") {
@@ -2012,7 +2009,8 @@ function ensureComponentHistoryDrawer() {
   });
 
   drawer.addEventListener("click", event => {
-    if (event.target === drawer) {
+    const eventEditor = drawer.querySelector("#componentHistoryEventEditor");
+    if (event.target === drawer && (!eventEditor || eventEditor.classList.contains("hidden"))) {
       closeComponentHistoryDrawer();
     }
   });
