@@ -221,8 +221,5 @@
   };
   window.TrainingApp.registerFeature("sync", syncController);
 
-  window.SyncController = syncController;
-  window.loadSyncStatus = loadSyncStatus;
-  window.handleSyncNow = handleSyncNow;
   initializeSync();
 })();

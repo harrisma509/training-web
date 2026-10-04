@@ -2820,9 +2820,7 @@ async function loadComponents() {
   }
 
   renderComponentsBikeSelect();
-  if (typeof window.syncDefaultBikeSelect === "function") {
-    window.syncDefaultBikeSelect();
-  }
+  window.TrainingApp?.features?.settings?.syncDefaultBikeSelect?.();
   renderComponentsSummary();
   renderComponentsTable();
 

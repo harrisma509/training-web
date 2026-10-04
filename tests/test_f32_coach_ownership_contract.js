@@ -11,7 +11,7 @@ assert.equal((coachSource.match(/registerFeature\("coach", coachController\)/g) 
 assert.match(coachSource, /init: initializeCoachFeature/);
 assert.match(coachSource, /activate\(context = \{\}\)/);
 assert.match(coachSource, /refresh\(\)/);
-assert.match(coachSource, /window\.CoachController = coachController/);
+assert.doesNotMatch(coachSource, /window\.CoachController\s*=/);
 assert.match(coachSource, /if \(state\.initialized\) return/);
 assert.match(coachSource, /sessionsLoadPromise/);
 assert.match(coachSource, /sessionsLoaded/);

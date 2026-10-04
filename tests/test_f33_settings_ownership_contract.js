@@ -17,6 +17,9 @@ assert.equal(
 );
 assert.match(settingsSource, /window\.TrainingApp\.registerFeature\("settings", settingsController\)/);
 assert.match(settingsSource, /const settingsController = \{/);
+assert.match(settingsSource, /syncFormCheckboxes: syncFormCheckboxes/);
+assert.match(settingsSource, /syncDefaultBikeSelect: syncDefaultBikeSelect/);
+assert.doesNotMatch(settingsSource, /window\.(?:SettingsController|loadSystemStatus|copySystemDiagnostics|loadDefaultSyncDaysPreference|saveDefaultSyncDaysPreference|restorePreferences|syncLimitSelects|updateLimitPreference|applyAppearancePreference|syncFormCheckboxes|syncDefaultBikeSelect|updateStartupTabVisibility|validateAiCoachSettingsDraft|loadAiCoachSettings|saveAiCoachSettings|cancelAiCoachSettings)\s*=/);
 for (const method of ["init", "open", "requestClose", "applyAppearance", "updateLimitPreference"]) {
     assert.match(settingsSource, new RegExp(`${method}:`), method);
 }

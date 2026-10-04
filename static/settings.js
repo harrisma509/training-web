@@ -1174,6 +1174,8 @@
     requestClose: closeSettingsDrawer,
     applyAppearance: applyAppearance,
     updateLimitPreference: updateLimitPreference,
+    syncFormCheckboxes: syncFormCheckboxes,
+    syncDefaultBikeSelect: syncDefaultBikeSelect,
     initialize: initializeSettings,
   };
 
@@ -1186,23 +1188,6 @@
     }
   };
   window.TrainingApp.registerFeature("settings", settingsController);
-
-  window.SettingsController = settingsController;
-  window.loadSystemStatus = loadSystemStatus;
-  window.copySystemDiagnostics = copySystemDiagnostics;
-  window.loadDefaultSyncDaysPreference = loadDefaultSyncDaysPreference;
-  window.saveDefaultSyncDaysPreference = saveDefaultSyncDaysPreference;
-  window.restorePreferences = restorePreferences;
-  window.syncLimitSelects = syncLimitSelects;
-  window.updateLimitPreference = updateLimitPreference;
-  window.applyAppearancePreference = applyAppearancePreference;
-  window.syncFormCheckboxes = syncFormCheckboxes;
-  window.syncDefaultBikeSelect = syncDefaultBikeSelect;
-  window.updateStartupTabVisibility = updateStartupTabVisibility;
-  window.validateAiCoachSettingsDraft = validateAiCoachSettingsDraft;
-  window.loadAiCoachSettings = loadAiCoachSettings;
-  window.saveAiCoachSettings = saveAiCoachSettings;
-  window.cancelAiCoachSettings = cancelAiCoachSettings;
 
   initializeSettings();
 })();

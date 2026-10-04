@@ -459,9 +459,6 @@ function commitFeatureTransition(context) {
   if (isYearly) window.TrainingApp?.features?.yearly?.showView?.(state.yearlyView || "annual");
 }
 
-async function activateLegacyFeature(featureName, context, feature) {
-}
-
 const featureActivationDispatcher = createFeatureActivationDispatcher({
   resolveFeature: featureName => window.TrainingApp?.features?.[featureName],
   getCurrentFeatureName: () => state.activeTab || "daily",
@@ -473,7 +470,6 @@ const featureActivationDispatcher = createFeatureActivationDispatcher({
     }
   },
   reportError: error => console.error("Feature activation failed.", error),
-  activateLegacy: activateLegacyFeature,
   recordAcceptedRoute: () => {
     lastAcceptedRoute = window.location.href;
   },

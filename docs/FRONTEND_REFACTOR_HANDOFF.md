@@ -113,8 +113,8 @@ F29 consolidated the active Yearly dashboard runtime in `yearly.js`. The
 feature module now owns Yearly loading, annual/monthly rendering, view state,
 commentary API usage, request freshness, and the F20 transient surface. It
 self-registers one stable controller at `TrainingApp.features.yearly`; the
-retained `window.YearlyController` and `window.showYearlyView` names are
-compatibility aliases to that controller. `app.js` retains only pane and
+former `window.YearlyController` and `window.showYearlyView` aliases were
+retired in F35. `app.js` retains only pane and
 transition coordination plus the startup preload call through the registry.
 Yearly maintenance remains outside the dashboard lifecycle and is not part of
 the shell's data-loading path.
@@ -123,9 +123,8 @@ F30 consolidated the active Charts runtime in `charts.js`. The feature now owns
 category state and tab/panel visibility, category-specific loading, Chart.js
 instances, replacement destruction, request freshness, feature controls, and
 theme redraw behavior. It self-registers one stable controller at
-`TrainingApp.features.charts`; `window.ChartsController` and
-`window.showChartsCategory` remain compatibility aliases because the existing
-public surface is still part of the tracked runtime contract. `app.js` retains
+`TrainingApp.features.charts`; the former `window.ChartsController` and
+`window.showChartsCategory` aliases were retired in F35. `app.js` retains
 only top-level Charts pane visibility and transition coordination.
 
 F31 consolidated the active Daily runtime in `daily.js`. The feature now owns
@@ -133,9 +132,9 @@ Daily loading and rendering, exact-date state resolution, keyed request
 coalescing, day actions, narrative cache/request invalidation, resync dialog
 and operation polling, status auto-dismiss timing, and its page-lifetime
 cleanup listener. It self-registers one stable controller at
-`TrainingApp.features.daily`; `window.DailyController` and `window.loadDaily`
-remain compatibility aliases for the existing feature-local and tracked
-consumer surface. `app.js` retains only generic route parsing, pane
+`TrainingApp.features.daily`; the former `window.DailyController` and
+`window.loadDaily` aliases were retired in F35. `app.js` retains only generic
+route parsing, pane
 coordination, and the registry-owned Daily preload call.
 
 F32 consolidated the active Coach runtime in `coach.js`. The feature now owns
@@ -143,9 +142,9 @@ lazy session-list loading, selected-session and usage state, message rendering,
 response-stage timing, mobile session drawer state, history and overflow menus,
 delete confirmation, focus behavior, and `beforeunload` timer cleanup. It
 self-registers one stable controller at `TrainingApp.features.coach` with
-idempotent `init`, lazy `activate`, and explicit `refresh` methods. The
-retained `window.CoachController` name aliases that controller for the tracked
-compatibility surface; `app.js` no longer registers or implements Coach
+idempotent `init`, lazy `activate`, and explicit `refresh` methods. The former
+`window.CoachController` alias was retired in F35; `app.js` no longer registers
+or implements Coach
 business logic. Session loading is protected by one in-flight promise and
 session selection retains its request-token stale-response guard.
 
@@ -155,15 +154,15 @@ decoded JSON rather than the unsupported `.content` attribute. The Node
 session-management contract now reads the included delete-dialog partial and
 asserts the existing automatic conversation scrolling behavior. The current
 delete text, focus trap, pending state, responsive drawer, menus, and
-compatibility alias remain unchanged.
+compatibility behavior remains unchanged.
 
 ### F33 implementation: Settings ownership consolidation
 
 F33 makes `settings.js` the canonical Settings runtime owner. It registers one
 identity-preserving `TrainingApp.features.settings` controller with `init`,
 `open`, `requestClose`, `applyAppearance`, and `updateLimitPreference` methods;
-`window.SettingsController` remains an alias for the tracked compatibility
-surface. `app.js` no longer registers Settings or contains Settings business
+the former `window.SettingsController` and helper globals were retired in F35.
+`app.js` no longer registers Settings or contains Settings business
 logic.
 
 Settings owns idempotent initialization, drawer and tab listeners, appearance
@@ -185,18 +184,17 @@ the composed Settings registry is intentionally absent.
 
 Maintenance calculations, API routes, persistence, markup, CSS, and response
 contracts were unchanged. No maintenance action is executed by initialization
-or live validation. The retained compatibility exports are the Settings
-controller alias and existing Settings helper globals because tracked feature
-consumers and browser compatibility still use them; duplicate shell ownership
-and Settings registration were removed.
+or live validation. The two cross-feature Settings helpers used by Gear and
+Components are methods on the canonical controller rather than window aliases;
+duplicate shell ownership and Settings registration were removed.
 
 ### F34 implementation: Sync ownership consolidation
 
 F34 makes `sync.js` the canonical Sync runtime owner. It registers one stable
 `TrainingApp.features.sync` controller with `init`, `loadStatus`, `refresh`,
-`runSync`, and `cleanup` methods; `window.SyncController`,
-`window.loadSyncStatus`, and `window.handleSyncNow` remain compatibility names
-for the tracked browser surface. Registration is idempotent and the app shell
+`runSync`, and `cleanup` methods. The former `window.SyncController`,
+`window.loadSyncStatus`, and `window.handleSyncNow` aliases were retired in
+F35. Registration is idempotent and the app shell
 does not overwrite the registry entry.
 
 Sync owns the header button listener, status loading and rendering, error
@@ -214,10 +212,8 @@ existing default-sync-days preference and system-status presentation; it does
 not gain a second Sync runtime path. No Sync, resync, import, maintenance, or
 other mutating operation is started by F34 initialization or passive activation.
 
-The remaining compatibility debt is the retained Sync controller and helper
-aliases. F35 may inventory and remove only aliases with no tracked runtime,
-test, template, or external compatibility consumer, alongside the broader
-compatibility-deletion slice. No final documentation cleanup is included here.
+F35 completed the Sync compatibility cleanup without changing its passive
+status behavior or mutating operation boundaries.
 
 ## Listener and async ownership
 
@@ -390,12 +386,36 @@ transition. The supported source values are `startup`, `direct-url`,
    canonical registry entry; exact-date route restoration and same-key request
    reuse are feature-owned rather than shell fallback behavior.
 - Goals and KPIs remain no-op placeholders. Components/Service remains on its
-   F21 lifecycle adapter. Charts, Daily, Yearly, Coach, Settings, and Sync retain
-   their existing compatibility paths while their active runtime owners remain
-   registry-mediated.
-- `TrainingApp.features`, `TrainingApp.registerFeature`, `window.showTab`,
-  `window.activateFeature`, legacy controller globals, and remaining legacy
-  loaders such as `window.loadDaily` remain available.
+   F21 lifecycle adapter. Feature modules use their registry entries as the
+   composed-runtime call surface; compatibility globals are retained only for
+   shell registration of Plan, Goals, KPIs, and Components.
+   `TrainingApp.features`, `TrainingApp.registerFeature`, `window.showTab`,
+   and `window.activateFeature` remain available as the shell and lifecycle
+   surfaces. Feature-local aliases are removed only after the tracked-consumer
+   inventory proves that the registry path is sufficient.
+
+### F35 implementation: compatibility bridge cleanup
+
+F35 completed the consumer-driven cleanup authorized by the previous
+increments. The repository had no tracked runtime, template, test-harness,
+deployment, or external automation consumers for the feature aliases removed
+in this increment: Daily, Charts, Yearly, Coach, Settings, and Sync controller
+and helper globals. Search now opens Daily through
+`TrainingApp.features.daily`; Gear and Components call the corresponding
+Settings methods through `TrainingApp.features.settings`.
+
+The shell retains only the bounded registration bridge for Plan, Goals, KPIs,
+and Components/Service because those modules still publish controller globals
+that `app.js` consumes. The generic dispatcher still accepts an injected legacy
+fallback for isolated contract harnesses, but the composed shell no longer
+passes an empty fallback implementation. No backend, API, schema, ETL, CSS,
+dependency, route, or ownership redesign changes were made.
+
+F36 must reconcile this handoff against the final source inventory, remove
+historical phase wording that no longer describes the runtime, and confirm
+the remaining shell registration bridge and standalone harness fallbacks with
+one final repository-wide contract. F36 must not reintroduce deleted feature
+aliases or broaden the shell bridge without a new tracked consumer.
 
 Registration is idempotent: an existing feature entry is not overwritten by a
 second registration. The dispatcher is the only shell transition entry point;

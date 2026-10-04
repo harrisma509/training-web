@@ -817,7 +817,7 @@ if (typeof module !== "undefined" && module.exports) {
         const url = new URL(window.location.href);
         url.searchParams.set("date", date);
         window.history.replaceState({}, "", url);
-        window.DailyController?.load();
+        window.TrainingApp?.features?.daily?.load?.();
     }
 
     function submitSearch(event) {

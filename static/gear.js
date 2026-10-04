@@ -121,9 +121,7 @@ function bindGearFilterCheckboxes() {
   const settingsHideShoesCheckbox = document.getElementById("settingsHideShoes");
   const settingsHideRetiredCheckbox = document.getElementById("settingsHideRetired");
 
-  if (typeof window.syncFormCheckboxes === "function") {
-    window.syncFormCheckboxes();
-  }
+  window.TrainingApp?.features?.settings?.syncFormCheckboxes?.();
 
   if (gearHideShoesCheckbox && !gearHideShoesCheckbox.dataset.gearFilterBound) {
     gearHideShoesCheckbox.dataset.gearFilterBound = "true";

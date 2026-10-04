@@ -1308,5 +1308,4 @@
         }
     };
     window.TrainingApp.registerFeature("coach", coachController);
-    window.CoachController = coachController;
 })();

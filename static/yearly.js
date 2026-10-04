@@ -630,8 +630,6 @@
     initMaintenance: populateYearlyMaintenanceYearOptions,
   };
 
-  window.YearlyController = yearlyController;
-  window.showYearlyView = showYearlyView;
   window.TrainingApp = window.TrainingApp || { features: {} };
   window.TrainingApp.features = window.TrainingApp.features || {};
   window.TrainingApp.registerFeature = window.TrainingApp.registerFeature || function (name, feature) {

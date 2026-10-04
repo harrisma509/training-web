@@ -1225,8 +1225,6 @@
     render: renderDailyTable,
   };
 
-  window.loadDaily = loadDaily;
-  window.DailyController = dailyController;
   window.TrainingApp = window.TrainingApp || { features: {} };
   window.TrainingApp.features = window.TrainingApp.features || {};
   window.TrainingApp.registerFeature = window.TrainingApp.registerFeature || function (name, feature) {

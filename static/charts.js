@@ -1654,8 +1654,6 @@
         loadVolume,
         render: renderWeightChart,
     };
-    window.ChartsController = chartsController;
-    window.showChartsCategory = showChartsCategory;
     window.TrainingApp = window.TrainingApp || { features: {} };
     window.TrainingApp.features = window.TrainingApp.features || {};
     window.TrainingApp.registerFeature = window.TrainingApp.registerFeature || function (name, feature) {

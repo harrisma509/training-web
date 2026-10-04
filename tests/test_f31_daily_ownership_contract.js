@@ -17,8 +17,7 @@ assert.equal(
     "Daily must register exactly once",
 );
 assert.match(dailySource, /window\.TrainingApp\.registerFeature\("daily", dailyController\)/);
-assert.match(dailySource, /window\.loadDaily = loadDaily/);
-assert.match(dailySource, /window\.DailyController = dailyController/);
+assert.doesNotMatch(dailySource, /window\.(?:loadDaily|DailyController)\s*=/);
 
 for (const ownerPattern of [
     /function renderDailyTable\(/,

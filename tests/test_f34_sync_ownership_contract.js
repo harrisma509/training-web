@@ -106,8 +106,10 @@ async function main() {
     vm.runInNewContext(syncSource, context);
 
     const controller = window.TrainingApp.features.sync;
-    assert.equal(controller, window.SyncController, "compatibility controller must alias registry identity");
     assert.equal(window.TrainingApp.features.sync, controller);
+    assert.equal("SyncController" in window, false, "obsolete Sync controller alias must be removed");
+    assert.equal("loadSyncStatus" in window, false, "obsolete Sync loader alias must be removed");
+    assert.equal("handleSyncNow" in window, false, "obsolete Sync action alias must be removed");
     assert.equal(timers.filter(timer => timer.delay === 60000).length, 1, "startup must create one status interval");
     assert.equal(elements.syncNowBtn.listeners.click.length, 1, "startup must attach one Sync listener");
     assert.equal(statusCalls, 0, "initialization must not issue a status request");

@@ -10,6 +10,7 @@ assert.match(yearlySource, /init: initializeYearlyFeature/);
 assert.match(yearlySource, /activate: \(\) => loadYearly\(false\)/);
 assert.match(yearlySource, /refresh: \(\) => loadYearly\(true\)/);
 assert.match(yearlySource, /showView: showYearlyView/);
+assert.doesNotMatch(yearlySource, /window\.(?:YearlyController|showYearlyView)\s*=/);
 assert.match(yearlySource, /window\.TrainingApp\.registerFeature\("yearly", yearlyController\)/);
 assert.equal((yearlySource.match(/fetchYearly\(\)/g) || []).length, 1);
 assert.equal((yearlySource.match(/function renderYearlyTable\(/g) || []).length, 1);

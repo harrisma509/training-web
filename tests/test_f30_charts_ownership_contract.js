@@ -12,8 +12,7 @@ assert.match(chartsSource, /init: initializeChartsFeature/);
 assert.match(chartsSource, /activate: \(\) => showChartsCategory\(getChartsCategory\(\)\)/);
 assert.match(chartsSource, /refresh: \(\) => showChartsCategory\(getChartsCategory\(\), \{ force: true \}\)/);
 assert.match(chartsSource, /showCategory: showChartsCategory/);
-assert.match(chartsSource, /window\.ChartsController = chartsController/);
-assert.match(chartsSource, /window\.showChartsCategory = showChartsCategory/);
+assert.doesNotMatch(chartsSource, /window\.(?:ChartsController|showChartsCategory)\s*=/);
 
 for (const helper of [
   "normalizeChartsCategory",
