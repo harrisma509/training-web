@@ -2,7 +2,7 @@
 
 ## Status and scope
 
-This document records the current `training-web` frontend architecture for F19.
+This document records the current `training-web` frontend architecture through F22.
 It is an architecture handoff, not an approval to introduce a framework or
 rewrite the dashboard. The current implementation is server-rendered HTML
 with vanilla JavaScript modules, modular CSS, shared `AppState`, and a shared
@@ -45,14 +45,14 @@ decision changes it:
 
 | Area | Current owner | Initial load | Later activation | Request protection | Cleanup/deactivation |
 | --- | --- | --- | --- | --- | --- |
-| Plan | `plan.js` / `PlanController` | `loadData()` does not load it; initial `showTab()` calls `load` | `showTab()` calls `load` | Plan request counters | No app-level deactivation |
+| Plan | `plan.js` / `PlanController` | Startup activation calls `activate`; legacy `loadPlan` remains a forced reload | Same-key activation coalesces; `refresh` forces authoritative reload | Plan request counters | No app-level deactivation |
 | Goals, KPIs | respective module | No-op render/load controllers | No-op | None needed | None |
 | Charts | `charts.js` / `ChartsController` | `loadData()` does not load it; category activation loads selected data | `showChartsCategory()` loads selected category | Per-data request IDs and chart destruction | Charts are destroyed when their replacement/status path requires it; no tab deactivation hook |
 | Daily | `daily.js` / `DailyController` | `loadData()` calls `load` | `popstate` may call `load` for an exact date; no normal tab hook | Daily request ID; narrative request ID/cache | Local menus/dialogs/drawers close locally; no tab deactivation hook |
-| Search | `search.js` / `SearchController` | `loadData()` does not load results | `showTab()` calls `activate`; URL restore occurs on `popstate` | Search request ID; stale-result preservation | Dynamic action menus close locally; no general deactivate hook |
-| Weekly | `weekly.js` / `WeeklyController` | `loadData()` calls `load` | No normal tab activation load | Weekly request ID | Commentary and audit drawers close locally; no tab deactivation hook |
-| Zones | `zones.js` / `ZonesController` | `loadData()` calls `load` | No normal tab activation load | Zones request ID | No app-level deactivation |
-| Service / Gear | `components.js`, `gear.js` | `loadData()` loads both | Subtab switch changes visibility; does not load | Components has no shared request token; Gear has no request token | Component menus/drawers close locally; no tab deactivation hook |
+| Search | `search.js` / `SearchController` | `init` wires listeners; activation loads the current URL-backed query when needed | Same query preserves results; `refresh` reloads the current query | Search request ID; stale-result preservation | Dynamic action menus close locally; no general deactivate hook |
+| Weekly | `weekly.js` / `WeeklyController` | `init` wires handlers; startup preload and activation share in-flight work | Same-key activation reuses loaded rows; `refresh` forces reload | Weekly request ID and coalesced loader | Commentary and audit drawers close locally; no tab deactivation hook |
+| Zones | `zones.js` / `ZonesController` | `init` binds the limit selector; startup preload and activation share in-flight work | Same-key activation reuses loaded rows; `refresh` forces reload | Zones request ID and coalesced loader | No app-level deactivation |
+| Service / Gear | `components.js`, `gear.js` | Components remains F21 lifecycle-owned; Gear `init` binds filters and its startup preload is coalesced with activation | Gear activation reuses loaded rows; `refresh` forces reload | Components F21 guards; Gear request ID and stale-response protection | Component menus/drawers close locally; no tab deactivation hook |
 | Yearly | `yearly.js` plus app-owned `loadYearly` | `loadData()` calls `loadYearly` | View switch changes visibility; no normal activation load | No shared request token | Commentary drawer is dynamically created and locally closed |
 | Coach | `coach.js` / `CoachController` | Not loaded by `loadData()` | `showTab()` calls `activate` once | Session load token; interval only during response stages | Local close methods; loading interval stops on completion and `beforeunload`, but no tab deactivation hook |
 | Sync status | `sync.js` / `SyncController` | `loadData()` calls status load and app starts a 60-second interval | Not tab-scoped | None for the interval's individual fetches | Interval is app-global and has no teardown |
@@ -258,13 +258,17 @@ transition. The supported source values are `startup`, `direct-url`,
 - Search and Coach retain their existing `activate` methods and now receive
   the shell context. Search owns its established query normalization while
   honoring the shell-selected push/replace mode exactly once.
-- Plan remains a legacy `load` fallback when no `activate` method exists.
+- Plan, Weekly, Zones, Gear, and Search now expose idempotent `init`, canonical
+   `activate`, and explicit `refresh` methods. Their legacy globals and
+   controller `load` methods remain available and retain reload-on-call behavior.
+- Plan no longer relies on a legacy activation fallback.
 - Charts keeps `showChartsCategory` as its legacy nested-view/load fallback;
   the dispatcher updates category visibility without loading twice.
 - Daily keeps its existing `load` fallback only for exact-date `popstate`.
-- Goals, KPIs, Weekly, Zones, Service/Gear, Yearly, and Settings retain their
-  existing no-op or initial-load behavior; no fake lifecycle methods were
-  added.
+- Goals and KPIs remain no-op placeholders. Components/Service remains on its
+   F21 lifecycle adapter. Charts, Daily, Yearly, Coach, Settings, and Sync retain
+   their existing compatibility paths and were intentionally excluded from F22
+   because their loading, transient, or nested-view behavior has higher risk.
 - `TrainingApp.features`, `TrainingApp.registerFeature`, `window.showTab`,
   `window.activateFeature`, legacy controller globals, and legacy loaders such
   as `window.loadPlan` and `window.loadDaily` remain available.
@@ -273,6 +277,32 @@ Registration is idempotent: an existing feature entry is not overwritten by a
 second registration. The dispatcher is the only shell transition entry point;
 legacy functions are invoked only when the destination has no lifecycle
 `activate` method.
+
+### F22 low-risk lifecycle migration
+
+F22 migrates Plan, Search, Zones, Gear, and Weekly to the canonical lifecycle
+surface without changing routes, APIs, schema, persistence, calculations,
+templates, CSS, or transient-surface behavior. `init` owns one-time listeners;
+`activate` uses the current cached result or shares an in-flight request;
+`refresh` explicitly reloads authoritative data. Existing request-generation
+guards remain in place, and Gear now has the same stale-response protection
+before committing rows, filters, or summaries. Failed and superseded loads do
+not become permanently cached as successful initialization.
+
+Legacy globals are retained for compatibility. Calls such as `loadPlan()`,
+`loadWeekly()`, `loadZones()`, and `loadGear()` continue to mean an explicit
+reload, while the dispatcher calls the cache-aware lifecycle `activate` method.
+Search keeps its URL-backed filters, paging, sorting, action menus, and stale
+result preservation; its `refresh` reloads the current query without changing
+navigation or drafts.
+
+The remaining high-risk migrations are Daily, Charts, Yearly, Coach, Settings,
+Sync, and any broader transient-surface coordination. F23 must not begin until
+F22 has focused lifecycle tests, full regression validation, live desktop and
+mobile checks, and a clean deployed commit. F23 prerequisites include an
+explicit owner and freshness policy for each remaining feature, deterministic
+tests for any transient or dirty-state behavior it changes, and a browser
+validation plan that proves no duplicate requests or compatibility regressions.
 
 ### Remaining inconsistencies and F20/F21 prerequisites
 

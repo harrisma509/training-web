@@ -33,6 +33,9 @@
     origin: null,
   };
   let planCheckinDrawer = null;
+  let planInitialized = false;
+  let planLoadPromise = null;
+  let planLoaded = false;
   const PLAN_VISIBLE_ACTIVITY_LIMIT = 5;
   const PLAN_LOAD_GAUGE_CONFIG = Object.freeze({
     maxRatio: 1.5,
@@ -999,10 +1002,10 @@
     }
   }
 
-  async function loadPlan() {
+  async function loadPlanData() {
     const strip = document.getElementById("planStrip");
     if (!strip) {
-      return;
+      return false;
     }
 
     const requestId = ++PLAN_LOAD_REQUESTS.current;
@@ -1012,7 +1015,7 @@
       await ensurePlanWeeklyRows();
       renderPlanStrip();
       await loadPlanCheckins();
-      return;
+      return true;
     }
 
     strip.innerHTML = '<div class="plan-empty-state">Loading plan…</div>';
@@ -1032,6 +1035,7 @@
       await ensurePlanWeeklyRows();
       renderPlanStrip();
       await loadPlanCheckins();
+      return true;
     } catch (error) {
       console.error(error);
       if (requestId !== PLAN_LOAD_REQUESTS.current) {
@@ -1039,12 +1043,45 @@
       }
       window.AppState.planRows = [];
       strip.innerHTML = '<div class="plan-empty-state">Plan unavailable</div>';
+      return false;
     }
+  }
+
+  function loadPlan(force = true) {
+    if (!force && planLoaded) {
+      return Promise.resolve(true);
+    }
+    if (!force && planLoadPromise) {
+      return planLoadPromise;
+    }
+    planLoadPromise = loadPlanData()
+      .then(result => {
+        planLoaded = result === true;
+        return result;
+      })
+      .finally(() => {
+        planLoadPromise = null;
+      });
+    return planLoadPromise;
+  }
+
+  function initPlan() {
+    if (planInitialized) {
+      return true;
+    }
+    planInitialized = true;
+    document.addEventListener("DOMContentLoaded", () => {
+      renderPlanStrip();
+    }, { once: true });
+    return true;
   }
 
   function buildPlanController() {
     return {
-      load: loadPlan,
+      init: initPlan,
+      activate: () => loadPlan(false),
+      refresh: () => loadPlan(true),
+      load: () => loadPlan(true),
       render: renderPlanStrip,
     };
   }
@@ -1052,7 +1089,5 @@
   window.loadPlan = loadPlan;
   window.PlanController = buildPlanController();
 
-  document.addEventListener("DOMContentLoaded", () => {
-    renderPlanStrip();
-  });
+  initPlan();
 })();

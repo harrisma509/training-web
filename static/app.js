@@ -350,7 +350,9 @@ yearlyTab.addEventListener("click", () => showTab("yearly"));
 coachTab?.addEventListener("click", () => showTab("coach"));
 yearlyAnnualTab?.addEventListener("click", () => showYearlyView("annual"));
 yearlyMonthlyTab?.addEventListener("click", () => showYearlyView("monthly"));
-gearRefresh.addEventListener("click", loadGear);
+gearRefresh.addEventListener("click", () => {
+  window.GearController?.refresh?.();
+});
 yearlyRefresh?.addEventListener("click", loadYearly);
 componentsBikeSelect?.addEventListener("change", event => {
   const selectedGearId = String(event.target.value || "").trim();
@@ -971,9 +973,9 @@ async function loadYearly() {
 async function loadData() {
   await Promise.all([
     loadDaily(),
-    loadWeekly(),
-    loadZones(),
-    loadGear(),
+    window.WeeklyController?.refresh?.() ?? loadWeekly(),
+    window.ZonesController?.refresh?.() ?? loadZones(),
+    window.GearController?.refresh?.() ?? loadGear(),
     loadComponents(),
     loadYearly()
   ]);

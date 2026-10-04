@@ -127,6 +127,7 @@ if (typeof module !== "undefined" && module.exports) {
         activityTypesLoaded: false,
         resyncingActivityIds: new Set(),
         openActionsMenu: null,
+        listenersAttached: false,
     };
 
     function field(id) {
@@ -861,6 +862,11 @@ if (typeof module !== "undefined" && module.exports) {
             && left.offset === right.offset;
     }
 
+    function init() {
+        attach();
+        return true;
+    }
+
     function activate(context = {}) {
         if (!state.initialized) {
             readFromUrl();
@@ -877,11 +883,23 @@ if (typeof module !== "undefined" && module.exports) {
         syncUrl(query, context.historyMode || "replace");
         renderActiveFilters(query.filters);
         if (!queryMatches(query, state.lastResult?.query)) {
-            loadResults(query);
+            return loadResults(query);
         } else {
             setValidationMessage("");
             updatePagination(state.lastResult);
+            return Promise.resolve(true);
         }
+    }
+
+    function refresh() {
+        const query = {
+            filters: { ...state.filters },
+            sort_by: state.sortBy,
+            sort_direction: state.sortDirection,
+            limit: state.limit,
+            offset: state.offset,
+        };
+        return loadResults(query);
     }
 
     function openAdvancedSearch(values = {}) {
@@ -914,8 +932,10 @@ if (typeof module !== "undefined" && module.exports) {
     }
 
     function attach() {
+        if (state.listenersAttached) return;
         const form = field("searchForm");
         if (!form) return;
+        state.listenersAttached = true;
         loadActivityTypeOptions();
         document.addEventListener("click", event => {
             const openMenu = state.openActionsMenu;
@@ -987,7 +1007,9 @@ if (typeof module !== "undefined" && module.exports) {
     }
 
     window.SearchController = {
+        init,
         activate,
+        refresh,
         openAdvancedSearch,
         removeSearchParameters,
         refreshGearOptions() {
@@ -996,5 +1018,5 @@ if (typeof module !== "undefined" && module.exports) {
         },
         restoreFromUrl,
     };
-    attach();
+    init();
 })();

@@ -13,6 +13,9 @@ const weeklyState = {
 
 let weeklyLoadRequestId = 0;
 let weeklyLimitListenerBound = false;
+let weeklyInitialized = false;
+let weeklyLoadPromise = null;
+let weeklyLoaded = false;
 
 const weeklyDrawer = document.getElementById("weeklyDrawer");
 const weeklyDrawerContent = document.getElementById("weeklyDrawerContent");
@@ -645,7 +648,7 @@ async function saveWeeklyDrawer() {
   }
 }
 
-async function loadWeekly() {
+async function loadWeeklyData() {
   const requestId = ++weeklyLoadRequestId;
   const limit = Number(window.AppState.weeklyLimit);
 
@@ -653,26 +656,26 @@ async function loadWeekly() {
     if (window.api && typeof window.api.fetchWeekly === "function") {
       const rows = await window.api.fetchWeekly(limit);
       if (requestId !== weeklyLoadRequestId) {
-        return;
+        return false;
       }
       window.AppState.weeklyRows = rows;
     } else {
       const rows = await fetch(`/api/weekly?limit=${limit}`).then(response => response.json());
       if (requestId !== weeklyLoadRequestId) {
-        return;
+        return false;
       }
       window.AppState.weeklyRows = rows;
     }
   } catch (error) {
     console.error(error);
     if (requestId !== weeklyLoadRequestId) {
-      return;
+      return false;
     }
     window.AppState.weeklyRows = [];
   }
 
   if (requestId !== weeklyLoadRequestId) {
-    return;
+    return false;
   }
 
   renderWeeklyTable();
@@ -680,6 +683,26 @@ async function loadWeekly() {
   if (window.AppState.activeTab === "weekly") {
     renderHeaderSummary();
   }
+  return true;
+}
+
+function loadWeekly(force = true) {
+  if (!force && weeklyLoaded) {
+    return Promise.resolve(true);
+  }
+  if (!force && weeklyLoadPromise) {
+    return weeklyLoadPromise;
+  }
+  weeklyLoadPromise = loadWeeklyData()
+    .then(result => {
+      weeklyLoaded = result === true;
+      return result === true;
+    })
+    .catch(() => false)
+    .finally(() => {
+      weeklyLoadPromise = null;
+    });
+  return weeklyLoadPromise;
 }
 
 function attachWeeklyLimitSelector() {
@@ -704,7 +727,7 @@ function attachWeeklyLimitSelector() {
     if (typeof window.updateLimitPreference === "function") {
       window.updateLimitPreference("weeklyLimit", nextValue, () => {
         if (window.AppState.activeTab === "weekly" && typeof window.loadWeekly === "function") {
-          window.loadWeekly();
+          window.loadWeekly(true);
         }
       });
       return;
@@ -715,7 +738,7 @@ function attachWeeklyLimitSelector() {
       window.persistPreferences();
     }
     if (window.AppState.activeTab === "weekly" && typeof window.loadWeekly === "function") {
-      window.loadWeekly();
+      window.loadWeekly(true);
     }
   });
 
@@ -807,6 +830,10 @@ function renderWeeklyTable() {
 
 // Initialization and public interface
 function registerWeeklyEventHandlers() {
+  if (weeklyInitialized) {
+    return true;
+  }
+  weeklyInitialized = true;
   drawerCloseBtn.addEventListener("click", () => closeWeeklyDrawer());
   drawerCancelBtn.addEventListener("click", () => closeWeeklyDrawer());
   drawerSaveBtn.addEventListener("click", saveWeeklyDrawer);
@@ -817,14 +844,20 @@ function registerWeeklyEventHandlers() {
       closeWeeklyDrawer();
     }
   });
+  return true;
 }
 
 registerWeeklyEventHandlers();
 attachWeeklyLimitSelector();
 window.loadWeekly = loadWeekly;
 window.WeeklyController = {
-  load: loadWeekly,
+  init: registerWeeklyEventHandlers,
+  activate: () => loadWeekly(false),
+  refresh: () => loadWeekly(true),
+  load: () => loadWeekly(true),
   render: renderWeeklyTable,
   openDrawer: openWeeklyDrawer,
   closeDrawer: closeWeeklyDrawer,
 };
+
+window.loadWeekly = loadWeekly;

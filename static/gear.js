@@ -74,6 +74,11 @@ function shouldShowGearRow(row) {
   return true;
 }
 
+let gearInitialized = false;
+let gearLoadPromise = null;
+let gearLoaded = false;
+let gearLoadRequestId = 0;
+
 function renderGearTable() {
   const rows = window.AppState.gearRows
     .filter(row => shouldShowGearRow(row))
@@ -146,35 +151,73 @@ function bindGearFilterCheckboxes() {
   }
 }
 
-async function loadGear() {
+async function loadGearData() {
   const fixedLimit = 10000;
+  const requestId = ++gearLoadRequestId;
+  let rows = [];
 
   try {
     if (window.api && typeof window.api.fetchGearDashboard === "function") {
-      window.AppState.gearRows = await window.api.fetchGearDashboard(fixedLimit);
+      rows = await window.api.fetchGearDashboard(fixedLimit);
     } else {
       const response = await fetch(`/api/gear/dashboard?limit=${fixedLimit}`);
       if (!response.ok) {
         throw new Error(`Gear endpoint failed: ${response.status}`);
       }
-      window.AppState.gearRows = await response.json();
+      rows = await response.json();
     }
   } catch (error) {
     console.error(error);
-    window.AppState.gearRows = [];
+    rows = [];
   }
+  if (requestId !== gearLoadRequestId) {
+    return false;
+  }
+  window.AppState.gearRows = Array.isArray(rows) ? rows : [];
   renderGearTable();
   window.SearchController?.refreshGearOptions?.();
 
   if (window.AppState.activeTab === "service" && window.AppState.serviceSubtab === "gear") {
     renderHeaderSummary();
   }
+  return true;
 }
 
-bindGearFilterCheckboxes();
+function loadGear(force = true) {
+  if (!force && gearLoaded) {
+    return Promise.resolve(true);
+  }
+  if (!force && gearLoadPromise) {
+    return gearLoadPromise;
+  }
+  gearLoadPromise = loadGearData()
+    .then(result => {
+      gearLoaded = result === true;
+      return result === true;
+    })
+    .catch(() => false)
+    .finally(() => {
+      gearLoadPromise = null;
+    });
+  return gearLoadPromise;
+}
+
+function initGear() {
+  if (gearInitialized) {
+    return true;
+  }
+  gearInitialized = true;
+  bindGearFilterCheckboxes();
+  return true;
+}
+
+initGear();
 
 window.GearController = {
-  load: loadGear,
+  init: initGear,
+  activate: () => loadGear(false),
+  refresh: () => loadGear(true),
+  load: () => loadGear(true),
   render: renderGearTable,
   syncFilters: bindGearFilterCheckboxes,
 };

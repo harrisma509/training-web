@@ -6,6 +6,9 @@
  */
 let zonesLoadRequestId = 0;
 let zonesLimitListenerBound = false;
+let zonesInitialized = false;
+let zonesLoadPromise = null;
+let zonesLoaded = false;
 
 function formatPercent(value) {
   if (value === null || value === undefined || value === "") {
@@ -57,7 +60,7 @@ function zoneHeaderLabel(metric, title) {
   return `${title}%(${zoneHeaderRange(metric)})`;
 }
 
-async function loadZones() {
+async function loadZonesData() {
   const requestId = ++zonesLoadRequestId;
   const limit = Number(window.AppState.zonesLimit);
 
@@ -65,26 +68,26 @@ async function loadZones() {
     if (window.api && typeof window.api.fetchZones === "function") {
       const rows = await window.api.fetchZones(limit);
       if (requestId !== zonesLoadRequestId) {
-        return;
+        return false;
       }
       window.AppState.zonesRows = rows;
     } else {
       const rows = await fetch(`/api/zones?limit=${limit}`).then(response => response.json());
       if (requestId !== zonesLoadRequestId) {
-        return;
+        return false;
       }
       window.AppState.zonesRows = rows;
     }
   } catch (error) {
     console.error(error);
     if (requestId !== zonesLoadRequestId) {
-      return;
+      return false;
     }
     window.AppState.zonesRows = [];
   }
 
   if (requestId !== zonesLoadRequestId) {
-    return;
+    return false;
   }
 
   renderZonesTable();
@@ -92,6 +95,35 @@ async function loadZones() {
   if (window.AppState.activeTab === "zones") {
     renderHeaderSummary();
   }
+  return true;
+}
+
+function loadZones(force = true) {
+  if (!force && zonesLoaded) {
+    return Promise.resolve(true);
+  }
+  if (!force && zonesLoadPromise) {
+    return zonesLoadPromise;
+  }
+  zonesLoadPromise = loadZonesData()
+    .then(result => {
+      zonesLoaded = result === true;
+      return result === true;
+    })
+    .catch(() => false)
+    .finally(() => {
+      zonesLoadPromise = null;
+    });
+  return zonesLoadPromise;
+}
+
+function initZones() {
+  if (zonesInitialized) {
+    return true;
+  }
+  zonesInitialized = true;
+  attachZonesLimitSelector();
+  return true;
 }
 
 function attachZonesLimitSelector() {
@@ -181,9 +213,14 @@ function renderZonesTable() {
   `;
 }
 
-attachZonesLimitSelector();
+initZones();
 
 window.ZonesController = {
-  load: loadZones,
+  init: initZones,
+  activate: () => loadZones(false),
+  refresh: () => loadZones(true),
+  load: () => loadZones(true),
   render: renderZonesTable,
 };
+
+window.loadZones = loadZones;
