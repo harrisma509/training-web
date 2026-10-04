@@ -381,68 +381,7 @@
       </div>
     </section>
 
-    <section id="searchPane" class="hidden" aria-label="Activity Search">
-      <form id="searchForm" class="search-form">
-        <div class="search-primary">
-          <label class="search-query">
-            <span>Activity</span>
-            <input id="searchText" type="search" maxlength="200" autocomplete="off">
-          </label>
-          <label><span>From</span><input id="searchStartDate" type="date"></label>
-          <label><span>To</span><input id="searchEndDate" type="date"></label>
-          <button type="submit">Search</button>
-          <button id="searchClear" type="button" class="button-secondary">Reset</button>
-        </div>
-        <div id="searchValidationMessage" class="search-validation-message" role="alert" aria-live="polite"></div>
-        <details class="search-filters">
-          <summary>More filters</summary>
-          <label class="search-keep-open"><input id="searchKeepFiltersOpen" type="checkbox"> Keep filters open</label>
-          <div class="search-filter-grid">
-            <label><span>Activity type</span>
-              <select id="searchSportType">
-                <option value="">Any activity type</option>
-              </select>
-            </label>
-            <label><span>Bike / gear</span>
-              <select id="searchGearId">
-                <option value="">Any bike / gear</option>
-              </select>
-            </label>
-            <label><span>Distance min (mi)</span><input id="searchMinDistance" type="number" min="0" step="0.1"></label>
-            <label><span>Distance max (mi)</span><input id="searchMaxDistance" type="number" min="0" step="0.1"></label>
-            <label><span>Elevation min (ft)</span><input id="searchMinElevation" type="number" min="0" step="1"></label>
-            <label><span>Elevation max (ft)</span><input id="searchMaxElevation" type="number" min="0" step="1"></label>
-            <label><span>Moving time min (sec)</span><input id="searchMinDuration" type="number" min="0"
-                step="60"></label>
-            <label><span>Moving time max (sec)</span><input id="searchMaxDuration" type="number" min="0"
-                step="60"></label>
-            <label><span>Start time from</span><input id="searchStartTimeFrom" type="time"></label>
-            <label><span>Start time to</span><input id="searchStartTimeTo" type="time"></label>
-          </div>
-        </details>
-      </form>
-      <div class="search-toolbar">
-        <div class="search-result-context">
-          <span id="searchScope" class="search-scope">All history</span>
-          <div id="searchActiveFilters" class="search-active-filters" aria-label="Active filters"></div>
-          <div id="searchStatus" class="search-status" role="status" aria-live="polite"></div>
-        </div>
-        <div class="search-page-controls">
-          <label for="searchLimit">Rows</label>
-          <select id="searchLimit">
-            <option value="25">25</option>
-            <option value="50" selected>50</option>
-            <option value="100">100</option>
-          </select>
-          <span id="searchPageStatus" aria-live="polite"></span>
-          <button id="searchPrevious" type="button" class="button-secondary" disabled>Previous</button>
-          <button id="searchNext" type="button" class="button-secondary" disabled>Next</button>
-        </div>
-      </div>
-      <div class="table-wrap search-table-wrap">
-        <table id="searchResults" class="search-table"></table>
-      </div>
-    </section>
+    {% include "partials/panes/search_pane.html" %}
 
     <section id="weeklyPane" class="hidden">
       <div class="table-wrap">

@@ -119,6 +119,39 @@ def test_settings_partial_is_single_authority_at_the_original_composition_point(
     assert rendered_source.count('id="settingsDrawer"') == 1
 
 
+def test_search_partial_is_single_authority_at_the_original_composition_point() -> None:
+    root_source = (REPO_ROOT / "templates" / "index.html").read_text(encoding="utf-8")
+    partial_source = (REPO_ROOT / "templates" / "partials" / "panes" / "search_pane.html").read_text(
+        encoding="utf-8"
+    )
+    rendered_source, document = parse_index()
+
+    include = '{% include "partials/panes/search_pane.html" %}'
+    assert root_source.count(include) == 1
+    assert root_source.count('id="searchPane"') == 0
+    assert partial_source.count('id="searchPane"') == 1
+
+    main = next(element for element in by_tag(document, "main"))
+    pane_order = [child.attributes.get("id") for child in main.children if child.tag == "section"]
+    search_index = pane_order.index("searchPane")
+    assert pane_order[search_index - 1 : search_index + 2] == ["dailyPane", "searchPane", "weeklyPane"]
+
+    rendered_search = next(element for element in all_elements(document) if element.attributes.get("id") == "searchPane")
+    partial_document = parse_html(partial_source)
+    partial_search = next(element for element in all_elements(partial_document) if element.attributes.get("id") == "searchPane")
+    assert normalized_tree(rendered_search) == normalized_tree(partial_search)
+    assert rendered_source.count('id="searchPane"') == 1
+
+    search_form = next(element for element in all_elements(rendered_search) if element.attributes.get("id") == "searchForm")
+    assert search_form.tag == "form"
+    assert [element.attributes.get("type") for element in all_elements(search_form) if element.tag == "button"] == [
+        "submit",
+        "button",
+    ]
+    assert next(element for element in all_elements(rendered_search) if element.attributes.get("id") == "searchResults").tag == "table"
+    assert not any(element.attributes.get("open") is not None for element in all_elements(rendered_search) if element.tag == "details")
+
+
 def normalized_tree(element):
     return (
         element.tag,
