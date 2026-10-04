@@ -10,7 +10,7 @@ This app is responsible for:
 - gear and component status presentation
 - sync status and operational health views
 - user settings and app preferences
-- web deployment for the local NAS runtime
+- web deployment to HarrisServer
 - bounded server-side read-only PostgreSQL queries over processed data for dashboard, Search, reporting, lookup, narrative, and export workflows
 - web-owned Coach persistence and AI-provider orchestration
 
@@ -35,7 +35,7 @@ This repo owns:
 - API endpoints for dashboard data
 - frontend static assets and browser UI
 - status and sync presentation
-- NAS deployment packaging
+- deployment packaging for the HarrisServer runtime
 
 The web app should be treated as the read/query and presentation layer, not as the source of truth for ETL logic or schema evolution.
 
@@ -62,11 +62,18 @@ Typical model:
 This matters because local syntax checks are useful, but they do not validate the true production environment.
 
 ## Deployment and validation
-Use the repository's deployment flow for runtime validation:
+Use one of the repository's platform-native deployment scripts for runtime validation:
 
 ```bash
-./deploy_to_server.sh
+./deploy_to_server_from_mac.sh
 ```
+
+On Windows, run `.\deploy_training_web.ps1`; on macOS or Linux, run
+`./deploy_to_server_from_mac.sh`. Both require a clean worktree whose `HEAD`
+matches its configured upstream revision, package that exact commit, exclude
+local secrets/caches/tests/archives/databases and deployment-only files, and
+upload the same archive to `/opt/training/web`. Use `-DryRun` on Windows or
+`--dry-run` on macOS/Linux to inspect the archive without uploading it.
 
 Then validate the live app with a focused HTTP request, for example:
 
@@ -78,7 +85,7 @@ Important rules:
 - prefer targeted endpoint validation over broad testing
 - confirm HTTP status and JSON shape
 - validate the impacted route, not just the app boot
-- do not assume local Python execution is equivalent to the NAS runtime
+- do not assume local Python execution is equivalent to the HarrisServer runtime
 
 ## Security and operational safety
 - Never commit or expose `.env`, credentials, tokens, or raw API payloads

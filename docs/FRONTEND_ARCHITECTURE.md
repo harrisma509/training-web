@@ -141,8 +141,8 @@ process when the deployed root still advertises an older version.
 Ordinary code or static deployment:
 
 1. Test a clean, pushed commit.
-2. Run `deploy_training_web.ps1` for that exact commit.
-3. If runtime metadata is stale, run only `cd /opt/training/web && docker compose restart training-web`.
+2. Run `deploy_training_web.ps1` on Windows or `deploy_to_server_from_mac.sh` on macOS/Linux for that exact commit.
+3. If runtime metadata is stale, perform only the scoped `training-web` restart: `cd /opt/training/web && docker compose restart training-web`.
 4. Verify the root advertises the commit, all 43 first-party assets use it, changed-asset hashes match, cache headers are correct, and root/API health is 200.
 
 Container recreation is reserved for Compose, environment, mount, port,
@@ -150,6 +150,13 @@ network, or command configuration changes. An image rebuild is reserved for a
 Dockerfile, requirements/dependency, system-package, or image-content change.
 Routine source/static changes do not require recreation or image rebuild.
 Documentation-only changes do not require deployment or restart.
+
+The two supported scripts use the same archive include/exclude policy and
+destination. They exclude Git metadata, secrets, virtual environments, caches,
+tests, local databases, temporary archives, the retired frontend handoff, and
+deployment-only files. Both require a clean worktree and local `HEAD` equal to
+its configured upstream revision. Use the platform-native dry-run option to
+inspect the archive without upload. No supported NAS deployment path remains.
 
 ## Testing and release evidence
 

@@ -6,7 +6,7 @@ This repo is the web dashboard and browser-facing API layer for the Training Das
 Future agent work should respect that boundary and keep the web repo focused on presentation, API behavior, and deployment.
 
 ## Repo boundary
-- `training-web` owns FastAPI app setup, route registration, frontend assets, app presentation, and NAS deployment.
+- `training-web` owns FastAPI app setup, route registration, frontend assets, app presentation, and HarrisServer deployment.
 - `training-etl` owns Strava ingestion, ETL builders, database writes, summary calculations, schema SQL, and operational ETL scripts.
 - Do not modify database schema from this repo unless there is a clear, explicit coordination request.
 - Do not move ETL logic into this repo unless the task specifically asks for it.
@@ -64,19 +64,20 @@ the permanent replacement for the retired frontend handoff.
 ## Deployment policy
 The HarrisServer Docker deployment is the real runtime. Local checks are useful, but they are not enough.
 
-Typical flow:
+Typical flow from macOS or Linux:
 
 ```bash
-./deploy_to_server.sh
+./deploy_to_server_from_mac.sh
 curl -sS -D - http://192.168.1.100:8088/api/gear/dashboard?limit=5
 ```
 
-Ordinary source/static deployment uses the exact clean tested commit and the
-repository deployment script. Restart only `training-web` when startup-derived
-asset metadata is stale. Compose recreation is for Compose/environment/mount/
-port/network/command changes; image rebuild is for Dockerfile, requirements,
-system-package, or image-content changes. Documentation-only changes are not
-deployed or restarted.
+On Windows, use `.deploy_training_web.ps1`. Both scripts require a clean
+On Windows, use `.\deploy_training_web.ps1`. Both scripts require a clean
+worktree whose `HEAD` matches its configured upstream revision, package the
+same exact-commit archive, and support `--dry-run`/`-DryRun` without upload.
+Compose/environment/mount/port/network/command changes; image rebuild is for
+Dockerfile, requirements, system-package, or image-content changes.
+Documentation-only changes are not deployed or restarted.
 
 When a route or app-registration change is made, validate the live endpoint after deployment.
 
@@ -120,13 +121,13 @@ Every task should include:
 
 Do not claim validation that was not actually performed.
 
-## NAS access rule
+## Remote access rule
 Do not perform normal implementation, validation, or debugging via SSH unless the user explicitly requests it.
 
 Preferred sequence:
 1. local code review
 2. local syntax validation
-3. deploy to NAS runtime
+3. deploy to HarrisServer runtime
 4. targeted live endpoint check
 5. browser validation if required
 

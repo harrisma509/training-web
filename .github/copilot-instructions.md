@@ -57,11 +57,15 @@ Do not change database schema from this repo unless explicitly requested.
 
 ## Deployment
 
-Deploy with:
+Deploy from macOS or Linux with:
 
 ```bash
-./deploy_to_server.sh
+./deploy_to_server_from_mac.sh
 ```
+
+On Windows, use `.\deploy_training_web.ps1`. Both supported scripts require
+a clean worktree whose `HEAD` equals its configured upstream revision, package
+the same exact commit, and support a local dry run without upload.
 
 After deploy, validate live endpoints with `curl`.
 
@@ -120,7 +124,7 @@ curl -sS -D - http://192.168.1.100:8088/api/gear/dashboard?limit=5
 For backend changes:
 
 1. Run `python -m py_compile` on touched Python files.
-2. Deploy with `./deploy_to_server.sh`.
+ 2. Deploy with the platform-native supported deployment script.
 3. Test affected live endpoint with `curl`.
 4. Confirm HTTP 200.
 5. Confirm JSON shape.

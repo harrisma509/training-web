@@ -35,6 +35,10 @@ try {
         if ($LASTEXITCODE -ne 0 -or $assetVersion -notmatch '^[0-9a-f]{40}$') {
             throw "Unable to determine the deployed Git revision."
         }
+        $upstreamVersion = (git.exe rev-parse --verify '@{u}').Trim()
+        if ($LASTEXITCODE -ne 0 -or $upstreamVersion -ne $assetVersion) {
+            throw "Deployment requires HEAD to equal its configured upstream revision."
+        }
         if (Test-Path $VersionMetadataPath) {
             throw "Deployment metadata path already exists: $VersionMetadataPath"
         }
@@ -72,13 +76,17 @@ try {
             --exclude="__pycache__" `
             --exclude="*.pyc" `
             --exclude=".DS_Store" `
+            --exclude="*.db" `
+            --exclude="*.sqlite" `
+            --exclude="*.sqlite3" `
+            --exclude="*.tar" `
+            --exclude="*.tar.gz" `
+            --exclude="*.zip" `
+            --exclude="tmp" `
             --exclude="tests" `
             --exclude="AI_DEV_GUIDE.md" `
             --exclude="README.md" `
-            --exclude="deploy_to_nas_from_mac.sh" `
             --exclude="deploy_to_server_from_mac.sh" `
-            --exclude="deploy_to_server.sh" `
-            --exclude="deploy_to_server.ps1" `
             --exclude="deploy_training_web.ps1" `
             .
         if ($LASTEXITCODE -ne 0) {
