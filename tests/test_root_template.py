@@ -214,6 +214,78 @@ def test_charts_partial_is_single_authority_at_the_original_composition_point() 
     )
 
 
+def test_service_partial_is_single_authority_at_the_original_composition_point() -> None:
+    root_source = (REPO_ROOT / "templates" / "index.html").read_text(encoding="utf-8")
+    partial_source = (REPO_ROOT / "templates" / "partials" / "panes" / "service_pane.html").read_text(
+        encoding="utf-8"
+    )
+    rendered_source, document = parse_index()
+
+    include = '{% include "partials/panes/service_pane.html" %}'
+    assert root_source.count(include) == 1
+    assert root_source.count('id="servicePane"') == 0
+    assert partial_source.count('id="servicePane"') == 1
+
+    main = next(element for element in by_tag(document, "main"))
+    pane_order = [child.attributes.get("id") for child in main.children if child.tag == "section"]
+    service_index = pane_order.index("servicePane")
+    assert pane_order[service_index - 1 : service_index + 2] == ["zonesPane", "servicePane", "yearlyPane"]
+
+    rendered_service = by_id(document, "servicePane")
+    partial_document = parse_html(partial_source)
+    partial_service = by_id(partial_document, "servicePane")
+    assert normalized_tree(rendered_service) == normalized_tree(partial_service)
+    assert rendered_source.count('id="servicePane"') == 1
+
+    service_tabs = [element for element in all_elements(rendered_service) if element.attributes.get("role") == "tab"]
+    assert [
+        (element.attributes.get("id"), element.attributes.get("aria-selected"), element.attributes.get("aria-controls"), element.attributes.get("tabindex"))
+        for element in service_tabs
+    ] == [
+        ("componentsSubtab", "true", "componentsPane", "0"),
+        ("gearSubtab", "false", "gearPane", "-1"),
+    ]
+
+    service_panels = [element for element in all_elements(rendered_service) if element.attributes.get("role") == "tabpanel"]
+    assert [element.attributes.get("id") for element in service_panels] == ["gearPane", "componentsPane"]
+    assert [element.attributes.get("aria-labelledby") for element in service_panels] == ["gearSubtab", "componentsSubtab"]
+    assert "hidden" in classes(by_id(rendered_service, "gearPane"))
+    assert "hidden" not in classes(by_id(rendered_service, "componentsPane"))
+
+    assert [element.attributes.get("id") for element in all_elements(rendered_service) if element.tag == "table"] == [
+        "gearTable",
+        "componentsTable",
+    ]
+    assert [element.attributes.get("id") for element in all_elements(rendered_service) if element.attributes.get("id") in {
+        "hideShoesCheckbox",
+        "hideRetiredCheckbox",
+        "componentsControls",
+        "componentsBikeSelect",
+        "componentsSummary",
+        "componentsAddButton",
+        "componentsTableWrap",
+    }] == [
+        "hideShoesCheckbox",
+        "hideRetiredCheckbox",
+        "componentsControls",
+        "componentsBikeSelect",
+        "componentsSummary",
+        "componentsAddButton",
+        "componentsTableWrap",
+    ]
+    for class_name in ("gear-header-row", "gear-header-main", "gear-title", "gear-subtitle"):
+        assert sum(class_name in classes(element) for element in all_elements(rendered_service)) == 2
+    assert [element.tag for element in all_elements(rendered_service) if element.tag == "form"] == []
+
+    scripts = [asset_path(element.attributes.get("src")) for element in by_tag(document, "script")]
+    assert scripts.index("/static/gear.js") < scripts.index("/static/components.js")
+    assert not any(
+        attribute.lower().startswith("on")
+        for element in all_elements(rendered_service)
+        for attribute in element.attributes
+    )
+
+
 def normalized_tree(element):
     return (
         element.tag,
