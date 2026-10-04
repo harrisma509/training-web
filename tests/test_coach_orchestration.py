@@ -459,7 +459,7 @@ class CoachSettingsTests(unittest.TestCase):
         with patch("routes.coach_settings.db_conn", side_effect=RuntimeError("hidden database error")):
             result = get_ai_coach_settings()
         self.assertEqual(result.status_code, 503)
-        self.assertEqual(result.content["detail"], "AI Coach settings are unavailable.")
+        self.assertEqual(json.loads(result.body.decode("utf-8"))["detail"], "AI Coach settings are unavailable.")
 
     def test_daily_history_validation_rejects_malformed_values(self):
         base = {

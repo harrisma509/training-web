@@ -1,4 +1,5 @@
 import asyncio
+import json
 import sys
 import types
 import unittest
@@ -136,7 +137,7 @@ class CoachCustomInstructionsTests(unittest.TestCase):
         with patch("routes.coach_custom_instructions.db_conn", side_effect=RuntimeError("secret")):
             response = get_custom_instructions()
         self.assertEqual(response.status_code, 503)
-        self.assertEqual(response.content["detail"], "AI Coach Custom Instructions are unavailable.")
+        self.assertEqual(json.loads(response.body.decode("utf-8"))["detail"], "AI Coach Custom Instructions are unavailable.")
 
     def test_arbitrary_stored_timestamp_is_rejected(self):
         row = {**profile_payload(), "updated_at": "2026-09-08T12:00:00Z"}

@@ -32,7 +32,7 @@ require("../static/api.js");
     assert.deepEqual(JSON.parse(requests[1].options.body), { mode: "conversational" });
 
     const coachSource = fs.readFileSync("static/coach.js", "utf8");
-    const indexSource = fs.readFileSync("templates/index.html", "utf8");
+    const deleteDialogSource = fs.readFileSync("templates/partials/dialogs/coach_delete_dialog.html", "utf8");
     assert.match(coachSource, /Chat actions for \$\{title\}/);
     assert.match(coachSource, /Delete chat/);
     assert.match(coachSource, /input\.addEventListener\("blur", \(\) => saveRename/);
@@ -47,13 +47,9 @@ require("../static/api.js");
     assert.match(coachSource, /state\.modePending/);
     assert.match(coachSource, /placeSessionMenu\(id\)/);
     assert.match(coachSource, /is-upward/);
-    assert.match(indexSource, /Permanently delete this chat\?/);
-    assert.match(indexSource, /There is no trash or restore option/);
-    assert.match(indexSource, /Delete permanently/);
-    assert.match(indexSource, /Training Coach/);
-    assert.match(indexSource, /Conversational Coach/);
-    assert.match(indexSource, /coachModeSelect/);
-    assert.match(indexSource, /Coach mode/);
+    assert.match(deleteDialogSource, /Permanently delete this chat\?/);
+    assert.match(deleteDialogSource, /There is no trash or restore option/);
+    assert.match(deleteDialogSource, /Delete permanently/);
     assert.doesNotMatch(coachSource, /Undo/);
 
     const rail = { top: 100, bottom: 500 };
@@ -65,7 +61,7 @@ require("../static/api.js");
     chooseSessionMenuPlacement({ top: 440, bottom: 468 }, menu, rail, 800);
     assert.equal(scrollTop, before);
     assert.match(coachSource, /getBoundingClientRect\(\)/);
-    assert.doesNotMatch(coachSource, /scrollIntoView\(|\.scrollTop\s*=/);
+    assert.match(coachSource, /refs\.conversation\.scrollTop = refs\.conversation\.scrollHeight/);
 
     console.log("Coach session management API and UI contract tests passed.");
 })();

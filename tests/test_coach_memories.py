@@ -1,4 +1,5 @@
 import asyncio
+import json
 import sys
 import types
 import unittest
@@ -544,7 +545,7 @@ class MemoryRouteTests(unittest.TestCase):
         with patch("routes.coach.db_conn", return_value=connection):
             result = delete_coach_session("1")
         self.assertEqual(result.status_code, 503)
-        self.assertEqual(result.content, {"detail": "Unable to delete Coach session."})
+        self.assertEqual(json.loads(result.body.decode("utf-8")), {"detail": "Unable to delete Coach session."})
         self.assertFalse(hasattr(connection, "committed"))
 
     def test_list_returns_derived_statuses(self):

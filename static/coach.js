@@ -79,6 +79,9 @@
         sessionStatusMessage: "",
         historyRailCollapsed: false,
         overflowMenuOpen: false,
+        sessionsLoadPromise: null,
+        sessionsLoaded: false,
+        activated: false,
     };
 
     const refs = {
@@ -1035,30 +1038,40 @@
         refs.loading.classList.add("hidden");
     }
 
-    async function loadSessions(preferredId = "") {
-        state.sessionsError = "";
-        state.sessionsLoading = true;
-        renderSessions();
-        try {
-            const payload = await window.api.fetchCoachSessions();
-            state.sessions = sortSessions(Array.isArray(payload) ? payload : (payload.sessions || []));
-            const stored = preferredId || window.AppState.coachSessionId || "";
-            const selected = state.sessions.find(session => sessionId(session) === text(stored)) || state.sessions[0];
-            if (selected) await selectSession(sessionId(selected), true);
-            else {
-                state.selectedSessionId = "";
-                state.session = null;
-                state.usage = null;
-                renderCoachMode();
-                renderSessions();
-                renderConversation();
-            }
-        } catch (error) {
-            state.sessionsError = "Unable to load conversations. Try again.";
-        } finally {
-            state.sessionsLoading = false;
+    async function loadSessions(preferredId = "", force = false) {
+        if (state.sessionsLoadPromise) return state.sessionsLoadPromise;
+        if (!force && state.sessionsLoaded) return true;
+
+        state.sessionsLoadPromise = (async () => {
+            state.sessionsError = "";
+            state.sessionsLoading = true;
             renderSessions();
-        }
+            try {
+                const payload = await window.api.fetchCoachSessions();
+                state.sessions = sortSessions(Array.isArray(payload) ? payload : (payload.sessions || []));
+                const stored = preferredId || window.AppState.coachSessionId || "";
+                const selected = state.sessions.find(session => sessionId(session) === text(stored)) || state.sessions[0];
+                if (selected) await selectSession(sessionId(selected), true);
+                else {
+                    state.selectedSessionId = "";
+                    state.session = null;
+                    state.usage = null;
+                    renderCoachMode();
+                    renderSessions();
+                    renderConversation();
+                }
+                state.sessionsLoaded = true;
+                return true;
+            } catch (error) {
+                state.sessionsError = "Unable to load conversations. Try again.";
+                return false;
+            } finally {
+                state.sessionsLoading = false;
+                renderSessions();
+                state.sessionsLoadPromise = null;
+            }
+        })();
+        return state.sessionsLoadPromise;
     }
 
     async function selectSession(id, silent = false) {
@@ -1189,82 +1202,111 @@
         if (state.previousFocus && typeof state.previousFocus.focus === "function") state.previousFocus.focus();
     }
 
-    function activate() {
+    function initializeCoachFeature() {
         if (state.initialized) return;
         state.initialized = true;
-        loadSessions();
+        refs.newChat.addEventListener("click", createSession);
+        refs.composer.addEventListener("submit", submitMessage);
+        refs.modeSelect.addEventListener("change", updateCoachMode);
+        refs.input.addEventListener("input", resizeComposer);
+        refs.input.addEventListener("keydown", event => {
+            if (event.key === "Enter" && !event.shiftKey) {
+                event.preventDefault();
+                refs.composer.requestSubmit();
+            }
+        });
+        refs.usageToggle.addEventListener("click", () => {
+            closeOverflowMenu();
+            const expanded = refs.usageToggle.getAttribute("aria-expanded") === "true";
+            setUsagePanelOpen(!expanded);
+        });
+        refs.usageClose.addEventListener("click", () => setUsagePanelOpen(false, true));
+        refs.drawerOpen.addEventListener("click", openDrawer);
+        refs.drawerClose.addEventListener("click", closeDrawer);
+        refs.drawerBackdrop.addEventListener("click", closeDrawer);
+        refs.historyCollapse.addEventListener("click", () => setHistoryRailCollapsed(true));
+        refs.historyRestore.addEventListener("click", () => setHistoryRailCollapsed(false));
+        refs.overflowToggle.addEventListener("click", toggleOverflowMenu);
+        refs.deleteCancel.addEventListener("click", () => closeDeleteDialog(true));
+        refs.deleteConfirm.addEventListener("click", confirmDelete);
+        refs.deleteDialog.addEventListener("click", event => {
+            if (event.target.dataset.coachDeleteCancel === "true" && !state.deletePending) closeDeleteDialog(true);
+        });
+        refs.deleteDialog.addEventListener("keydown", event => {
+            if (event.key !== "Tab" || state.deletePending) return;
+            const focusable = [refs.deleteCancel, refs.deleteConfirm].filter(button => !button.disabled);
+            if (!focusable.length) return;
+            const current = focusable.indexOf(document.activeElement);
+            const next = event.shiftKey
+                ? (current <= 0 ? focusable.length - 1 : current - 1)
+                : (current === focusable.length - 1 ? 0 : current + 1);
+            event.preventDefault();
+            focusable[next].focus();
+        });
+        document.addEventListener("keydown", event => {
+            if (event.key === "Escape" && state.overflowMenuOpen) {
+                closeOverflowMenu(true);
+                return;
+            }
+            if (event.key !== "Escape") return;
+            if (refs.usageToggle.getAttribute("aria-expanded") === "true") {
+                setUsagePanelOpen(false, true);
+                return;
+            }
+            if (state.deleteSessionId) {
+                if (!state.deletePending) closeDeleteDialog(true);
+                return;
+            }
+            if (state.sessionMenuId) {
+                const id = state.sessionMenuId;
+                state.sessionMenuId = "";
+                renderSessions();
+                focusSessionActions(id);
+                return;
+            }
+            if (state.drawerOpen) closeDrawer();
+        });
+        document.addEventListener("click", event => {
+            if (state.overflowMenuOpen && !event.target.closest(".coach-overflow-wrap")) closeOverflowMenu();
+            if (state.sessionMenuId && !event.target.closest(".coach-session-actions")) {
+                state.sessionMenuId = "";
+                renderSessions();
+            }
+        });
+
+        window.addEventListener("beforeunload", stopLoadingStages);
+        setHistoryRailCollapsed(readHistoryRailPreference(), false);
     }
 
-    refs.newChat.addEventListener("click", createSession);
-    refs.composer.addEventListener("submit", submitMessage);
-    refs.modeSelect.addEventListener("change", updateCoachMode);
-    refs.input.addEventListener("input", resizeComposer);
-    refs.input.addEventListener("keydown", event => {
-        if (event.key === "Enter" && !event.shiftKey) {
-            event.preventDefault();
-            refs.composer.requestSubmit();
-        }
-    });
-    refs.usageToggle.addEventListener("click", () => {
-        closeOverflowMenu();
-        const expanded = refs.usageToggle.getAttribute("aria-expanded") === "true";
-        setUsagePanelOpen(!expanded);
-    });
-    refs.usageClose.addEventListener("click", () => setUsagePanelOpen(false, true));
-    refs.drawerOpen.addEventListener("click", openDrawer);
-    refs.drawerClose.addEventListener("click", closeDrawer);
-    refs.drawerBackdrop.addEventListener("click", closeDrawer);
-    refs.historyCollapse.addEventListener("click", () => setHistoryRailCollapsed(true));
-    refs.historyRestore.addEventListener("click", () => setHistoryRailCollapsed(false));
-    refs.overflowToggle.addEventListener("click", toggleOverflowMenu);
-    refs.deleteCancel.addEventListener("click", () => closeDeleteDialog(true));
-    refs.deleteConfirm.addEventListener("click", confirmDelete);
-    refs.deleteDialog.addEventListener("click", event => {
-        if (event.target.dataset.coachDeleteCancel === "true" && !state.deletePending) closeDeleteDialog(true);
-    });
-    refs.deleteDialog.addEventListener("keydown", event => {
-        if (event.key !== "Tab" || state.deletePending) return;
-        const focusable = [refs.deleteCancel, refs.deleteConfirm].filter(button => !button.disabled);
-        if (!focusable.length) return;
-        const current = focusable.indexOf(document.activeElement);
-        const next = event.shiftKey
-            ? (current <= 0 ? focusable.length - 1 : current - 1)
-            : (current === focusable.length - 1 ? 0 : current + 1);
-        event.preventDefault();
-        focusable[next].focus();
-    });
-    document.addEventListener("keydown", event => {
-        if (event.key === "Escape" && state.overflowMenuOpen) {
-            closeOverflowMenu(true);
-            return;
-        }
-        if (event.key !== "Escape") return;
-        if (refs.usageToggle.getAttribute("aria-expanded") === "true") {
-            setUsagePanelOpen(false, true);
-            return;
-        }
-        if (state.deleteSessionId) {
-            if (!state.deletePending) closeDeleteDialog(true);
-            return;
-        }
-        if (state.sessionMenuId) {
-            const id = state.sessionMenuId;
-            state.sessionMenuId = "";
-            renderSessions();
-            focusSessionActions(id);
-            return;
-        }
-        if (state.drawerOpen) closeDrawer();
-    });
-    document.addEventListener("click", event => {
-        if (state.overflowMenuOpen && !event.target.closest(".coach-overflow-wrap")) closeOverflowMenu();
-        if (state.sessionMenuId && !event.target.closest(".coach-session-actions")) {
-            state.sessionMenuId = "";
-            renderSessions();
-        }
-    });
+    const coachController = {
+        init: initializeCoachFeature,
+        activate(context = {}) {
+            initializeCoachFeature();
+            if (state.activated) return Promise.resolve(true);
+            state.activated = true;
+            return loadSessions(context.sessionId || "");
+        },
+        refresh() {
+            initializeCoachFeature();
+            state.sessionsLoaded = false;
+            return loadSessions("", true);
+        },
+        render: renderMarkdown,
+    };
 
-    window.addEventListener("beforeunload", stopLoadingStages);
-    setHistoryRailCollapsed(readHistoryRailPreference(), false);
-    window.CoachController = { activate, renderMarkdown };
+    window.TrainingApp = window.TrainingApp || {
+        state: window.AppState,
+        api: window.api,
+        utils: window.AppUtils,
+        features: {},
+    };
+    window.TrainingApp.features = window.TrainingApp.features || {};
+    window.TrainingApp.registerFeature = window.TrainingApp.registerFeature || function (name, feature) {
+        if (!feature || typeof feature !== "object") return;
+        if (!Object.prototype.hasOwnProperty.call(window.TrainingApp.features, name)) {
+            window.TrainingApp.features[name] = feature;
+        }
+    };
+    window.TrainingApp.registerFeature("coach", coachController);
+    window.CoachController = coachController;
 })();

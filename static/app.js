@@ -161,10 +161,6 @@ if (window.ComponentsController) {
 if (window.SyncController) {
   window.TrainingApp.registerFeature("sync", window.SyncController);
 }
-if (window.CoachController) {
-  window.TrainingApp.registerFeature("coach", window.CoachController);
-}
-
 const planTab = document.getElementById("planTab");
 const goalsTab = document.getElementById("goalsTab");
 const kpisTab = document.getElementById("kpisTab");

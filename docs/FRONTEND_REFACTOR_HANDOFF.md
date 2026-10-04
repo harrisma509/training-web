@@ -54,7 +54,7 @@ decision changes it:
 | Zones | `zones.js` / `TrainingApp.features.zones` | `init` binds the limit selector; startup preload and activation share in-flight work | Same-key activation reuses loaded rows; `refresh` forces reload | Zones request ID and coalesced loader | No app-level deactivation |
 | Service / Gear | `components.js`, `gear.js` | Components remains F21 lifecycle-owned; Gear `init` binds filters and its startup preload is coalesced with activation | Gear activation reuses loaded rows; `refresh` forces reload | Components F21 guards; Gear request ID and stale-response protection | Component menus/drawers close locally; no tab deactivation hook |
 | Yearly | `yearly.js` / `TrainingApp.features.yearly` | Startup preload and activation share in-flight work | Same-key activation reuses loaded rows; `refresh` forces reload; view selection delegates to the feature | Yearly request coalescing and freshness guard | Commentary drawer uses `TrainingApp.TransientSurface`; Settings maintenance remains separate |
-| Coach | `coach.js` / `CoachController` | Not loaded by `loadData()` | `showTab()` calls `activate` once | Session load token; interval only during response stages | Local close methods; loading interval stops on completion and `beforeunload`, but no tab deactivation hook |
+| Coach | `coach.js` / `TrainingApp.features.coach` | Lazy; registry `init` wires listeners and first activation loads sessions | Registry `activate` is idempotent; `refresh` forces the session-list reload | Session load token, keyed session-load promise, and response-stage interval | Coach owns menus, delete dialog, mobile drawer, response stages, and `beforeunload` timer cleanup; no tab deactivation hook |
 | Sync status | `sync.js` / `SyncController` | `loadData()` calls status load and app starts a 60-second interval | Not tab-scoped | None for the interval's individual fetches | Interval is app-global and has no teardown |
 | Settings | `settings.js` / `SettingsController` | Module wiring is immediate; drawer data loads on demand | Drawer opens locally | Feature-local loading flags/promises | Drawer close is local; no app-level deactivation |
 
@@ -137,6 +137,29 @@ cleanup listener. It self-registers one stable controller at
 remain compatibility aliases for the existing feature-local and tracked
 consumer surface. `app.js` retains only generic route parsing, pane
 coordination, and the registry-owned Daily preload call.
+
+F32 consolidated the active Coach runtime in `coach.js`. The feature now owns
+lazy session-list loading, selected-session and usage state, message rendering,
+response-stage timing, mobile session drawer state, history and overflow menus,
+delete confirmation, focus behavior, and `beforeunload` timer cleanup. It
+self-registers one stable controller at `TrainingApp.features.coach` with
+idempotent `init`, lazy `activate`, and explicit `refresh` methods. The
+retained `window.CoachController` name aliases that controller for the tracked
+compatibility surface; `app.js` no longer registers or implements Coach
+business logic. Session loading is protected by one in-flight promise and
+session selection retains its request-token stale-response guard.
+
+F32 also repaired four stale test contracts without changing Coach runtime
+behavior. Three Python tests now inspect FastAPI `JSONResponse.body` through
+decoded JSON rather than the unsupported `.content` attribute. The Node
+session-management contract now reads the included delete-dialog partial and
+asserts the existing automatic conversation scrolling behavior. The current
+delete text, focus trap, pending state, responsive drawer, menus, and
+compatibility alias remain unchanged.
+
+The next bounded ownership debt is the app-global Sync status interval and its
+remaining shell-level lifecycle policy. F33 should address that only after a
+fresh consumer inventory; no F33 work is included here.
 
 ## Listener and async ownership
 
