@@ -136,6 +136,10 @@ assert.match(webGuide, /Ordinary source\/static changes use the platform-native 
 assert.match(webGuide, /Recreate containers for Compose/);
 assert.match(webGuide, /Rebuild the image for\s+Dockerfile/);
 assert.match(webGuide, /Documentation-only changes are not deployed or restarted/);
+assert.match(webReadme, /After deployment, verify the rendered root advertises the expected full commit/);
+assert.match(webInstructions, /After deployment, verify the rendered root advertises the expected full commit/);
+assert.match(webReadme, /startup-derived commit or asset metadata remains stale[\s\S]*`training-web`/);
+assert.match(webInstructions, /startup-derived commit or asset metadata remains stale[\s\S]*`training-web`/);
 assert.match(webInstructions, /platform-native repository-local interpreter documented in `docs\/TESTING_GUIDE\.md`/);
 assert.match(etlInstructions, /platform-native repository-local interpreter documented in `docs\/TESTING_GUIDE\.md`/);
 assert.doesNotMatch(etlReadme, /(^|[\s`])python src[\\/]resync_activity\.py/m);

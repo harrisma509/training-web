@@ -74,12 +74,15 @@ curl -sS -D - http://192.168.1.100:8088/api/gear/dashboard?limit=5
 On Windows, use `.\deploy_training_web.ps1`. Both scripts require a clean
 worktree whose `HEAD` matches its configured upstream revision, package the
 same exact-commit archive, and support `--dry-run`/`-DryRun` without upload.
-Ordinary source/static changes use the platform-native deployment script. If
-startup-derived commit or asset metadata is stale, restart only the scoped
-`training-web` application process. Recreate containers for Compose,
-environment, mount, port, network, or command changes. Rebuild the image for
+Ordinary source/static changes use the platform-native deployment script.
+Recreate containers for Compose, environment, mount, port, network, or command
+changes. Rebuild the image for
 Dockerfile, requirements or dependency, system-package, or image-content
 changes.
+After deployment, verify the rendered root advertises the expected full commit.
+If startup-derived commit or asset metadata remains stale, restart only
+`training-web`, then repeat health, version, cache, and changed-asset hash
+verification.
 Documentation-only changes are not deployed or restarted.
 
 When a route or app-registration change is made, validate the live endpoint after deployment.

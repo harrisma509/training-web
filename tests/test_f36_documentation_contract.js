@@ -73,8 +73,19 @@ assert.doesNotMatch(architecture, /F35 runtime remains deployed/);
 assert.doesNotMatch(architecture, /all 43 first-party assets/);
 assert.equal(webConstitution, etlConstitution, "repository constitutions must remain byte-identical");
 assert.match(etlInstructions, /Feature documents define detailed contracts and current behavior\.\r?\n\r?\n# GitHub Copilot Instructions for training-etl/);
-assert.match(personalization, /conversation “remember this” action/);
 assert.match(personalization, /Generic words such as/);
+assert.match(personalization, /conversation \*\*"remember this"\*\*/);
+assert.match(personalization, /Generic words such as `park`, `hard`,/);
+assert.match(personalization, /`ride`, or `bike` do not independently activate narrow scopes or match a\s+memory title\./);
+assert.match(webInstructions, /^# GitHub Copilot Instructions for training-web$/m);
+assert.match(etlInstructions, /^# GitHub Copilot Instructions for training-etl$/m);
+assert.doesNotMatch(webInstructions, /behavior\.\r?\n# GitHub Copilot Instructions for training-web/);
+assert.doesNotMatch(etlInstructions, /behavior\.\r?\n# GitHub Copilot Instructions for training-etl/);
+for (const guidance of [readme, webInstructions, aiGuide]) {
+    assert.match(guidance, /After deployment, verify the rendered root advertises the expected full commit/);
+    assert.match(guidance, /startup-derived commit or asset metadata remains stale, restart only[\s\S]*`training-web`/);
+    assert.match(guidance, /Documentation-only changes are not deployed or restarted/);
+}
 assert.doesNotMatch([readme, aiGuide, webInstructions, etlReadme, etlInstructions].join("\n"), /(^|[\s`])python3? -m (pytest|py_compile)\b/m);
 assert.doesNotMatch([readme, aiGuide, webInstructions, etlReadme, etlInstructions].join("\n"), /activate the repository virtual environment/);
 

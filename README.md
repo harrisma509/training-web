@@ -75,6 +75,11 @@ local secrets/caches/tests/archives/databases and deployment-only files, and
 upload the same archive to `/opt/training/web`. Use `-DryRun` on Windows or
 `--dry-run` on macOS/Linux to inspect the archive without uploading it.
 
+After deployment, verify the rendered root advertises the expected full commit.
+If startup-derived commit or asset metadata remains stale, restart only
+`training-web`, then repeat health, version, cache, and changed-asset hash
+verification. Documentation-only changes are not deployed or restarted.
+
 Then validate the live app with a focused HTTP request, for example:
 
 ```bash

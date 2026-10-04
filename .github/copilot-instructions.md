@@ -68,6 +68,11 @@ a clean worktree whose `HEAD` equals its configured upstream revision, package
 the same exact commit, and support `-DryRun` on Windows or `--dry-run` on
 macOS/Linux to inspect the archive without uploading it.
 
+After deployment, verify the rendered root advertises the expected full commit.
+If startup-derived commit or asset metadata remains stale, restart only
+`training-web`, then repeat health, version, cache, and changed-asset hash
+verification. Documentation-only changes are not deployed or restarted.
+
 After deploy, validate live endpoints with `curl`.
 
 Example:

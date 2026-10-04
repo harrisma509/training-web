@@ -59,8 +59,8 @@ not Durable Memories and are never routed into memory storage.
 
 The Settings > AI Coach editor supports list, create, edit, deactivate, and
 reactivate. There is no application hard-delete route, automatic extraction,
-silent write, or conversation “remember this” action. Management operations use
-parameterized SQL, short transactions, and make no provider call.
+silent write, or conversation **"remember this"** action. Management operations
+use parameterized SQL, short transactions, and make no provider call.
 
 Approved types are `medical`, `safety`, `training_goal`, `schedule`, `event`,
 `equipment`, `preference`, and `lesson_learned`. Approved scopes are
@@ -97,8 +97,8 @@ user-established topic. Strong evidence from the question is considered before
 recent user-authored history, then threshold-qualified older user history when
 recent user context cannot resolve ambiguity, along with explicit current-week
 flags. Recent bike or activity entities are supporting evidence only; they
-cannot alone activate normal memories. Generic words such as “park,” “hard,”
-“ride,” or “bike” do not independently activate narrow scopes or match a
+cannot alone activate normal memories. Generic words such as `park`, `hard`,
+`ride`, or `bike` do not independently activate narrow scopes or match a
 memory title. Memory text itself is not scanned for relevance.
 
 Always activate the `all_training` routing scope, but do not treat it as a
