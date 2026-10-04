@@ -299,8 +299,8 @@ function statusPill(value) {
   }
   return `<span class="pill status-${status}">${status}</span>`;
 }
-  window.TrainingApp?.features?.sync?.init?.();
-  window.TrainingApp?.features?.sync?.refresh?.();
+window.TrainingApp?.features?.sync?.init?.();
+window.TrainingApp?.features?.sync?.refresh?.();
 function showServiceSubtab(subtab) {
   const normalizedSubtab = ["components", "gear"].includes(subtab) ? subtab : "components";
   persistPreferences();

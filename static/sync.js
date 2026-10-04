@@ -148,13 +148,13 @@
       const result = window.api && typeof window.api.requestSync === "function"
         ? await window.api.requestSync()
         : await fetch("/api/sync-request", {
-            method: "POST"
-          }).then(async response => {
-            if (!response.ok) {
-              throw new Error("Sync request failed");
-            }
-            return response.json();
-          });
+          method: "POST"
+        }).then(async response => {
+          if (!response.ok) {
+            throw new Error("Sync request failed");
+          }
+          return response.json();
+        });
 
       syncNowBtn.textContent = result.created ? "Requested" : "Already Queued";
 
