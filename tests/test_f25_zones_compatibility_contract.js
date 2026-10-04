@@ -87,7 +87,7 @@ async function main() {
     assert.doesNotMatch(appSource, /window\.loadPlan/);
     assert.doesNotMatch(gearSource, /window\.GearController\s*=/);
     assert.match(gearSource, /window\.TrainingApp\.registerFeature\("gear", gearController\);/);
-    assert.match(weeklySource, /window\.WeeklyController\s*=/);
+    assert.doesNotMatch(weeklySource, /window\.WeeklyController\s*=/);
     assert.match(appSource, /window\.TrainingApp = window\.TrainingApp \|\| \{/);
 
     const harness = createHarness();

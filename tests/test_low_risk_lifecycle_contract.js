@@ -10,7 +10,7 @@ const candidates = [
     ["search.js", "searchController", "loadResults"],
     ["zones.js", "zonesController", "loadZones"],
     ["gear.js", "gearController", "loadGear"],
-    ["weekly.js", "WeeklyController", "loadWeekly"],
+    ["weekly.js", "weeklyController", "loadWeekly"],
 ];
 
 for (const [file, controller, loader] of candidates) {

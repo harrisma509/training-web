@@ -157,9 +157,6 @@ if (window.ChartsController) {
 if (window.DailyController) {
   window.TrainingApp.registerFeature("daily", window.DailyController);
 }
-if (window.WeeklyController) {
-  window.TrainingApp.registerFeature("weekly", window.WeeklyController);
-}
 if (window.SettingsController) {
   window.TrainingApp.registerFeature("settings", window.SettingsController);
 }
@@ -959,7 +956,7 @@ async function loadYearly() {
 async function loadData() {
   await Promise.all([
     loadDaily(),
-    window.WeeklyController?.refresh?.() ?? loadWeekly(),
+    window.TrainingApp?.features?.weekly?.refresh?.(),
     window.TrainingApp?.features?.zones?.refresh?.(),
     window.TrainingApp?.features?.gear?.refresh?.(),
     loadComponents(),

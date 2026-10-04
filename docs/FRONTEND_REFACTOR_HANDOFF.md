@@ -2,7 +2,7 @@
 
 ## Status and scope
 
-This document records the current `training-web` frontend architecture through F27.
+This document records the current `training-web` frontend architecture through F28.
 It is an architecture handoff, not an approval to introduce a framework or
 rewrite the dashboard. The current implementation is server-rendered HTML
 with vanilla JavaScript modules, modular CSS, shared `AppState`, and a shared
@@ -50,7 +50,7 @@ decision changes it:
 | Charts | `charts.js` / `ChartsController` | `loadData()` does not load it; category activation loads selected data | `showChartsCategory()` loads selected category | Per-data request IDs and chart destruction | Charts are destroyed when their replacement/status path requires it; no tab deactivation hook |
 | Daily | `daily.js` / `DailyController` | `loadData()` calls `load` | `popstate` may call `load` for an exact date; no normal tab hook | Daily request ID; narrative request ID/cache | Local menus/dialogs/drawers close locally; no tab deactivation hook |
 | Search | `search.js` / `TrainingApp.features.search` | `init` wires listeners; activation loads the current URL-backed query when needed | Same query preserves results; `refresh` reloads the current query | Search request ID; stale-result preservation | Dynamic action menus close locally; no general deactivate hook |
-| Weekly | `weekly.js` / `WeeklyController` | `init` wires handlers; startup preload and activation share in-flight work | Same-key activation reuses loaded rows; `refresh` forces reload | Weekly request ID and coalesced loader | Commentary and audit drawers close locally; no tab deactivation hook |
+| Weekly | `weekly.js` / `TrainingApp.features.weekly` | `init` wires handlers; startup preload and activation share in-flight work | Same-key activation reuses loaded rows; `refresh` forces reload | Weekly request ID and coalesced loader | Commentary and audit drawers close locally; no tab deactivation hook |
 | Zones | `zones.js` / `TrainingApp.features.zones` | `init` binds the limit selector; startup preload and activation share in-flight work | Same-key activation reuses loaded rows; `refresh` forces reload | Zones request ID and coalesced loader | No app-level deactivation |
 | Service / Gear | `components.js`, `gear.js` | Components remains F21 lifecycle-owned; Gear `init` binds filters and its startup preload is coalesced with activation | Gear activation reuses loaded rows; `refresh` forces reload | Components F21 guards; Gear request ID and stale-response protection | Component menus/drawers close locally; no tab deactivation hook |
 | Yearly | `yearly.js` plus app-owned `loadYearly` | `loadData()` calls `loadYearly` | View switch changes visibility; no normal activation load | No shared request token | Commentary drawer is dynamically created and locally closed |
@@ -267,8 +267,9 @@ transition. The supported source values are `startup`, `direct-url`,
   the shell context. Search owns its established query normalization while
   honoring the shell-selected push/replace mode exactly once.
 - Plan, Weekly, Zones, Gear, and Search now expose idempotent `init`, canonical
-   `activate`, and explicit `refresh` methods. Their legacy globals and
-   controller `load` methods remain available and retain reload-on-call behavior.
+   `activate`, and explicit `refresh` methods. Their controller `load` methods
+   retain reload-on-call behavior; retired compatibility globals are removed
+   where the consumer inventory permits.
 - Plan no longer relies on a legacy activation fallback.
 - Charts keeps `showChartsCategory` as its legacy nested-view/load fallback;
   the dispatcher updates category visibility without loading twice.
@@ -298,9 +299,8 @@ before committing rows, filters, or summaries. Failed and superseded loads do
 not become permanently cached as successful initialization.
 
 Legacy globals are retained for compatibility where repository consumers still
-exist. Calls such as `loadWeekly()`, `loadZones()`, and `loadGear()` continue
-to mean an explicit reload, while the dispatcher calls the cache-aware
-lifecycle `activate` method.
+exist. Controller `load` methods continue to mean an explicit reload, while
+the dispatcher calls the cache-aware lifecycle `activate` method.
 Search keeps its URL-backed filters, paging, sorting, action menus, and stale
 result preservation; its `refresh` reloads the current query without changing
 navigation or drafts.
@@ -389,10 +389,27 @@ preload/activation coalescing, cached activation, forced refresh, stale-response
 protection, filter and table rendering, Service summary updates, and Search
 refresh integration.
 
-The remaining compatibility family explicitly deferred from F27 is Weekly's
-controller/loader surface. F28 should investigate Weekly only after a fresh
-consumer inventory and equivalent lifecycle characterization. Settings and
-other feature-family migrations remain out of scope until separately approved.
+### F28 implementation: Weekly compatibility-global retirement
+
+F28 retires the Weekly compatibility globals `window.WeeklyController` and
+`window.loadWeekly`; no other Weekly global exports were found in the tracked
+repository. `weekly.js` now keeps its state, loader, renderer, commentary
+drawer, and audit drawer helpers lexical and registers one identity-preserving
+`TrainingApp.features.weekly` controller. The controller exposes only the
+existing lifecycle, render, and drawer methods needed by feature-local and
+shell behavior.
+
+The app shell and Settings row-limit reload use the canonical Weekly registry.
+Startup preload, cache-aware activation, forced refresh, request coalescing,
+request-generation protection, table rendering, commentary dirty-close/save
+behavior, and audit loading/error behavior are unchanged. The F28 contract
+covers registry identity, lifecycle request policy, retired-global absence,
+private helper retention, shell/Settings consumers, and overlay ownership.
+
+The remaining compatibility debt is the higher-risk feature families and
+feature-local transient/deactivation coordination listed below. F29 should
+address only an explicitly approved next slice; no broader cleanup is implied
+by F28.
 
 ### Remaining inconsistencies and F20/F21 prerequisites
 

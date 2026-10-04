@@ -1059,8 +1059,8 @@
       settingsWeeklyLimit.addEventListener("change", (event) => {
         const value = Number(event.target.value);
         updateLimitPreference("weeklyLimit", value, () => {
-          if (window.AppState.activeTab === "weekly" && typeof window.loadWeekly === "function") {
-            window.loadWeekly();
+          if (window.AppState.activeTab === "weekly") {
+            window.TrainingApp?.features?.weekly?.refresh?.();
           }
         });
       });

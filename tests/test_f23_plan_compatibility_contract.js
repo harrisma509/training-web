@@ -16,7 +16,7 @@ assert.match(planSource, /refresh: \(\) => loadPlan\(true\)/);
 assert.match(planSource, /load: \(\) => loadPlan\(true\)/);
 assert.match(planSource, /PLAN_LOAD_REQUESTS/);
 
-assert.match(weeklySource, /window\.loadWeekly\s*=\s*loadWeekly;/);
+assert.doesNotMatch(weeklySource, /window\.loadWeekly\s*=\s*loadWeekly;/);
 assert.doesNotMatch(zonesSource, /window\.loadZones\s*=\s*loadZones;/);
 assert.doesNotMatch(zonesSource, /window\.ZonesController\s*=/);
 
