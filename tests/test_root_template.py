@@ -461,6 +461,59 @@ def test_coach_partials_are_single_authority_at_the_original_composition_points(
     assert weekly_drawer not in all_elements(rendered_dialog)
 
 
+def test_weekly_drawer_partial_is_single_authority_at_original_composition_point() -> None:
+    root_source = (REPO_ROOT / "templates" / "index.html").read_text(encoding="utf-8")
+    partial_source = (REPO_ROOT / "templates" / "partials" / "overlays" / "weekly_drawer.html").read_text(
+        encoding="utf-8"
+    )
+    rendered_source, document = parse_index()
+
+    include = '{% include "partials/overlays/weekly_drawer.html" %}'
+    assert root_source.count(include) == 1
+    assert root_source.count('id="weeklyDrawer"') == 0
+    assert "weekly-drawer-header" not in root_source
+    assert partial_source.count('id="weeklyDrawer"') == 1
+    assert root_source.index('{% include "partials/dialogs/coach_delete_dialog.html" %}') < root_source.index(include)
+
+    main = by_tag(document, "main")[0]
+    direct_main_children = [child.attributes.get("id") for child in main.children]
+    assert direct_main_children[-3:] == ["coachPane", "coachDeleteDialog", "weeklyDrawer"]
+
+    rendered_drawer = by_id(document, "weeklyDrawer")
+    partial_drawer = by_id(parse_html(partial_source), "weeklyDrawer")
+    assert normalized_tree(rendered_drawer) == normalized_tree(partial_drawer)
+    assert rendered_drawer.parent is main
+    assert "hidden" in classes(rendered_drawer)
+    assert rendered_drawer.attributes == {
+        "id": "weeklyDrawer",
+        "class": "weekly-drawer hidden",
+        "aria-hidden": "true",
+    }
+    assert [element.attributes.get("id") for element in all_elements(rendered_drawer) if element.attributes.get("id")] == [
+        "drawerCloseBtn",
+        "drawerContext",
+        "weeklyDrawerContent",
+        "drawerCancelBtn",
+        "drawerSaveBtn",
+    ]
+    assert [element.attributes.get("id") for element in by_tag(rendered_drawer, "form")] == []
+    assert by_id(rendered_drawer, "drawerCloseBtn").attributes == {
+        "id": "drawerCloseBtn",
+        "type": "button",
+        "class": "drawer-close-button",
+        "aria-label": "Close drawer",
+    }
+    assert by_id(rendered_drawer, "drawerCancelBtn").attributes.get("type") == "button"
+    assert by_id(rendered_drawer, "drawerSaveBtn").attributes.get("type") == "button"
+    assert by_id(rendered_drawer, "weeklyDrawerContent").attributes.get("class") == "weekly-drawer-content"
+    assert not any(
+        attribute.lower().startswith("on")
+        for element in all_elements(rendered_drawer)
+        for attribute in element.attributes
+    )
+    assert rendered_source.count('id="weeklyDrawer"') == 1
+
+
 def test_core_pane_partials_are_single_authority_at_original_composition_points() -> None:
     root_source = (REPO_ROOT / "templates" / "index.html").read_text(encoding="utf-8")
     rendered_source, document = parse_index()
