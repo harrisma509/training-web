@@ -5,6 +5,8 @@
  * instead of embedding raw fetch calls. The rendering/state code stays in each feature module, not here.
  */
 (function () {
+  const SAFE_CSV_FILENAME = /^[A-Za-z0-9][A-Za-z0-9._-]*\.[cC][sS][vV]$/;
+
   async function fetchJson(url, options = {}) {
     const response = await fetch(url, {
       headers: {
@@ -23,8 +25,81 @@
     return response.json();
   }
 
+  function csvFilenameFromDisposition(disposition, fallbackFilename) {
+    if (!SAFE_CSV_FILENAME.test(fallbackFilename || "")) {
+      throw new TypeError("A safe fallback CSV filename is required.");
+    }
+
+    const header = String(disposition || "");
+    const extended = header.match(/(?:^|;)\s*filename\*\s*=\s*UTF-8''([^;]+)/i);
+    const ordinary = header.match(/(?:^|;)\s*filename\s*=\s*(?:"([^"]*)"|([^;]*))/i);
+    let candidate = "";
+
+    if (extended) {
+      try {
+        candidate = decodeURIComponent(extended[1].trim());
+      } catch (_error) {
+        candidate = "";
+      }
+    } else if (ordinary) {
+      candidate = (ordinary[1] || ordinary[2] || "").trim();
+    }
+
+    return SAFE_CSV_FILENAME.test(candidate) ? candidate : fallbackFilename;
+  }
+
+  async function downloadCsv(url, fallbackFilename) {
+    if (!SAFE_CSV_FILENAME.test(fallbackFilename || "")) {
+      throw new TypeError("A safe fallback CSV filename is required.");
+    }
+
+    let target;
+    try {
+      target = new URL(url, window.location.href);
+    } catch (_error) {
+      throw new TypeError("A valid same-origin CSV URL is required.");
+    }
+    if (target.origin !== window.location.origin) {
+      throw new Error("CSV downloads must use a same-origin URL.");
+    }
+
+    const response = await fetch(target.href, {
+      headers: { Accept: "text/csv" },
+    });
+    if (!response.ok) {
+      throw new Error(`${response.status} ${response.statusText || "CSV download failed"}`);
+    }
+    if (!/^text\/csv(?:\s*;|$)/i.test(response.headers?.get("Content-Type") || "")) {
+      throw new Error("CSV download returned an unexpected content type.");
+    }
+
+    const blob = await response.blob();
+    const filename = csvFilenameFromDisposition(
+      response.headers?.get("Content-Disposition"),
+      fallbackFilename,
+    );
+    const objectUrl = window.URL.createObjectURL(blob);
+    let anchor = null;
+    try {
+      anchor = document.createElement("a");
+      anchor.href = objectUrl;
+      anchor.download = filename;
+      anchor.style.display = "none";
+      document.body.appendChild(anchor);
+      anchor.click();
+    } catch (error) {
+      window.URL.revokeObjectURL(objectUrl);
+      throw error;
+    } finally {
+      anchor?.remove();
+    }
+    window.setTimeout(() => window.URL.revokeObjectURL(objectUrl), 0);
+    return filename;
+  }
+
   const api = {
     fetchJson,
+    downloadCsv,
 
     async fetchCoachSessions() {
       return fetchJson("/api/coach/sessions");
