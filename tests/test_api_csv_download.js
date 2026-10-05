@@ -119,7 +119,11 @@ test("rejects non-2xx responses without downloading the error body", async () =>
 
     await assert.rejects(
         harness.api.downloadCsv("/api/weekly/export", "weekly.csv"),
-        /503 Service Unavailable/,
+        error => {
+            assert.match(error.message, /503 Service Unavailable/);
+            assert.equal(error.status, 503);
+            return true;
+        },
     );
     assert.equal(blobCalls, 0);
     assert.equal(harness.anchors.length, 0);

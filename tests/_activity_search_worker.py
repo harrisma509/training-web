@@ -1,4 +1,6 @@
 import asyncio
+import csv
+import io
 import json
 import subprocess
 import sys
@@ -63,7 +65,7 @@ class FakeConnection:
         return self.cursor_value
 
 
-def asgi_get(path="/api/activities/search", params=None, headers=None):
+def asgi_get(path="/api/activities/search", params=None, headers=None, raw=False):
     messages = []
     query_string = urlencode(params or [], doseq=True).encode("utf-8")
     request_headers = [(b"host", b"testserver")]
@@ -96,6 +98,12 @@ def asgi_get(path="/api/activities/search", params=None, headers=None):
         for message in messages
         if message["type"] == "http.response.body"
     )
+    response_headers = {
+        name.decode("latin-1").lower(): value.decode("latin-1")
+        for name, value in response_start["headers"]
+    }
+    if raw:
+        return response_start["status"], response_body, response_headers
     return response_start["status"], json.loads(response_body)
 
 
@@ -123,14 +131,24 @@ def activity_row(**updates):
 
 
 class ActivitySearchRouteTests(unittest.TestCase):
-    def response(self, params=None, rows=None, *, total_count=None, db_error=None, headers=None):
+    def response(
+        self,
+        params=None,
+        rows=None,
+        *,
+        total_count=None,
+        db_error=None,
+        headers=None,
+        path="/api/activities/search",
+        raw=False,
+    ):
         if db_error is not None:
             database = patch("routes.activities.db_conn", side_effect=db_error)
         else:
             self.connection = FakeConnection(rows, total_count)
             database = patch("routes.activities.db_conn", return_value=self.connection)
         with database as db_mock:
-            result = asgi_get(params=params, headers=headers)
+            result = asgi_get(path=path, params=params, headers=headers, raw=raw)
         return result, db_mock
 
     def test_route_is_registered_and_default_search_means_all_history(self):
@@ -523,6 +541,129 @@ class ActivitySearchRouteTests(unittest.TestCase):
         self.assertEqual(payload, {"detail": "Activity search is temporarily unavailable."})
         self.assertNotIn("private SQL", json.dumps(payload))
         database.assert_called_once()
+
+    def test_export_uses_applied_filters_sort_and_fixed_columns_without_paging(self):
+        row = activity_row(
+            description="Trail condition: snow, ice\n雪",
+            private_note="Do not share outside my account.",
+        )
+        (status, body, headers), _ = self.response(
+            path="/api/activities/search/export",
+            raw=True,
+            params=[
+                ("start_date", "2026-09-01"),
+                ("end_date", "2026-09-30"),
+                ("text", "  snow  "),
+                ("sport_type", "MountainBikeRide"),
+                ("gear_id", "bike-1"),
+                ("min_distance_mi", "10"),
+                ("sort_by", "elevation"),
+                ("sort_direction", "asc"),
+                ("limit", "1"),
+                ("offset", "500"),
+            ],
+            rows=[row],
+        )
+
+        self.assertEqual(status, 200)
+        self.assertEqual(headers["content-type"], "text/csv; charset=utf-8")
+        self.assertEqual(headers["content-disposition"], 'attachment; filename="training-search.csv"')
+        records = list(csv.reader(io.StringIO(body.decode("utf-8-sig"), newline="")))
+        self.assertEqual(records[0], [
+            "activity_id", "date_local", "start_at_local", "start_at_utc", "timezone",
+            "utc_offset_seconds", "name", "sport_type", "activity_category", "gear_id",
+            "gear_name", "distance_mi", "elevation_ft", "moving_sec", "elapsed_sec",
+            "activity_load", "description",
+        ])
+        self.assertEqual(records[1][-1], "Trail condition: snow, ice\n雪")
+        self.assertNotIn("private_note", records[0])
+        self.assertNotIn("Do not share", records[1][-1])
+
+        sql, params = self.connection.cursor_value.executions[0]
+        self.assertIn("sa.description", sql)
+        self.assertNotIn("sa.private_note", sql)
+        self.assertIn("sa.date_local >= %s", sql)
+        self.assertIn("lower(sa.\"name\") LIKE lower(%s)", sql)
+        self.assertIn("sa.gear_id IN (%s)", sql)
+        self.assertIn("sa.distance_mi >= %s", sql)
+        self.assertIn("ORDER BY sa.elevation_ft ASC NULLS LAST, sa.activity_id ASC", sql)
+        self.assertIn("d.date = sa.date_local", sql)
+        self.assertIn("d.main_ride_id = sa.activity_id", sql)
+        self.assertNotIn("LIMIT %s OFFSET %s", sql)
+        self.assertEqual(params, (
+            date(2026, 9, 1), date(2026, 9, 30), "%snow%",
+            "mountainbikeride", "bike-1", 10.0, 50_001,
+        ))
+        self.assertEqual(len(self.connection.cursor_value.executions), 1)
+
+    def test_export_private_note_is_appended_only_when_explicitly_selected(self):
+        row = activity_row(description="Description text", private_note="Private note text")
+        (status, body, _), _ = self.response(
+            path="/api/activities/search/export",
+            raw=True,
+            params={"include_private_note": "true"},
+            rows=[row],
+        )
+
+        self.assertEqual(status, 200)
+        records = list(csv.reader(io.StringIO(body.decode("utf-8-sig"), newline="")))
+        self.assertEqual(records[0][-2:], ["description", "private_note"])
+        self.assertEqual(records[1][-2:], ["Description text", "Private note text"])
+        sql, params = self.connection.cursor_value.executions[0]
+        self.assertIn("sa.private_note", sql)
+        self.assertEqual(params, (50_001,))
+
+    def test_empty_export_returns_headers_only(self):
+        (status, body, _), _ = self.response(
+            path="/api/activities/search/export",
+            raw=True,
+            rows=[],
+        )
+
+        self.assertEqual(status, 200)
+        records = list(csv.reader(io.StringIO(body.decode("utf-8-sig"), newline="")))
+        self.assertEqual(len(records), 1)
+        self.assertEqual(records[0][0], "activity_id")
+        self.assertEqual(records[0][-1], "description")
+
+    def test_export_accepts_exactly_50000_and_rejects_50001_without_partial_csv(self):
+        one_row = activity_row()
+        (status, _, _), database = self.response(
+            path="/api/activities/search/export",
+            raw=True,
+            rows=[one_row] * 50_000,
+        )
+        self.assertEqual(status, 200)
+        database.assert_called_once()
+        sql, params = self.connection.cursor_value.executions[0]
+        self.assertIn("LIMIT %s", sql)
+        self.assertEqual(params, (50_001,))
+
+        (status, payload), _ = self.response(
+            path="/api/activities/search/export",
+            rows=[one_row] * 50_001,
+        )
+        self.assertEqual(status, 422)
+        self.assertEqual(
+            payload,
+            {"detail": "Refine Search filters to export no more than 50,000 activities."},
+        )
+
+    def test_export_database_and_serialization_failures_are_sanitized(self):
+        (status, payload), database = self.response(
+            path="/api/activities/search/export",
+            db_error=RuntimeError("private SQL and parameters"),
+        )
+        self.assertEqual(status, 503)
+        self.assertEqual(payload, {"detail": "Activity export is temporarily unavailable."})
+        database.assert_called_once()
+
+        (status, payload), _ = self.response(
+            path="/api/activities/search/export",
+            rows=[{"activity_id": object()}],
+        )
+        self.assertEqual(status, 503)
+        self.assertEqual(payload, {"detail": "Activity export is temporarily unavailable."})
 
 
 if __name__ == "__main__":

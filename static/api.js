@@ -67,7 +67,9 @@
       headers: { Accept: "text/csv" },
     });
     if (!response.ok) {
-      throw new Error(`${response.status} ${response.statusText || "CSV download failed"}`);
+      const error = new Error(`${response.status} ${response.statusText || "CSV download failed"}`);
+      error.status = response.status;
+      throw error;
     }
     if (!/^text\/csv(?:\s*;|$)/i.test(response.headers?.get("Content-Type") || "")) {
       throw new Error("CSV download returned an unexpected content type.");

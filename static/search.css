@@ -149,6 +149,28 @@
     font-size: 12px;
 }
 
+.search-export-controls {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 6px 10px;
+    color: var(--muted);
+    font-size: 12px;
+}
+
+.search-export-controls label {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    white-space: nowrap;
+}
+
+.search-private-note-warning {
+    flex-basis: 100%;
+    margin: 0;
+    color: var(--red);
+}
+
 .search-page-controls select {
     min-width: 76px;
 }

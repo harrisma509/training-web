@@ -123,6 +123,7 @@ if (typeof module !== "undefined" && module.exports) {
         initialized: false,
         resultState: "initial",
         lastResult: null,
+        exporting: false,
         activityTypes: [],
         activityTypesLoaded: false,
         resyncingActivityIds: new Set(),
@@ -363,6 +364,66 @@ if (typeof module !== "undefined" && module.exports) {
         if (!status) return;
         status.textContent = message;
         status.dataset.state = kind;
+    }
+
+    function updateExportControl() {
+        const button = field("searchExport");
+        if (button) button.disabled = state.exporting || !state.lastResult || state.lastResult.total_count === 0;
+    }
+
+    function updatePrivateNoteWarning() {
+        const checkbox = field("searchIncludePrivateNote");
+        const warning = field("searchPrivateNoteWarning");
+        if (warning) warning.hidden = !checkbox?.checked;
+    }
+
+    function buildExportUrl(query, includePrivateNote) {
+        const params = new URLSearchParams();
+        FILTER_KEYS.forEach(key => {
+            const value = query.filters?.[key];
+            if (Array.isArray(value)) {
+                value.forEach(item => {
+                    if (item !== null && item !== undefined && String(item) !== "") params.append(key, String(item));
+                });
+            } else if (value !== null && value !== undefined && String(value) !== "") {
+                params.set(key, String(value));
+            }
+        });
+        params.set("sort_by", query.sort_by);
+        params.set("sort_direction", query.sort_direction);
+        params.set("include_private_note", String(includePrivateNote));
+        return `/api/activities/search/export?${params.toString()}`;
+    }
+
+    async function exportResults() {
+        if (state.exporting || !state.lastResult || state.lastResult.total_count === 0) return;
+        const checkbox = field("searchIncludePrivateNote");
+        const button = field("searchExport");
+        const includePrivateNote = Boolean(checkbox?.checked);
+        const query = state.lastResult.query;
+        if (!query) return;
+
+        state.exporting = true;
+        if (button) button.textContent = "Exporting…";
+        updateExportControl();
+        setStatus("Exporting Search results…", "loading");
+        try {
+            await window.api.downloadCsv(
+                buildExportUrl(query, includePrivateNote),
+                "training-search.csv",
+            );
+            setStatus("CSV export downloaded.", "success");
+        } catch (error) {
+            setStatus(error?.status === 422
+                ? "More than 50,000 activities match. Refine Search filters and try again."
+                : "CSV export is temporarily unavailable.", "error");
+        } finally {
+            state.exporting = false;
+            if (button) button.textContent = "Export CSV";
+            if (checkbox) checkbox.checked = false;
+            updatePrivateNoteWarning();
+            updateExportControl();
+        }
     }
 
     function setValidationMessage(message = "") {
@@ -686,6 +747,7 @@ if (typeof module !== "undefined" && module.exports) {
         const pageStatus = field("searchPageStatus");
         const previous = field("searchPrevious");
         const next = field("searchNext");
+        updateExportControl();
         if (!result) {
             if (pageStatus) pageStatus.textContent = "";
             if (previous) previous.disabled = true;
@@ -955,6 +1017,8 @@ if (typeof module !== "undefined" && module.exports) {
             control.addEventListener("change", captureDraft);
         });
         field("searchClear")?.addEventListener("click", clearSearch);
+        field("searchIncludePrivateNote")?.addEventListener("change", updatePrivateNoteWarning);
+        field("searchExport")?.addEventListener("click", exportResults);
         field("searchPrevious")?.addEventListener("click", () => {
             if (!state.lastResult) return;
             loadPage(Math.max(0, state.lastResult.offset - state.lastResult.limit));

@@ -294,49 +294,23 @@ Custom
 
 Allow explicit selection from the approved field inventory.
 
-CSV export
+CSV export V1
 
-Export should follow the search workflow:
+Search V1 exports the complete last-applied result set directly to a browser download. It does not export draft filter controls, only the current page, or perform a separate preview, column picker, or output-size calculation.
 
-Search → Filter → Preview → Choose Columns → Export
+The export uses the same validated filters and allowlisted sort as Search. It includes all matching rows up to 50,000. The server queries at most 50,001 rows; if the extra row exists, it rejects the entire export with HTTP 422 and returns no partial CSV. An empty result is a successful CSV containing the headers.
 
-Export requirements
-Require a bounded date range or an explicit result-count ceiling.
-Show an export preview containing:
-Number of activities
-Date range
-Selected columns
-Sort order
-Whether description is included
-Whether private note is included
-Approximate output size when practical
-Use stable documented column names.
-Document:
-Units
-Timezone
-Provenance
-Null and missing-data semantics
-Export timestamp
-Preserve Unicode and line breaks safely.
-Use a consistent CSV encoding suitable for modern Excel.
-Safe defaults
+Use this stable column order:
 
-Include normal activity metadata and measurements by default.
+`activity_id,date_local,start_at_local,start_at_utc,timezone,utc_offset_seconds,name,sport_type,activity_category,gear_id,gear_name,distance_mi,elevation_ft,moving_sec,elapsed_sec,activity_load,description`
 
-Exclude by default:
+Private note is excluded unless explicitly selected with the visibly labeled Include Private Note control. When selected, append `private_note` as the final column and show this warning:
 
-Private note
-Description
-Daily Check-in notes
-Sensitive health narrative
-Exact coordinates
-Raw provider data
-Internal database fields
-Secrets or operational metadata
+Private Notes may contain sensitive information and will be included in the downloaded file.
 
-If private notes are selected, display a concise warning:
+CSV output preserves Unicode and line breaks and uses a UTF-8 encoding suitable for modern spreadsheet applications. Dates and timestamps use their stored local/UTC values; distances are miles, elevation is feet, durations are seconds, and activity load is the persisted main-ride load joined by local date and activity ID. Missing values are blank. Description is included in V1; private note remains opt-in.
 
-This export contains private athlete-authored notes.
+Daily Check-in notes, sensitive health narrative, exact coordinates, raw provider data, internal database fields, secrets, and operational metadata are not exported. The CSV is downloaded by the browser and is not persisted or forwarded by the application.
 
 AI-safe exports
 

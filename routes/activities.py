@@ -7,6 +7,7 @@ from enum import Enum
 from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import JSONResponse
 
+from csv_export import CsvColumn, csv_response
 from db import db_conn, json_safe
 
 
@@ -18,6 +19,7 @@ MAX_FILTER_VALUES = 25
 MAX_FILTER_VALUE_LENGTH = 100
 MAX_TEXT_LENGTH = 200
 MAX_ACTIVITY_TYPES = 100
+SEARCH_EXPORT_MAX_ROWS = 50_000
 ACTIVITY_CATEGORIES = {"ride", "hike", "walk", "run", "ski", "mobility", "strength", "other"}
 
 
@@ -133,6 +135,55 @@ COUNT_SQL = """
     FROM public.strava_activities AS sa
 """
 
+SEARCH_EXPORT_SELECT_SQL = """
+    SELECT
+        sa.activity_id,
+        sa.date_local,
+        sa.start_at_local,
+        sa.start_at_utc,
+        sa.timezone,
+        sa.utc_offset_seconds,
+        sa."name" AS name,
+        sa.sport_type,
+        sa.activity_category,
+        sa.gear_id,
+        g.gear_name,
+        sa.distance_mi,
+        sa.elevation_ft,
+        sa.moving_sec,
+        sa.elapsed_sec,
+        d.main_ride_load AS activity_load,
+        sa.description
+        {private_note_column}
+    FROM public.strava_activities AS sa
+    LEFT JOIN public.gear AS g
+        ON g.gear_id = sa.gear_id
+    LEFT JOIN public.daily_training AS d
+        ON d.date = sa.date_local
+        AND d.main_ride_id = sa.activity_id
+"""
+
+SEARCH_EXPORT_COLUMNS = (
+    CsvColumn("activity_id", "activity_id"),
+    CsvColumn("date_local", "date_local"),
+    CsvColumn("start_at_local", "start_at_local"),
+    CsvColumn("start_at_utc", "start_at_utc"),
+    CsvColumn("timezone", "timezone"),
+    CsvColumn("utc_offset_seconds", "utc_offset_seconds"),
+    CsvColumn("name", "name"),
+    CsvColumn("sport_type", "sport_type"),
+    CsvColumn("activity_category", "activity_category"),
+    CsvColumn("gear_id", "gear_id"),
+    CsvColumn("gear_name", "gear_name"),
+    CsvColumn("distance_mi", "distance_mi"),
+    CsvColumn("elevation_ft", "elevation_ft"),
+    CsvColumn("moving_sec", "moving_sec"),
+    CsvColumn("elapsed_sec", "elapsed_sec"),
+    CsvColumn("activity_load", "activity_load"),
+    CsvColumn("description", "description"),
+)
+SEARCH_EXPORT_PRIVATE_NOTE_COLUMN = CsvColumn("private_note", "private_note")
+
 
 def _resolve_sort(sort_by, sort_direction, legacy_sort):
     if legacy_sort is not None:
@@ -184,49 +235,24 @@ def _escape_like_literal(value):
     return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
 
 
-def _shape_activity(row):
-    fields = (
-        "activity_id",
-        "date_local",
-        "start_at_local",
-        "start_at_utc",
-        "timezone",
-        "utc_offset_seconds",
-        "name",
-        "sport_type",
-        "activity_category",
-        "gear_id",
-        "gear_name",
-        "distance_mi",
-        "elevation_ft",
-        "moving_sec",
-        "elapsed_sec",
-        "activity_load",
-    )
-    return {field: json_safe(row.get(field)) for field in fields}
-
-
-@router.get("/api/activities/search")
-def search_activities(
-    start_date: date | None = None,
-    end_date: date | None = None,
-    text: str | None = None,
-    sport_type: list[str] | None = Query(default=None),
-    activity_category: list[str] | None = Query(default=None),
-    gear_id: list[str] | None = Query(default=None),
-    min_distance_mi: float | None = Query(default=None, ge=0),
-    max_distance_mi: float | None = Query(default=None, ge=0),
-    min_elevation_ft: float | None = Query(default=None, ge=0),
-    max_elevation_ft: float | None = Query(default=None, ge=0),
-    min_duration_sec: int | None = Query(default=None, ge=0),
-    max_duration_sec: int | None = Query(default=None, ge=0),
-    start_time_from: time | None = None,
-    start_time_to: time | None = None,
-    sort_by: ActivitySortBy | None = None,
-    sort_direction: ActivitySortDirection | None = None,
-    sort: ActivitySort | None = None,
-    limit: int = Query(default=DEFAULT_LIMIT, ge=1, le=MAX_LIMIT),
-    offset: int = Query(default=0, ge=0),
+def _build_search_criteria(
+    start_date,
+    end_date,
+    text,
+    sport_type,
+    activity_category,
+    gear_id,
+    min_distance_mi,
+    max_distance_mi,
+    min_elevation_ft,
+    max_elevation_ft,
+    min_duration_sec,
+    max_duration_sec,
+    start_time_from,
+    start_time_to,
+    sort_by,
+    sort_direction,
+    sort,
 ):
     if (start_date is None) != (end_date is None):
         raise HTTPException(status_code=422, detail="start_date and end_date must be supplied together.")
@@ -312,13 +338,92 @@ def search_activities(
         parameters.append(start_time_to)
 
     where_sql = "\n    WHERE " + "\n      AND ".join(conditions) if conditions else ""
-    filter_parameters = tuple(parameters)
-    count_sql = COUNT_SQL + where_sql
     direction_sql = SORT_DIRECTION_SQL[resolved_sort_direction]
     order_sql = (
         f"{SORT_COLUMN_SQL[resolved_sort_by]} {direction_sql} NULLS LAST, "
         f"sa.activity_id {direction_sql}"
     )
+    return (
+        where_sql,
+        tuple(parameters),
+        order_sql,
+        resolved_sort_by,
+        resolved_sort_direction,
+        applied_sort,
+    )
+
+
+def _shape_activity(row):
+    fields = (
+        "activity_id",
+        "date_local",
+        "start_at_local",
+        "start_at_utc",
+        "timezone",
+        "utc_offset_seconds",
+        "name",
+        "sport_type",
+        "activity_category",
+        "gear_id",
+        "gear_name",
+        "distance_mi",
+        "elevation_ft",
+        "moving_sec",
+        "elapsed_sec",
+        "activity_load",
+    )
+    return {field: json_safe(row.get(field)) for field in fields}
+
+
+@router.get("/api/activities/search")
+def search_activities(
+    start_date: date | None = None,
+    end_date: date | None = None,
+    text: str | None = None,
+    sport_type: list[str] | None = Query(default=None),
+    activity_category: list[str] | None = Query(default=None),
+    gear_id: list[str] | None = Query(default=None),
+    min_distance_mi: float | None = Query(default=None, ge=0),
+    max_distance_mi: float | None = Query(default=None, ge=0),
+    min_elevation_ft: float | None = Query(default=None, ge=0),
+    max_elevation_ft: float | None = Query(default=None, ge=0),
+    min_duration_sec: int | None = Query(default=None, ge=0),
+    max_duration_sec: int | None = Query(default=None, ge=0),
+    start_time_from: time | None = None,
+    start_time_to: time | None = None,
+    sort_by: ActivitySortBy | None = None,
+    sort_direction: ActivitySortDirection | None = None,
+    sort: ActivitySort | None = None,
+    limit: int = Query(default=DEFAULT_LIMIT, ge=1, le=MAX_LIMIT),
+    offset: int = Query(default=0, ge=0),
+):
+    (
+        where_sql,
+        filter_parameters,
+        order_sql,
+        resolved_sort_by,
+        resolved_sort_direction,
+        applied_sort,
+    ) = _build_search_criteria(
+        start_date,
+        end_date,
+        text,
+        sport_type,
+        activity_category,
+        gear_id,
+        min_distance_mi,
+        max_distance_mi,
+        min_elevation_ft,
+        max_elevation_ft,
+        min_duration_sec,
+        max_duration_sec,
+        start_time_from,
+        start_time_to,
+        sort_by,
+        sort_direction,
+        sort,
+    )
+    count_sql = COUNT_SQL + where_sql
     sql = SELECT_SQL + where_sql + "\n    ORDER BY " + order_sql + "\n    LIMIT %s OFFSET %s"
     item_parameters = (*filter_parameters, limit, offset)
 
@@ -353,3 +458,85 @@ def search_activities(
         "applied_start_date": start_date.isoformat() if start_date else None,
         "applied_end_date": end_date.isoformat() if end_date else None,
     })
+
+
+@router.get("/api/activities/search/export")
+def export_search_activities(
+    start_date: date | None = None,
+    end_date: date | None = None,
+    text: str | None = None,
+    sport_type: list[str] | None = Query(default=None),
+    activity_category: list[str] | None = Query(default=None),
+    gear_id: list[str] | None = Query(default=None),
+    min_distance_mi: float | None = Query(default=None, ge=0),
+    max_distance_mi: float | None = Query(default=None, ge=0),
+    min_elevation_ft: float | None = Query(default=None, ge=0),
+    max_elevation_ft: float | None = Query(default=None, ge=0),
+    min_duration_sec: int | None = Query(default=None, ge=0),
+    max_duration_sec: int | None = Query(default=None, ge=0),
+    start_time_from: time | None = None,
+    start_time_to: time | None = None,
+    sort_by: ActivitySortBy | None = None,
+    sort_direction: ActivitySortDirection | None = None,
+    sort: ActivitySort | None = None,
+    include_private_note: bool = Query(default=False),
+):
+    (
+        where_sql,
+        filter_parameters,
+        order_sql,
+        _resolved_sort_by,
+        _resolved_sort_direction,
+        _applied_sort,
+    ) = _build_search_criteria(
+        start_date,
+        end_date,
+        text,
+        sport_type,
+        activity_category,
+        gear_id,
+        min_distance_mi,
+        max_distance_mi,
+        min_elevation_ft,
+        max_elevation_ft,
+        min_duration_sec,
+        max_duration_sec,
+        start_time_from,
+        start_time_to,
+        sort_by,
+        sort_direction,
+        sort,
+    )
+    sql = SEARCH_EXPORT_SELECT_SQL.format(
+        private_note_column=",\n        sa.private_note" if include_private_note else "",
+    )
+    sql += where_sql + "\n    ORDER BY " + order_sql + "\n    LIMIT %s"
+    parameters = (*filter_parameters, SEARCH_EXPORT_MAX_ROWS + 1)
+
+    try:
+        with db_conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute(sql, parameters)
+                rows = cur.fetchall()
+    except Exception:
+        return JSONResponse(
+            {"detail": "Activity export is temporarily unavailable."},
+            status_code=503,
+        )
+
+    if len(rows) > SEARCH_EXPORT_MAX_ROWS:
+        raise HTTPException(
+            status_code=422,
+            detail="Refine Search filters to export no more than 50,000 activities.",
+        )
+
+    columns = SEARCH_EXPORT_COLUMNS
+    if include_private_note:
+        columns += (SEARCH_EXPORT_PRIVATE_NOTE_COLUMN,)
+    try:
+        return csv_response(columns, rows, "training-search.csv")
+    except Exception:
+        return JSONResponse(
+            {"detail": "Activity export is temporarily unavailable."},
+            status_code=503,
+        )

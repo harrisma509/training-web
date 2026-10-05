@@ -44,6 +44,16 @@
           <div id="searchActiveFilters" class="search-active-filters" aria-label="Active filters"></div>
           <div id="searchStatus" class="search-status" role="status" aria-live="polite"></div>
         </div>
+        <div class="search-export-controls">
+          <label for="searchIncludePrivateNote">
+            <input id="searchIncludePrivateNote" type="checkbox" aria-describedby="searchPrivateNoteWarning">
+            Include Private Note
+          </label>
+          <p id="searchPrivateNoteWarning" class="search-private-note-warning" hidden>
+            Private Notes may contain sensitive information and will be included in the downloaded file.
+          </p>
+          <button id="searchExport" type="button" class="button-secondary" disabled>Export CSV</button>
+        </div>
         <div class="search-page-controls">
           <label for="searchLimit">Rows</label>
           <select id="searchLimit">
@@ -60,4 +70,3 @@
         <table id="searchResults" class="search-table"></table>
       </div>
     </section>
-
