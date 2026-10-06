@@ -9,20 +9,109 @@ Owns a read-only endpoint that combines:
 - derived usage since latest service event
 """
 
+import json
+import logging
 import re
 from datetime import date
 from decimal import Decimal, InvalidOperation
 from functools import cmp_to_key
 from typing import Optional
 
+import psycopg
 from fastapi import APIRouter, Body, HTTPException
 from fastapi.responses import JSONResponse
 
+from csv_export import CsvColumn, csv_response
 from db import db_conn, json_safe
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 DEFAULT_GEAR_ID = "b15895517"
+COMPONENT_EXPORT_COLUMNS = tuple(
+    CsvColumn(name, name)
+    for name in (
+        "bike_gear_id",
+        "bike_name",
+        "bike_brand",
+        "bike_model_year",
+        "bike_activity_count",
+        "bike_ride_count",
+        "bike_total_miles",
+        "bike_total_hours",
+        "bike_total_elevation_ft",
+        "bike_last_activity_date",
+        "gear_component_id",
+        "component_key",
+        "component_name",
+        "component_group",
+        "position",
+        "component_active",
+        "track_life",
+        "track_service",
+        "preferred_metric",
+        "service_interval_miles",
+        "service_interval_hours",
+        "service_interval_days",
+        "service_interval_rides",
+        "warning_percent",
+        "component_notes",
+        "life_state",
+        "life_baseline_event_id",
+        "life_baseline_action",
+        "life_baseline_service_date",
+        "life_usage_miles",
+        "life_usage_hours",
+        "life_usage_rides",
+        "life_usage_elevation_ft",
+        "life_usage_days",
+        "life_miles_available",
+        "life_hours_available",
+        "life_rides_available",
+        "life_elevation_ft_available",
+        "life_days_available",
+        "life_miles_source",
+        "life_hours_source",
+        "life_rides_source",
+        "life_elevation_ft_source",
+        "life_days_source",
+        "life_review_reasons",
+        "service_state",
+        "service_baseline_event_id",
+        "service_baseline_action",
+        "service_baseline_service_date",
+        "service_usage_miles",
+        "service_usage_hours",
+        "service_usage_rides",
+        "service_usage_elevation_ft",
+        "service_usage_days",
+        "service_miles_available",
+        "service_hours_available",
+        "service_rides_available",
+        "service_elevation_ft_available",
+        "service_days_available",
+        "service_miles_source",
+        "service_hours_source",
+        "service_rides_source",
+        "service_elevation_ft_source",
+        "service_days_source",
+        "service_review_reasons",
+        "service_event_id",
+        "service_date",
+        "service_action",
+        "service_product_name",
+        "service_manufacturer",
+        "service_model",
+        "service_notes",
+        "service_cost",
+        "service_odometer_miles",
+        "service_odometer_hours",
+        "service_odometer_rides",
+        "service_odometer_elevation_ft",
+        "service_performed_by",
+        "service_location",
+    )
+)
 
 
 def _normalize_text(value):
@@ -312,6 +401,106 @@ def derive_component_clocks(component, events, totals, today=None):
         "life": _derive_component_clock(component, events, totals, today=today, clock="life"),
         "service": _derive_component_clock(component, events, totals, today=today, clock="service"),
     }
+
+
+def _component_clock_export_fields(clock, prefix):
+    if clock is None:
+        return {
+            f"{prefix}_{field}": None
+            for field in (
+                "state",
+                "baseline_event_id",
+                "baseline_action",
+                "baseline_service_date",
+                "usage_miles",
+                "usage_hours",
+                "usage_rides",
+                "usage_elevation_ft",
+                "usage_days",
+                "miles_available",
+                "hours_available",
+                "rides_available",
+                "elevation_ft_available",
+                "days_available",
+                "miles_source",
+                "hours_source",
+                "rides_source",
+                "elevation_ft_source",
+                "days_source",
+                "review_reasons",
+            )
+        }
+
+    usage = clock.get("usage") or {}
+    availability = clock.get("metric_availability") or {}
+    sources = clock.get("snapshot_source") or {}
+    fields = {
+        f"{prefix}_state": clock.get("state"),
+        f"{prefix}_baseline_event_id": clock.get("baseline_event_id"),
+        f"{prefix}_baseline_action": clock.get("baseline_action"),
+        f"{prefix}_baseline_service_date": clock.get("baseline_service_date"),
+        f"{prefix}_review_reasons": json.dumps(
+            clock.get("review_reasons") or [],
+            ensure_ascii=False,
+            separators=(",", ":"),
+        ),
+    }
+    for metric in ("miles", "hours", "rides", "elevation_ft", "days"):
+        fields[f"{prefix}_usage_{metric}"] = usage.get(metric)
+        fields[f"{prefix}_{metric}_available"] = availability.get(metric)
+        fields[f"{prefix}_{metric}_source"] = sources.get(metric)
+    return fields
+
+
+def _component_export_row(bike, component, event, clocks):
+    row = {
+        "bike_gear_id": bike.get("gear_id"),
+        "bike_name": bike.get("gear_name"),
+        "bike_brand": bike.get("brand"),
+        "bike_model_year": bike.get("model_year"),
+        "bike_activity_count": bike.get("activity_count"),
+        "bike_ride_count": bike.get("ride_count"),
+        "bike_total_miles": bike.get("miles"),
+        "bike_total_hours": bike.get("hours"),
+        "bike_total_elevation_ft": bike.get("elevation_ft"),
+        "bike_last_activity_date": bike.get("last_activity_date"),
+        "gear_component_id": component.get("gear_component_id"),
+        "component_key": component.get("component_key"),
+        "component_name": component.get("component_name"),
+        "component_group": component.get("component_group"),
+        "position": component.get("position"),
+        "component_active": component.get("active"),
+        "track_life": component.get("track_life"),
+        "track_service": component.get("track_service"),
+        "preferred_metric": component.get("preferred_metric"),
+        "service_interval_miles": component.get("service_interval_miles"),
+        "service_interval_hours": component.get("service_interval_hours"),
+        "service_interval_days": component.get("service_interval_days"),
+        "service_interval_rides": component.get("service_interval_rides"),
+        "warning_percent": component.get("warning_percent"),
+        "component_notes": component.get("notes"),
+    }
+    row.update(_component_clock_export_fields(clocks.get("life"), "life"))
+    row.update(_component_clock_export_fields(clocks.get("service"), "service"))
+    row.update(
+        {
+            "service_event_id": event.get("service_event_id") if event else None,
+            "service_date": event.get("service_date") if event else None,
+            "service_action": event.get("action") if event else None,
+            "service_product_name": event.get("product_name") if event else None,
+            "service_manufacturer": event.get("manufacturer") if event else None,
+            "service_model": event.get("model") if event else None,
+            "service_notes": event.get("notes") if event else None,
+            "service_cost": event.get("cost") if event else None,
+            "service_odometer_miles": event.get("odometer_miles") if event else None,
+            "service_odometer_hours": event.get("odometer_hours") if event else None,
+            "service_odometer_rides": event.get("odometer_rides") if event else None,
+            "service_odometer_elevation_ft": event.get("odometer_elevation_ft") if event else None,
+            "service_performed_by": event.get("performed_by") if event else None,
+            "service_location": event.get("service_location") if event else None,
+        }
+    )
+    return row
 
 
 def _parse_service_date(value, *, required=True):
@@ -992,6 +1181,122 @@ def api_gear_components(gear_id: Optional[str] = None):
             ],
         }
     )
+
+
+@router.get("/api/gear/components/export")
+def export_gear_components(gear_id: str):
+    if not gear_id.strip():
+        raise HTTPException(status_code=422, detail="gear_id is required.")
+
+    try:
+        components_response = api_gear_components(gear_id)
+    except psycopg.Error as error:
+        logger.error("Components export roster query failed (%s).", type(error).__name__)
+        return JSONResponse(
+            {"detail": "Components export is temporarily unavailable."},
+            status_code=503,
+        )
+
+    if components_response.status_code != 200:
+        return components_response
+
+    payload = json.loads(components_response.body)
+    selected_bike = payload.get("selected_bike")
+    if (
+        str(payload.get("selected_gear_id") or "") != gear_id
+        or not selected_bike
+        or str(selected_bike.get("gear_id") or "") != gear_id
+    ):
+        raise HTTPException(status_code=400, detail="Invalid or ineligible gear_id.")
+
+    active_components = payload.get("components") or []
+    archived_components = payload.get("archived_components") or []
+    all_components = active_components + archived_components
+    if any(str(component.get("gear_id") or "") != gear_id for component in all_components):
+        logger.error("Components export rejected an inconsistent selected-bike roster.")
+        return JSONResponse(
+            {"detail": "Components export is temporarily unavailable."},
+            status_code=503,
+        )
+    if any(
+        not isinstance(component.get("component_clocks"), dict)
+        or not isinstance(component["component_clocks"].get("life"), dict)
+        or not isinstance(component["component_clocks"].get("service"), dict)
+        for component in active_components
+    ):
+        logger.error("Components export rejected an incomplete active component clock payload.")
+        return JSONResponse(
+            {"detail": "Components export is temporarily unavailable."},
+            status_code=503,
+        )
+
+    component_ids = [component["gear_component_id"] for component in all_components]
+    events_by_component = {}
+    if component_ids:
+        try:
+            with db_conn() as conn:
+                with conn.cursor() as cur:
+                    cur.execute(
+                        """
+                            select
+                                gse.service_event_id,
+                                gse.gear_component_id,
+                                gse.service_date,
+                                gse.action,
+                                gse.product_name,
+                                gse.manufacturer,
+                                gse.model,
+                                gse.notes,
+                                gse.cost,
+                                gse.odometer_miles,
+                                gse.odometer_hours,
+                                gse.odometer_rides,
+                                gse.odometer_elevation_ft,
+                                gse.performed_by,
+                                gse.service_location,
+                                gse.created_at
+                            from public.gear_service_event gse
+                            join public.gear_component gc
+                                on gc.gear_component_id = gse.gear_component_id
+                            where gc.gear_id = %s
+                              and gse.gear_component_id = any(%s)
+                        """,
+                        (gear_id, component_ids),
+                    )
+                    service_events = cur.fetchall()
+        except psycopg.Error as error:
+            logger.error("Components export event query failed (%s).", type(error).__name__)
+            return JSONResponse(
+                {"detail": "Components export is temporarily unavailable."},
+                status_code=503,
+            )
+
+        allowed_component_ids = set(component_ids)
+        for event in service_events:
+            component_id = event["gear_component_id"]
+            if component_id in allowed_component_ids:
+                events_by_component.setdefault(component_id, []).append(event)
+
+    rows = []
+    for component in active_components:
+        events = order_component_events(events_by_component.get(component["gear_component_id"], []))
+        clocks = component["component_clocks"]
+        for event in events or [None]:
+            rows.append(_component_export_row(selected_bike, component, event, clocks))
+
+    for component in archived_components:
+        events = order_component_events(events_by_component.get(component["gear_component_id"], []))
+        for event in events or [None]:
+            rows.append(_component_export_row(selected_bike, component, event, {"life": None, "service": None}))
+
+    try:
+        return csv_response(COMPONENT_EXPORT_COLUMNS, rows, "training-components.csv")
+    except (TypeError, ValueError, UnicodeError) as error:
+        logger.error("Components export serialization failed (%s).", type(error).__name__)
+        return JSONResponse(
+            {"detail": "Components export is temporarily unavailable."},
+            status_code=503,
+        )
 
 
 @router.post("/api/gear/components")

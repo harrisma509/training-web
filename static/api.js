@@ -48,9 +48,12 @@
     return SAFE_CSV_FILENAME.test(candidate) ? candidate : fallbackFilename;
   }
 
-  async function downloadCsv(url, fallbackFilename) {
+  async function downloadCsv(url, fallbackFilename, requestOptions = {}) {
     if (!SAFE_CSV_FILENAME.test(fallbackFilename || "")) {
       throw new TypeError("A safe fallback CSV filename is required.");
+    }
+    if (!requestOptions || typeof requestOptions !== "object" || Array.isArray(requestOptions)) {
+      throw new TypeError("CSV download request options must be an object.");
     }
 
     let target;
@@ -63,9 +66,24 @@
       throw new Error("CSV downloads must use a same-origin URL.");
     }
 
-    const response = await fetch(target.href, {
+    const fetchOptions = {
       headers: { Accept: "text/csv" },
-    });
+    };
+    const requestOptionKeys = Object.keys(requestOptions);
+    if (requestOptionKeys.length) {
+      if (
+        requestOptions.method !== "POST"
+        || typeof requestOptions.body !== "string"
+        || requestOptionKeys.some(key => !["method", "body"].includes(key))
+      ) {
+        throw new TypeError("CSV downloads support only a JSON POST body.");
+      }
+      fetchOptions.method = "POST";
+      fetchOptions.headers["Content-Type"] = "application/json";
+      fetchOptions.body = requestOptions.body;
+    }
+
+    const response = await fetch(target.href, fetchOptions);
     if (!response.ok) {
       const error = new Error(`${response.status} ${response.statusText || "CSV download failed"}`);
       error.status = response.status;

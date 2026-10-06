@@ -10,6 +10,23 @@
   let zonesInitialized = false;
   let zonesLoadPromise = null;
   let zonesLoaded = false;
+  let zonesLoading = false;
+  let zonesExporting = false;
+  let zonesExportListenerBound = false;
+  const ZONES_EXPORT_FIELDS = [
+    "week_start",
+    "ride_time_hhmm",
+    "zone_flag",
+    "z1_z2_pct",
+    "z3_pct",
+    "z4_z5_pct",
+    "z1_hhmm",
+    "z2_hhmm",
+    "z3_hhmm",
+    "z4_hhmm",
+    "z5_hhmm",
+    "ride_count",
+  ];
 
   function formatPercent(value) {
     if (value === null || value === undefined || value === "") {
@@ -22,6 +39,73 @@
     }
 
     return `${Math.round(pct)}%`;
+  }
+
+  function updateZonesExportButton() {
+    const button = document.getElementById("zonesExport");
+    if (!button) {
+      return;
+    }
+    const rows = window.AppState.zonesRows;
+    button.disabled = zonesLoading || zonesExporting || !Array.isArray(rows) || rows.length === 0;
+  }
+
+  function setZonesExportStatus(message, state = "") {
+    const status = document.getElementById("zonesExportStatus");
+    if (!status) {
+      return;
+    }
+    status.textContent = message;
+    status.dataset.state = state;
+  }
+
+  async function exportZonesCsv() {
+    const rows = window.AppState.zonesRows;
+    if (zonesLoading || zonesExporting || !Array.isArray(rows) || rows.length === 0) {
+      return;
+    }
+
+    const limit = Number(window.AppState.zonesLimit);
+    const allowedLimits = window.APP_ROW_LIMITS?.zones || [26, 60, 260];
+    if (!Number.isInteger(limit) || !allowedLimits.includes(limit) || rows.length > limit) {
+      setZonesExportStatus("Select 26, 60, or 260 Zones rows.", "error");
+      return;
+    }
+
+    const exportRows = rows.map(row => {
+      const exportRow = {};
+      ZONES_EXPORT_FIELDS.forEach(field => {
+        exportRow[field] = row[field] === undefined ? null : row[field];
+      });
+      return exportRow;
+    });
+    const button = document.getElementById("zonesExport");
+    zonesExporting = true;
+    if (button) {
+      button.textContent = "Exporting…";
+    }
+    updateZonesExportButton();
+    setZonesExportStatus("Exporting…", "loading");
+
+    try {
+      await window.api.downloadCsv(
+        "/api/zones/export",
+        "training-zones.csv",
+        {
+          method: "POST",
+          body: JSON.stringify({ limit, rows: exportRows }),
+        },
+      );
+      setZonesExportStatus("Zones CSV downloaded.", "success");
+    } catch (_error) {
+      setZonesExportStatus("Zones CSV export is temporarily unavailable.", "error");
+    } finally {
+      zonesExporting = false;
+      if (button) {
+        button.textContent = "Export CSV";
+      }
+      updateZonesExportButton();
+    }
   }
 
   function zonePctClass(metric, value) {
@@ -64,39 +148,49 @@
   async function loadZonesData() {
     const requestId = ++zonesLoadRequestId;
     const limit = Number(window.AppState.zonesLimit);
+    zonesLoading = true;
+    updateZonesExportButton();
+    setZonesExportStatus("", "");
 
     try {
-      if (window.api && typeof window.api.fetchZones === "function") {
-        const rows = await window.api.fetchZones(limit);
+      try {
+        if (window.api && typeof window.api.fetchZones === "function") {
+          const rows = await window.api.fetchZones(limit);
+          if (requestId !== zonesLoadRequestId) {
+            return false;
+          }
+          window.AppState.zonesRows = rows;
+        } else {
+          const rows = await fetch(`/api/zones?limit=${limit}`).then(response => response.json());
+          if (requestId !== zonesLoadRequestId) {
+            return false;
+          }
+          window.AppState.zonesRows = rows;
+        }
+      } catch (error) {
+        console.error(error);
         if (requestId !== zonesLoadRequestId) {
           return false;
         }
-        window.AppState.zonesRows = rows;
-      } else {
-        const rows = await fetch(`/api/zones?limit=${limit}`).then(response => response.json());
-        if (requestId !== zonesLoadRequestId) {
-          return false;
-        }
-        window.AppState.zonesRows = rows;
+        window.AppState.zonesRows = [];
       }
-    } catch (error) {
-      console.error(error);
+
       if (requestId !== zonesLoadRequestId) {
         return false;
       }
-      window.AppState.zonesRows = [];
-    }
 
-    if (requestId !== zonesLoadRequestId) {
-      return false;
-    }
+      renderZonesTable();
 
-    renderZonesTable();
-
-    if (window.AppState.activeTab === "zones") {
-      renderHeaderSummary();
+      if (window.AppState.activeTab === "zones") {
+        renderHeaderSummary();
+      }
+      return true;
+    } finally {
+      if (requestId === zonesLoadRequestId) {
+        zonesLoading = false;
+        updateZonesExportButton();
+      }
     }
-    return true;
   }
 
   function loadZones(force = true) {
@@ -124,6 +218,7 @@
     }
     zonesInitialized = true;
     attachZonesLimitSelector();
+    attachZonesExportButton();
     return true;
   }
 
@@ -161,6 +256,19 @@
     });
 
     zonesLimitListenerBound = true;
+  }
+
+  function attachZonesExportButton() {
+    if (zonesExportListenerBound) {
+      return;
+    }
+    const button = document.getElementById("zonesExport");
+    if (!button) {
+      return;
+    }
+    button.addEventListener("click", exportZonesCsv);
+    zonesExportListenerBound = true;
+    updateZonesExportButton();
   }
 
   function renderZonesTable() {

@@ -98,6 +98,19 @@
   flex-wrap: wrap;
 }
 
+.components-export-status {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.components-export-status[data-state="success"] {
+  color: var(--green);
+}
+
+.components-export-status[data-state="error"] {
+  color: var(--red);
+}
+
 .components-summary-bike {
   font-size: 12px;
   font-weight: 700;

@@ -7,6 +7,8 @@
 let componentEditorDirty = false;
 let componentServiceDirty = false;
 let historyEditorDirty = false;
+let componentsDataLoading = false;
+let componentsExporting = false;
 function isComponentEditorDirty() {
   return componentEditorDirty || document.querySelector("#componentEditorForm")?.dataset.dirty === "1";
 }
@@ -392,6 +394,84 @@ function renderComponentsSummary() {
       <span class="status-pill status-muted">${formatComponentInteger(bike.elevation_ft, "0")} ft</span>
     </div>
   `;
+}
+
+function setComponentsExportStatus(message, state = "") {
+  const status = document.getElementById("componentsExportStatus");
+  if (!status) {
+    return;
+  }
+  status.textContent = message;
+  status.dataset.state = state;
+}
+
+function updateComponentsExportButton() {
+  const button = document.getElementById("componentsExport");
+  if (!button) {
+    return;
+  }
+
+  const payload = window.AppState.componentsData || {};
+  const selectedGearId = String(payload.selected_gear_id || "").trim();
+  const bikes = Array.isArray(payload.available_bikes) ? payload.available_bikes : [];
+  const components = Array.isArray(payload.components) ? payload.components : [];
+  const archived = Array.isArray(payload.archived_components) ? payload.archived_components : [];
+  const selectedBikeIsEligible = Boolean(
+    selectedGearId
+      && payload.selected_bike
+      && bikes.some(bike => String(bike.gear_id) === selectedGearId),
+  );
+  button.disabled = (
+    componentsDataLoading
+    || componentsExporting
+    || !selectedBikeIsEligible
+    || components.length + archived.length === 0
+  );
+}
+
+async function exportComponentsCsv() {
+  const payload = window.AppState.componentsData || {};
+  const selectedGearId = String(payload.selected_gear_id || "").trim();
+  const bikes = Array.isArray(payload.available_bikes) ? payload.available_bikes : [];
+  const components = Array.isArray(payload.components) ? payload.components : [];
+  const archived = Array.isArray(payload.archived_components) ? payload.archived_components : [];
+  const selectedBikeIsEligible = Boolean(
+    selectedGearId
+      && payload.selected_bike
+      && bikes.some(bike => String(bike.gear_id) === selectedGearId),
+  );
+  if (
+    componentsDataLoading
+    || componentsExporting
+    || !selectedBikeIsEligible
+    || components.length + archived.length === 0
+  ) {
+    return;
+  }
+
+  const button = document.getElementById("componentsExport");
+  componentsExporting = true;
+  if (button) {
+    button.textContent = "Exporting…";
+  }
+  updateComponentsExportButton();
+  setComponentsExportStatus("Exporting…", "loading");
+
+  try {
+    await window.api.downloadCsv(
+      `/api/gear/components/export?gear_id=${encodeURIComponent(selectedGearId)}`,
+      "training-components.csv",
+    );
+    setComponentsExportStatus("Components CSV downloaded.", "success");
+  } catch (_error) {
+    setComponentsExportStatus("Components CSV export is temporarily unavailable.", "error");
+  } finally {
+    componentsExporting = false;
+    if (button) {
+      button.textContent = "Export CSV";
+    }
+    updateComponentsExportButton();
+  }
 }
 
 function renderComponentsBikeSelect() {
@@ -1307,6 +1387,11 @@ function ensureComponentAddControls() {
 
 function initializeComponentsUi() {
   ensureComponentAddControls();
+  const exportButton = document.getElementById("componentsExport");
+  if (exportButton) {
+    exportButton.addEventListener("click", exportComponentsCsv);
+  }
+  updateComponentsExportButton();
 }
 
 initializeComponentsUi();
@@ -2784,6 +2869,9 @@ async function openComponentHistoryEventEditor(componentId, serviceEventId, even
 
 async function loadComponents() {
   const selectedGearId = String(window.AppState.componentsSelectedGearId || window.AppState.defaultBikeGearId || "").trim();
+  componentsDataLoading = true;
+  updateComponentsExportButton();
+  setComponentsExportStatus("", "");
 
   try {
     const payload = window.api && typeof window.api.fetchComponents === "function"
@@ -2797,7 +2885,7 @@ async function loadComponents() {
               if (typeof persistPreferences === "function") {
                 persistPreferences();
               }
-              return loadComponents();
+              return await loadComponents();
             }
             throw new Error(`Components endpoint failed: ${response.status}`);
           }
@@ -2817,6 +2905,9 @@ async function loadComponents() {
       selected_bike: null,
       components: [],
     };
+  } finally {
+    componentsDataLoading = false;
+    updateComponentsExportButton();
   }
 
   renderComponentsBikeSelect();

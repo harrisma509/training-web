@@ -20,6 +20,19 @@
     padding: 1px 4px;
 }
 
+.zones-export-status {
+    color: var(--muted);
+    font-size: 12px;
+}
+
+.zones-export-status[data-state="success"] {
+    color: var(--green);
+}
+
+.zones-export-status[data-state="error"] {
+    color: var(--red);
+}
+
 .zone-good {
     background: color-mix(in srgb, var(--green) 90%, var(--panel));
     color: var(--zone-good-text);

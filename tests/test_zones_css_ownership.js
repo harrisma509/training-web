@@ -19,6 +19,7 @@ for (const selector of [
     ".zone-caution",
     ".zone-bad",
     ".zone-low",
+    ".zones-export-status",
 ]) {
     assert.ok(zonesSource.includes(selector), `missing Zones selector: ${selector}`);
     assert.ok(!sharedSource.includes(selector), `shared stylesheet still owns: ${selector}`);

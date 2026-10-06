@@ -107,6 +107,45 @@ test("downloads a same-origin CSV without navigation or feature-state mutation",
     assert.deepEqual(harness.revokedUrls, ["blob:csv-export"]);
 });
 
+test("supports a bounded JSON POST while retaining the shared CSV response contract", async () => {
+    let requestedOptions;
+    const harness = createApiHarness(async (_url, options) => {
+        requestedOptions = options;
+        return successfulResponse('attachment; filename="training-zones.csv"');
+    });
+    const body = JSON.stringify({ limit: 26, rows: [{ week_start: "2026-10-05" }] });
+
+    const filename = await harness.api.downloadCsv(
+        "/api/zones/export",
+        "training-zones.csv",
+        { method: "POST", body },
+    );
+
+    assert.equal(filename, "training-zones.csv");
+    assert.equal(requestedOptions.method, "POST");
+    assert.equal(requestedOptions.headers.Accept, "text/csv");
+    assert.equal(requestedOptions.headers["Content-Type"], "application/json");
+    assert.equal(requestedOptions.body, body);
+});
+
+test("rejects unsupported CSV request options before making a request", async () => {
+    let fetchCount = 0;
+    const harness = createApiHarness(async () => {
+        fetchCount += 1;
+        return successfulResponse();
+    });
+
+    await assert.rejects(
+        harness.api.downloadCsv("/api/zones/export", "zones.csv", { method: "GET" }),
+        /JSON POST body/,
+    );
+    await assert.rejects(
+        harness.api.downloadCsv("/api/zones/export", "zones.csv", null),
+        /must be an object/,
+    );
+    assert.equal(fetchCount, 0);
+});
+
 test("rejects non-2xx responses without downloading the error body", async () => {
     let blobCalls = 0;
     const harness = createApiHarness(async () => ({
