@@ -98,7 +98,15 @@ The Components toolbar has one `Export CSV` action for the currently selected el
 
 The flat file includes active and archived components. Each service event produces one row with current bike, component, and active-clock fields repeated; a component with no service events produces one row with blank event fields. Archived components retain `component_active=false` and have blank calculated clock fields. Active clocks reuse the selected-bike API's `component_clocks` result, calculated by the canonical `derive_component_clocks` helper. Their state, availability, source, baseline, and review-reason fields explain unavailable values; unavailable metrics remain blank rather than becoming zero. Event odometer values remain historical snapshots and are distinct from the repeated current clock values.
 
-The fixed filename is `training-components.csv`. The ordered allowlist is:
+The filename is `training-components-<safe-bike-slug>.csv`, derived only from
+the validated selected bike's canonical `gear_name`, never caller input. The
+deterministic slug uses Unicode NFKD normalization, discards remaining
+non-ASCII characters, lowercases the result, replaces each run of
+non-alphanumeric characters with one hyphen, trims leading and trailing
+hyphens, and is limited to 80 characters. An empty slug falls back to `bike`,
+so the basename is at most 104 ASCII characters. For example, `2025 Orbea
+Wild` produces `training-components-2025-orbea-wild.csv`. The ordered
+allowlist is:
 
 `bike_gear_id,bike_name,bike_brand,bike_model_year,bike_activity_count,bike_ride_count,bike_total_miles,bike_total_hours,bike_total_elevation_ft,bike_last_activity_date,gear_component_id,component_key,component_name,component_group,position,component_active,track_life,track_service,preferred_metric,service_interval_miles,service_interval_hours,service_interval_days,service_interval_rides,warning_percent,component_notes,life_state,life_baseline_event_id,life_baseline_action,life_baseline_service_date,life_usage_miles,life_usage_hours,life_usage_rides,life_usage_elevation_ft,life_usage_days,life_miles_available,life_hours_available,life_rides_available,life_elevation_ft_available,life_days_available,life_miles_source,life_hours_source,life_rides_source,life_elevation_ft_source,life_days_source,life_review_reasons,service_state,service_baseline_event_id,service_baseline_action,service_baseline_service_date,service_usage_miles,service_usage_hours,service_usage_rides,service_usage_elevation_ft,service_usage_days,service_miles_available,service_hours_available,service_rides_available,service_elevation_ft_available,service_days_available,service_miles_source,service_hours_source,service_rides_source,service_elevation_ft_source,service_days_source,service_review_reasons,service_event_id,service_date,service_action,service_product_name,service_manufacturer,service_model,service_notes,service_cost,service_odometer_miles,service_odometer_hours,service_odometer_rides,service_odometer_elevation_ft,service_performed_by,service_location`
 

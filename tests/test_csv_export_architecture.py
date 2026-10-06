@@ -8,7 +8,7 @@ ROOT = Path(__file__).resolve().parents[1]
 ROUTES = {
     "routes/activities.py": ("get", "/api/activities/search/export", "training-search.csv"),
     "routes/weekly.py": ("get", "/api/weekly/export", "training-weekly.csv"),
-    "routes/components.py": ("get", "/api/gear/components/export", "training-components.csv"),
+    "routes/components.py": ("get", "/api/gear/components/export", "training-components-"),
     "routes/zones.py": ("post", "/api/zones/export", "training-zones.csv"),
 }
 FEATURE_MODULES = (
@@ -125,7 +125,7 @@ class CsvExportArchitectureTests(unittest.TestCase):
         for filename in (
             "training-search.csv",
             "training-weekly.csv",
-            "training-components.csv",
+            "training-components-<safe-bike-slug>.csv",
             "training-zones.csv",
         ):
             self.assertIn(filename, architecture)
@@ -168,6 +168,17 @@ class CsvExportArchitectureTests(unittest.TestCase):
             "do not depend on the browser's separate Blob/object-URL",
         ):
             self.assertIn(contract, architecture)
+        self.assertNotIn("training-components.csv", architecture)
+        components_api = read("docs/COMPONENTS_SERVICE_API.md")
+        for contract in (
+            "training-components-<safe-bike-slug>.csv",
+            "canonical `gear_name`",
+            "NFKD",
+            "80 characters",
+            "training-components-2025-orbea-wild.csv",
+        ):
+            self.assertIn(contract, components_api)
+        self.assertNotIn("training-components.csv", components_api)
 
         constitution = read("docs/ENGINEERING_CONSTITUTION.md")
         self.assertNotIn("Sensitive fields remain excluded by default", constitution)

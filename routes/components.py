@@ -12,6 +12,7 @@ Owns a read-only endpoint that combines:
 import json
 import logging
 import re
+import unicodedata
 from datetime import date
 from decimal import Decimal, InvalidOperation
 from functools import cmp_to_key
@@ -1183,6 +1184,22 @@ def api_gear_components(gear_id: Optional[str] = None):
     )
 
 
+_COMPONENT_EXPORT_FILENAME_MAX_SLUG_LENGTH = 80
+
+
+def _components_export_filename(bike_name: str) -> str:
+    """Build a safe, bounded attachment name from a validated bike name."""
+    ascii_name = (
+        unicodedata.normalize("NFKD", bike_name)
+        .encode("ascii", "ignore")
+        .decode("ascii")
+        .lower()
+    )
+    slug = re.sub(r"[^a-z0-9]+", "-", ascii_name).strip("-")
+    slug = slug[:_COMPONENT_EXPORT_FILENAME_MAX_SLUG_LENGTH].rstrip("-")
+    return f"training-components-{slug or 'bike'}.csv"
+
+
 @router.get("/api/gear/components/export")
 def export_gear_components(gear_id: str):
     if not gear_id.strip():
@@ -1208,6 +1225,15 @@ def export_gear_components(gear_id: str):
         or str(selected_bike.get("gear_id") or "") != gear_id
     ):
         raise HTTPException(status_code=400, detail="Invalid or ineligible gear_id.")
+    bike_name = selected_bike.get("gear_name")
+    if bike_name is None:
+        bike_name = ""
+    elif not isinstance(bike_name, str):
+        logger.error("Components export rejected a non-text selected-bike name.")
+        return JSONResponse(
+            {"detail": "Components export is temporarily unavailable."},
+            status_code=503,
+        )
 
     active_components = payload.get("components") or []
     archived_components = payload.get("archived_components") or []
@@ -1290,7 +1316,8 @@ def export_gear_components(gear_id: str):
             rows.append(_component_export_row(selected_bike, component, event, {"life": None, "service": None}))
 
     try:
-        return csv_response(COMPONENT_EXPORT_COLUMNS, rows, "training-components.csv")
+        filename = _components_export_filename(bike_name)
+        return csv_response(COMPONENT_EXPORT_COLUMNS, rows, filename)
     except (TypeError, ValueError, UnicodeError) as error:
         logger.error("Components export serialization failed (%s).", type(error).__name__)
         return JSONResponse(

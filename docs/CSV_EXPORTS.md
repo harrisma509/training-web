@@ -10,7 +10,7 @@ remain in their owning contracts.
 | --- | --- | --- | --- | --- |
 | Search | `routes/activities.py` — `GET /api/activities/search/export` | One row per activity; up to 50,000. The route detects row 50,001 and rejects the entire export. | `training-search.csv` | [Search PRD](PRD/Search.md) |
 | Weekly | `routes/weekly.py` — `GET /api/weekly/export` | One row per available week, newest first; uses the selected 10, 52, or 520-row limit. | `training-weekly.csv` | [Weekly PRD](PRD/Weekly.md) |
-| Components / Service History | `routes/components.py` — `GET /api/gear/components/export?gear_id=<selected-bike-id>` | Selected bike only; one row per service event, or one blank-event row for a component with no events. Includes active and archived components. | `training-components.csv` | [Components Service API](COMPONENTS_SERVICE_API.md) |
+| Components / Service History | `routes/components.py` — `GET /api/gear/components/export?gear_id=<selected-bike-id>` | Selected bike only; one row per service event, or one blank-event row for a component with no events. Includes active and archived components. | `training-components-<safe-bike-slug>.csv` | [Components Service API](COMPONENTS_SERVICE_API.md) |
 | Zones | `routes/zones.py` — `POST /api/zones/export` | One row per currently visible table row, in visible order; bounded by the UI limits 26, 60, or 260. | `training-zones.csv` | [Zones PRD](PRD/Zones.md) |
 
 The feature routes own their query or posted-row scope, validation, bounds,

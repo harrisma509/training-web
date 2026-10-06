@@ -1,5 +1,6 @@
 import csv
 import io
+import inspect
 import json
 import unittest
 from datetime import date, datetime
@@ -238,6 +239,7 @@ class ComponentsExportTests(unittest.TestCase):
             if getattr(route, "path", None) == "/api/gear/components/export"
         )
         self.assertEqual(route.methods, {"GET"})
+        self.assertEqual(tuple(inspect.signature(route.endpoint).parameters), ("gear_id",))
         with self.assertRaises(HTTPException) as raised:
             export_gear_components("")
         self.assertEqual(raised.exception.status_code, 422)
@@ -250,10 +252,39 @@ class ComponentsExportTests(unittest.TestCase):
         self.assertEqual(response.status_code, 400)
         roster.assert_called_once_with("not-a-bike")
 
+    def test_filename_uses_the_canonical_bike_name_and_is_safe_bounded_and_deterministic(self):
+        cases = (
+            ("2025 Orbea Wild", "training-components-2025-orbea-wild.csv"),
+            ("  2025///Orbea---Wild?!  ", "training-components-2025-orbea-wild.csv"),
+            ("Café Vélo", "training-components-cafe-velo.csv"),
+            (
+                '../../2025\\Orbea" Wild\r\nX:\x01',
+                "training-components-2025-orbea-wild-x.csv",
+            ),
+            ("", "training-components-bike.csv"),
+            ("\U0001F6B5", "training-components-bike.csv"),
+            ("A" * 200, f"training-components-{'a' * 80}.csv"),
+        )
+        for bike_name, filename in cases:
+            with self.subTest(bike_name=bike_name):
+                payload = bike_payload([])
+                payload["selected_bike"]["gear_name"] = bike_name
+
+                response, _, _ = self.export_with(payload)
+                repeated_response, _, _ = self.export_with(payload)
+
+                expected_disposition = f'attachment; filename="{filename}"'
+                self.assertEqual(response.status_code, 200)
+                self.assertEqual(response.headers["content-disposition"], expected_disposition)
+                self.assertEqual(repeated_response.headers["content-disposition"], expected_disposition)
+                self.assertTrue(filename.isascii())
+                self.assertLessEqual(len(filename), 104)
+
     def test_exports_all_events_in_canonical_order_and_archived_rows_with_blank_clocks(self):
         active = [component(11), component(12)]
         archived = [component(21, active=False)]
         payload = bike_payload(active, archived)
+        payload["selected_bike"]["gear_name"] = "2025 Orbea Wild"
         events = [
             service_event(102, 11, "2026-05-01", created_at=datetime(2026, 5, 1, 11), notes="=SUM(1,1)"),
             service_event(201, 21, "2026-06-01"),
@@ -269,7 +300,7 @@ class ComponentsExportTests(unittest.TestCase):
         self.assertEqual(response.headers["content-type"], "text/csv; charset=utf-8")
         self.assertEqual(
             response.headers["content-disposition"],
-            'attachment; filename="training-components.csv"',
+            'attachment; filename="training-components-2025-orbea-wild.csv"',
         )
         self.assertTrue(response.body.startswith(b"\xef\xbb\xbf"))
         records = csv_records(response)
