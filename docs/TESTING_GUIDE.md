@@ -160,8 +160,46 @@ Reasonable exceptions include documentation-only changes, comments, and genuinel
 
 Pytest covers Python, not vanilla JavaScript behavior. Continue `node --check` for changed JavaScript files. Browser validation remains required for UI changes. Do not add Playwright or a JavaScript test framework as part of this guide.
 
-The current frontend contract inventory is 35 Node test files. The current Python
-baseline is 238 passed tests and 46 subtests. The authoritative architecture,
+### Complete Node inventory
+
+Run every repository-owned `test_*.js` file explicitly. In Windows
+PowerShell:
+
+```powershell
+$nodeTests = @(Get-ChildItem -Path tests -Filter 'test_*.js' -File | ForEach-Object { $_.FullName })
+if (-not $nodeTests) { throw "No Node test files were discovered" }
+node --test $nodeTests
+```
+
+On macOS/Linux, from the repository root:
+
+```bash
+node --test tests/test_*.js
+```
+
+For changed JavaScript, run `node --check <changed-file.js>` for every changed
+file before the focused and complete Node suites. For changed Python, use the
+repository-local interpreter and pass every changed Python path to
+`py_compile`; never use a system interpreter.
+
+### Live CSV response capture
+
+For browser CSV changes, use a fresh page per export and attach console,
+page-error, request-failure, and response monitoring before navigation. Click
+the real Export CSV button and capture the same-origin `text/csv` network
+response and body bytes in memory. Do not rely on Playwright's separate
+download event for Blob/object-URL downloads. Inspect status and attachment
+headers, BOM, header, row count/order, feature success state, and preserved UI
+selection without printing private-note contents or other sensitive values.
+
+If the managed browser cannot expose the response body, use one bounded,
+direct, non-mutating endpoint probe and report the remaining limitation. Do
+not change product code solely for a harness-only download observation and do
+not require manual user confirmation. The complete export ownership and
+contract map is in [CSV_EXPORTS.md](CSV_EXPORTS.md).
+
+The current complete-suite baseline is Python `268 passed, 85 subtests` and
+Node `45/45` tests across 39 `test_*.js` files. The authoritative architecture,
 registry, deployment, and release-verification rules are in
 [FRONTEND_ARCHITECTURE.md](FRONTEND_ARCHITECTURE.md).
 

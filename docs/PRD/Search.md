@@ -14,9 +14,9 @@ Browser -> training-web /api/activities/search
 
 `training-etl` remains the owner of schema evolution, ingestion, normalization, and field semantics. Search V1 does not require a new `training-api` endpoint merely to read processed activity rows. `training-api` remains reserved for explicitly approved synchronous ETL operations and coordinated ETL-owned contracts such as Coach context. See `training-etl/docs/ARD/TRAINING_SYSTEM_SERVICE_BOUNDARIES.md` for the cross-service decision.
 
-Enhanced Activity Search, Preview, and CSV Export
+Enhanced Activity Search and CSV Export
 
-Priority: High | Status/Gate: Architecture investigation, then a minimal vertical slice using trusted existing data
+Priority: High | Status: Search V1 and its fixed-schema CSV export are deployed. Canonical geography, weather, and configurable export formats remain deferred.
 
 Product need
 
@@ -24,7 +24,7 @@ Training Intelligence contains rich activity data that is difficult to explore o
 
 Create a reusable:
 
-Search → Filter → Preview → Open → Export
+Search → Filter → Open → Export
 
 workflow over persisted activity and related training data.
 
@@ -44,7 +44,7 @@ Product and UX decision
 
 Build a dedicated Search tab as the primary workspace.
 
-Daily may retain or later receive a lightweight search shortcut for finding a known date or activity, but Daily should remain a compact training-summary surface. Advanced filters, result previews, column selection, privacy controls, and export belong in the Search tab.
+Daily may retain or later receive a lightweight search shortcut for finding a known date or activity, but Daily should remain a compact training-summary surface. Advanced filters and privacy controls belong in the Search tab. The current CSV export has a fixed schema and does not use a separate preview or column picker.
 
 Both surfaces should eventually use the same typed search contract rather than separate search implementations.
 
@@ -249,13 +249,13 @@ Selecting a result should allow Mike to:
 Open the reusable activity-narrative drawer
 Navigate to the corresponding Daily date
 View the complete approved activity-detail fields
-Select the activity for export where applicable
+Export the complete last-applied result set; export is not limited to selected rows
 
 Do not create separate narrative presentation components for Search and Daily.
 
-Column selection and presets
+Future column selection and presets (not Search CSV V1)
 
-Allow Mike to choose visible and exported columns without making the default results table excessively wide.
+The current CSV export uses a fixed allowlist and does not offer column selection, presets, or an export preview. Consider configurable visible or exported columns only as a separately approved future contract.
 
 Candidate presets:
 
@@ -306,13 +306,13 @@ Use this stable column order:
 
 Private Note is included by default as the final column after `description`. The Include Private Note checkbox is checked on initial render; uncheck it to omit `private_note` entirely. Its compact tooltip says “Uncheck to exclude Private Note.” There is no persistent warning line. The checkbox resets to checked after every export attempt and is not persisted.
 
-CSV output preserves Unicode and line breaks and uses a UTF-8 encoding suitable for modern spreadsheet applications. Dates and timestamps use their stored local/UTC values; distances are miles, elevation is feet, durations are seconds, and activity load is the persisted main-ride load joined by local date and activity ID. Missing values are blank. Description is included in V1; private note remains opt-in.
+CSV output preserves Unicode and line breaks and uses a UTF-8 encoding suitable for modern spreadsheet applications. Dates and timestamps use their stored local/UTC values; distances are miles, elevation is feet, durations are seconds, and activity load is the persisted main-ride load joined by local date and activity ID. Missing values are blank. Description is included, and Private Note is included by default unless the user explicitly unchecks its export checkbox. That checkbox is checked on initial render, resets checked after success or failure, and is not persisted; this is distinct from the explicit source selection required to search private-note text. The canonical cross-export transport and privacy contract is documented in [CSV_EXPORTS.md](../CSV_EXPORTS.md).
 
 Daily Check-in notes, sensitive health narrative, exact coordinates, raw provider data, internal database fields, secrets, and operational metadata are not exported. The CSV is downloaded by the browser and is not persisted or forwarded by the application.
 
-AI-safe exports
+Future sanitized AI-safe exports (deferred)
 
-Support an explicitly selected sanitized export appropriate for upload to trusted AI tools.
+No sanitized or AI-specific export preset is part of the current fixed-schema Search CSV V1. Any future export for trusted AI tools requires a separate approved contract.
 
 The sanitized preset should:
 
@@ -429,13 +429,10 @@ Short labeled excerpts
 Existing narrative drawer
 Unicode and line-break preservation
 Privacy and logging validation
-Slice 3: Configurable columns and CSV export
-Column selector
-Safe presets
-Export preview
-Stable CSV contract
-Explicit sensitive-field selection
-Sanitized AI-upload preset
+Slice 3: Fixed-schema CSV export V1 (complete)
+The deployed export uses the approved stable field order, includes the complete last-applied result set up to its hard bound, includes Description, and includes Private Note by default with an explicit exclude checkbox. It has no preview, column picker, or AI-specific preset. See [CSV_EXPORTS.md](../CSV_EXPORTS.md) for shared delivery and validation ownership.
+
+Future configurable columns, presets, or sanitized exports require a separate product and privacy contract.
 Slice 4: Additional trusted metrics and usability
 Additional persisted activity metrics
 More filters and sort choices
@@ -474,7 +471,7 @@ Main writing improvements
 Locked the dedicated Search tab instead of leaving Search-tab versus Daily-panel placement unresolved.
 Separated trusted Search V1 fields from future enrichment, avoiding premature promises about Strava location and historical weather.
 Converted the pasted Coach example into a clear start-time product requirement.
-Added the complete Search → Filter → Preview → Open → Export workflow.
+Clarified the Search → Filter → Open → Export workflow and the fixed-schema CSV V1 contract.
 Defined narrative privacy and field-fidelity behavior.
-Added concrete result columns, filters, sorting, presets, export defaults, implementation slices, and acceptance criteria.
+Added concrete result columns, filters, sorting, current export defaults, implementation slices, and acceptance criteria; configurable export presets remain deferred.
 Preserved future AI and Coach integration while preventing Search from becoming an unrestricted query system.

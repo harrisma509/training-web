@@ -75,6 +75,18 @@ The ownership rule is:
 - `training-etl` owns ingestion, schema meaning, writes, and authoritative calculations.
 - Tests preserve behavior and architecture contracts.
 
+### CSV export ownership
+
+Browser-facing CSV delivery is owned by `training-web`: `csv_export.py` is the
+sole Python serializer/attachment-response helper, and `static/api.js` is the
+sole generic same-origin browser download helper. Feature routes own export
+scope, validation, bounds, ordering, privacy, row construction, and fixed
+field allowlists; feature modules own export-button state and UI-state
+preservation. Templates and feature CSS retain their normal structure and
+presentation roles. `app.js` remains shell-only and contains no export
+business logic. ETL CSV writers are precedent only, not browser-delivery
+owners. See [CSV_EXPORTS.md](CSV_EXPORTS.md) for the four current contracts.
+
 ## Lifecycle contract
 
 Lifecycle methods exist only when real consumers need them; a feature may expose
@@ -154,8 +166,8 @@ inspect the archive without upload. No supported NAS deployment path remains.
 
 ## Testing and release evidence
 
-The current baseline is Python `238 passed, 46 subtests` and Node `35/35` test
-files.
+The current complete-suite baseline is Python `268 passed, 85 subtests` and
+Node `45/45` tests across 39 `test_*.js` files.
 Tests are isolated from paid providers, production databases,
 Docker, SSH, deployment, and mutating operations.
 

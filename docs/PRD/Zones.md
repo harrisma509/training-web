@@ -1,5 +1,8 @@
 # Zones CSV export
 
+Cross-export ownership, transport safety, and live validation guidance is
+documented in [CSV_EXPORTS.md](../CSV_EXPORTS.md).
+
 The Zones pane has one `Export CSV` action beside the existing row-limit control. The visible table is rendered directly from `AppState.zonesRows` in array order; the `zonesLimit` selection controls the request limit (`26`, `60`, or `260`). There are no client filters, pagination, expansion, or secondary visible tables.
 
 The browser posts only the structured values from the current visible rows to the feature-owned `POST /api/zones/export` endpoint. This preserves the exact rendered row set and order if the underlying weekly summary changes after the table loads. The endpoint accepts only the selected allowed limit and the exact Zones row schema, rejects empty, oversized, duplicate, or non-newest-first input, and uses the shared E1 CSV serializer. It does not accept HTML, arbitrary columns, SQL, filenames, or a generic row export contract.

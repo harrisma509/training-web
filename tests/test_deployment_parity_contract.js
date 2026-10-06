@@ -127,7 +127,7 @@ for (const [guidance, windowsScript, unixScript] of [
     assert.match(guidance, /-DryRun/);
     assert.match(guidance, /--dry-run/);
 }
-assert.match(webTesting, /35 Node test files/);
+assert.match(webTesting, /39 `test_\*\.js` files/);
 assert.match(webTesting, /\.\\\.venv\\Scripts\\python\.exe -m pytest/);
 assert.match(etlTesting, /\.\\\.venv\\Scripts\\python\.exe -m pytest/);
 assert.match(etlTesting, /94 passed tests and 52 subtests/);

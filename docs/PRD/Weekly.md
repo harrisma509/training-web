@@ -1,5 +1,8 @@
 # Weekly CSV export
 
+Cross-export ownership, transport safety, and live validation guidance is
+documented in [CSV_EXPORTS.md](../CSV_EXPORTS.md).
+
 Weekly CSV export is a browser-only download of the latest rows selected by the existing Weekly rows control. The selected limit is exactly `10`, `52`, or `520`; the displayed table request and export use the same value. The server accepts and returns up to 520 rows. Each CSV row represents one returned week, ordered by `week_start` descending. The export does not synthesize missing calendar weeks.
 
 The export reuses the current bounded, read-only Weekly query and its existing derived values and joins. Daily activity totals, weekly average weight, and falls remain pre-aggregated to week grain. Weekly Audit and Weekly Commentary join once per week; audit-item details are not joined. Export does not recalculate training metrics.

@@ -91,6 +91,9 @@ Add Component exposes Template and Component starting point choices (`Installed 
 
 ## Selected-bike Components CSV export
 
+Cross-export ownership, transport safety, and live validation guidance is
+documented in [CSV_EXPORTS.md](CSV_EXPORTS.md).
+
 The Components toolbar has one `Export CSV` action for the currently selected eligible bike. `GET /api/gear/components/export?gear_id=<selected-bike-id>` validates that bike through the existing eligible-bike contract, uses the current Components roster and bike totals, and selects service events only through the included component IDs joined back to that bike. Caller-supplied component IDs are not accepted.
 
 The flat file includes active and archived components. Each service event produces one row with current bike, component, and active-clock fields repeated; a component with no service events produces one row with blank event fields. Archived components retain `component_active=false` and have blank calculated clock fields. Active clocks reuse the selected-bike API's `component_clocks` result, calculated by the canonical `derive_component_clocks` helper. Their state, availability, source, baseline, and review-reason fields explain unavailable values; unavailable metrics remain blank rather than becoming zero. Event odometer values remain historical snapshots and are distinct from the repeated current clock values.

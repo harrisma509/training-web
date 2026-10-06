@@ -46,8 +46,8 @@ for (const phrase of [
     "immutable",
     "Container recreation",
     "image rebuild",
-    "238 passed, 46 subtests",
-    "35/35",
+    "268 passed, 85 subtests",
+    "45/45",
     "15 registry keys",
     "ENGINEERING_CONSTITUTION.md",
     "Historical closeout context",
@@ -65,7 +65,7 @@ assert.match(aiGuide, /Documentation-only changes are not/);
 assert.match(webInstructions, /Permanent architecture and execution budget/);
 assert.match(etlInstructions, /Permanent architecture and execution budget/);
 assert.match(etlConstitution, /FRONTEND_ARCHITECTURE\.md/);
-assert.match(testing, /35 Node test files/);
+assert.match(testing, /39 `test_\*\.js` files/);
 assert.match(etlTesting, /94 passed tests and 52 subtests/);
 assert.match(architecture, /Components\/Service/);
 assert.doesNotMatch(architecture, /retired frontend handoff/);
