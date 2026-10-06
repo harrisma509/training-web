@@ -113,7 +113,7 @@ class CsvExportArchitectureTests(unittest.TestCase):
         self.assertNotRegex(app, r"downloadCsv|csv_export|training-(?:search|weekly|components|zones)\.csv")
         self.assertNotRegex(app, r"/api/(?:activities/search|weekly|gear/components|zones)/export")
 
-    def test_documented_cross_export_contract_and_current_search_defaults(self):
+    def test_documented_cross_export_contract_and_search_privacy_contract(self):
         architecture = read("docs/CSV_EXPORTS.md")
         for endpoint in (
             "/api/activities/search/export",
@@ -169,11 +169,38 @@ class CsvExportArchitectureTests(unittest.TestCase):
         ):
             self.assertIn(contract, architecture)
 
+        constitution = read("docs/ENGINEERING_CONSTITUTION.md")
+        self.assertNotIn("Sensitive fields remain excluded by default", constitution)
+        for contract in (
+            "Sensitive fields require an explicit, documented product contract and visible user control.",
+            "Each export must document its inclusion default, privacy boundary, and exclusions.",
+            "Search currently includes Private Note by default and provides an explicit control to exclude it.",
+        ):
+            self.assertIn(contract, constitution)
+        for safeguard in (
+            "Never expose secrets or sensitive payloads.",
+            "arbitrary SQL surface",
+            "typed, allowlisted, bounded retrieval",
+        ):
+            self.assertIn(safeguard, constitution)
+
         search_prd = read("docs/PRD/Search.md")
         self.assertIn("Private Note is included by default", search_prd)
         self.assertIn("Description is included", search_prd)
+        self.assertIn("uncheck it to omit `private_note` entirely", search_prd)
+        self.assertIn("The checkbox resets to checked after every export attempt and is not persisted.", search_prd)
+        self.assertIn("all matching rows up to 50,000", search_prd)
+        self.assertIn("Sensitive-field defaults and user controls match the documented fixed-schema export contract.", search_prd)
+        self.assertNotIn("Sensitive fields are excluded by default", search_prd)
+        self.assertNotIn("Sanitized exports can be safely supplied to trusted AI tools.", search_prd)
+        self.assertIn("No sanitized or AI-specific export preset is part of the current fixed-schema Search CSV V1.", search_prd)
+        self.assertIn(
+            "Any future sanitized or AI-specific export requires a separately approved privacy and field contract.",
+            search_prd,
+        )
         self.assertNotIn("private note remains opt-in", search_prd.casefold())
         self.assertNotIn("Search → Filter → Preview → Open → Export", search_prd)
+        self.assertIn("does not use a separate preview or column picker", search_prd)
         self.assertIn("does not offer column selection, presets, or an export preview", search_prd)
 
     def test_testing_guide_documents_automatic_csv_response_capture(self):

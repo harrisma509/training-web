@@ -310,11 +310,11 @@ CSV output preserves Unicode and line breaks and uses a UTF-8 encoding suitable 
 
 Daily Check-in notes, sensitive health narrative, exact coordinates, raw provider data, internal database fields, secrets, and operational metadata are not exported. The CSV is downloaded by the browser and is not persisted or forwarded by the application.
 
-Future sanitized AI-safe exports (deferred)
+Future sanitized or AI-specific exports (deferred)
 
-No sanitized or AI-specific export preset is part of the current fixed-schema Search CSV V1. Any future export for trusted AI tools requires a separate approved contract.
+No sanitized or AI-specific export preset is part of the current fixed-schema Search CSV V1. Any future export for trusted AI tools requires a separately approved privacy and field contract.
 
-The sanitized preset should:
+Potential requirements for a future contract (not approved for V1):
 
 Exclude credentials, raw JSON, and internal identifiers not needed for analysis
 Exclude private notes unless specifically selected
@@ -457,8 +457,8 @@ Private-note searching is explicit.
 Results remain bounded and responsive.
 Selecting a narrative result reuses the existing drawer.
 CSV exports have stable, documented columns, units, timezone, and provenance.
-Sensitive fields are excluded by default.
-Sanitized exports can be safely supplied to trusted AI tools.
+Sensitive-field defaults and user controls match the documented fixed-schema export contract.
+Any future sanitized or AI-specific export requires a separately approved privacy and field contract.
 Search results match authoritative persisted values.
 No raw provider payload, secret, or private narrative appears in logs or diagnostics.
 Existing Daily, Weekly, Coach, sync, narrative, and export behavior remains stable.
