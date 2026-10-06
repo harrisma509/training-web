@@ -99,7 +99,7 @@ The Components toolbar has one `Export CSV` action for the currently selected el
 The flat file includes active and archived components. Each service event produces one row with current bike, component, and active-clock fields repeated; a component with no service events produces one row with blank event fields. Archived components retain `component_active=false` and have blank calculated clock fields. Active clocks reuse the selected-bike API's `component_clocks` result, calculated by the canonical `derive_component_clocks` helper. Their state, availability, source, baseline, and review-reason fields explain unavailable values; unavailable metrics remain blank rather than becoming zero. Event odometer values remain historical snapshots and are distinct from the repeated current clock values.
 
 The filename is `training-components-<safe-bike-slug>.csv`, derived only from
-the validated selected bike's canonical `gear_name`, never caller input. The
+the validated selected bike's canonical `display_name`, never caller input. The
 deterministic slug uses Unicode NFKD normalization, discards remaining
 non-ASCII characters, lowercases the result, replaces each run of
 non-alphanumeric characters with one hyphen, trims leading and trailing

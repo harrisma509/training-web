@@ -169,6 +169,7 @@ def bike_payload(components, archived_components=(), *, gear_id="bike-1"):
         "gear_name": "Trail bike",
         "brand": "Example",
         "model_year": 2024,
+        "display_name": "2024 Example Trail bike",
         "activity_count": 9,
         "ride_count": 8,
         "miles": 1000,
@@ -252,7 +253,7 @@ class ComponentsExportTests(unittest.TestCase):
         self.assertEqual(response.status_code, 400)
         roster.assert_called_once_with("not-a-bike")
 
-    def test_filename_uses_the_canonical_bike_name_and_is_safe_bounded_and_deterministic(self):
+    def test_filename_uses_the_canonical_bike_display_name_and_is_safe_bounded_and_deterministic(self):
         cases = (
             ("2025 Orbea Wild", "training-components-2025-orbea-wild.csv"),
             ("  2025///Orbea---Wild?!  ", "training-components-2025-orbea-wild.csv"),
@@ -268,7 +269,7 @@ class ComponentsExportTests(unittest.TestCase):
         for bike_name, filename in cases:
             with self.subTest(bike_name=bike_name):
                 payload = bike_payload([])
-                payload["selected_bike"]["gear_name"] = bike_name
+                payload["selected_bike"]["display_name"] = bike_name
 
                 response, _, _ = self.export_with(payload)
                 repeated_response, _, _ = self.export_with(payload)
@@ -284,7 +285,10 @@ class ComponentsExportTests(unittest.TestCase):
         active = [component(11), component(12)]
         archived = [component(21, active=False)]
         payload = bike_payload(active, archived)
-        payload["selected_bike"]["gear_name"] = "2025 Orbea Wild"
+        payload["selected_bike"]["gear_name"] = "Wild"
+        payload["selected_bike"]["brand"] = "Orbea"
+        payload["selected_bike"]["model_year"] = 2025
+        payload["selected_bike"]["display_name"] = "2025 Orbea Wild"
         events = [
             service_event(102, 11, "2026-05-01", created_at=datetime(2026, 5, 1, 11), notes="=SUM(1,1)"),
             service_event(201, 21, "2026-06-01"),

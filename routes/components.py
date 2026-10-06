@@ -1187,10 +1187,10 @@ def api_gear_components(gear_id: Optional[str] = None):
 _COMPONENT_EXPORT_FILENAME_MAX_SLUG_LENGTH = 80
 
 
-def _components_export_filename(bike_name: str) -> str:
-    """Build a safe, bounded attachment name from a validated bike name."""
+def _components_export_filename(display_name: str) -> str:
+    """Build a safe, bounded attachment name from a validated bike display name."""
     ascii_name = (
-        unicodedata.normalize("NFKD", bike_name)
+        unicodedata.normalize("NFKD", display_name)
         .encode("ascii", "ignore")
         .decode("ascii")
         .lower()
@@ -1225,11 +1225,9 @@ def export_gear_components(gear_id: str):
         or str(selected_bike.get("gear_id") or "") != gear_id
     ):
         raise HTTPException(status_code=400, detail="Invalid or ineligible gear_id.")
-    bike_name = selected_bike.get("gear_name")
-    if bike_name is None:
-        bike_name = ""
-    elif not isinstance(bike_name, str):
-        logger.error("Components export rejected a non-text selected-bike name.")
+    display_name = selected_bike.get("display_name")
+    if not isinstance(display_name, str):
+        logger.error("Components export rejected an invalid selected-bike display name.")
         return JSONResponse(
             {"detail": "Components export is temporarily unavailable."},
             status_code=503,
@@ -1316,7 +1314,7 @@ def export_gear_components(gear_id: str):
             rows.append(_component_export_row(selected_bike, component, event, {"life": None, "service": None}))
 
     try:
-        filename = _components_export_filename(bike_name)
+        filename = _components_export_filename(display_name)
         return csv_response(COMPONENT_EXPORT_COLUMNS, rows, filename)
     except (TypeError, ValueError, UnicodeError) as error:
         logger.error("Components export serialization failed (%s).", type(error).__name__)

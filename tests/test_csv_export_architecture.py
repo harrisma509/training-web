@@ -172,7 +172,7 @@ class CsvExportArchitectureTests(unittest.TestCase):
         components_api = read("docs/COMPONENTS_SERVICE_API.md")
         for contract in (
             "training-components-<safe-bike-slug>.csv",
-            "canonical `gear_name`",
+            "canonical `display_name`",
             "NFKD",
             "80 characters",
             "training-components-2025-orbea-wild.csv",
