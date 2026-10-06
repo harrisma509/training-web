@@ -14,7 +14,6 @@ class FakeElement {
         this.textContent = "";
         this.disabled = false;
         this.checked = false;
-        this.hidden = false;
         this.open = false;
         this.className = "";
         this.style = {};
@@ -88,10 +87,9 @@ function createSearchHarness(initialHref = "http://localhost/?tab=search") {
         "searchStartTimeFrom", "searchStartTimeTo", "searchLimit", "searchClear",
         "searchPrevious", "searchNext", "searchKeepFiltersOpen", "searchValidationMessage",
         "searchStatus", "searchScope", "searchActiveFilters", "searchResults", "searchPageStatus",
-        "searchIncludePrivateNote", "searchPrivateNoteWarning", "searchExport",
+        "searchIncludePrivateNote", "searchExport",
     ];
     const elements = Object.fromEntries(ids.map(id => [id, new FakeElement(id === "searchForm" ? "form" : "div")]));
-    elements.searchPrivateNoteWarning.hidden = true;
     const inputIds = [
         "searchText", "searchStartDate", "searchEndDate", "searchSportType",
         "searchGearId", "searchMinDistance", "searchMaxDistance", "searchMinElevation",
@@ -234,8 +232,9 @@ async function main() {
     assert.match(dailySource, /openAdvancedSearch\(\{ text:/);
     assert.match(htmlSource, /id="searchTab"/);
     assert.match(htmlSource, /id="searchResults"/);
-    assert.match(htmlSource, /id="searchIncludePrivateNote"/);
-    assert.match(htmlSource, /id="searchPrivateNoteWarning" class="search-private-note-warning" hidden/);
+    assert.match(htmlSource, /id="searchIncludePrivateNote"[^>]*checked[^>]*title="Uncheck to exclude Private Note\."/);
+    assert.doesNotMatch(htmlSource, /searchPrivateNoteWarning|Private Notes may contain sensitive information/);
+    assert.doesNotMatch(searchCssSource, /search-private-note-warning/);
     assert.match(htmlSource, /id="searchExport"[^>]*disabled>Export CSV/);
     assert.match(htmlSource, /id="searchSportType"/);
     assert.doesNotMatch(htmlSource, /id="searchCategory"|>Category</);
@@ -462,9 +461,7 @@ async function main() {
     exportSearch.elements.searchText.value = "draft only";
     await exportSearch.elements.searchText.trigger("input");
     exportSearch.elements.searchLimit.value = "100";
-    exportSearch.elements.searchIncludePrivateNote.checked = true;
-    await exportSearch.elements.searchIncludePrivateNote.trigger("change");
-    assert.equal(exportSearch.elements.searchPrivateNoteWarning.hidden, false);
+    exportSearch.elements.searchIncludePrivateNote.checked = false;
 
     let finishExport;
     exportSearch.setDownloadResponse(() => new Promise(resolve => { finishExport = resolve; }));
@@ -480,15 +477,14 @@ async function main() {
     assert.equal(exportedUrl.searchParams.get("gear_id"), "bike-1");
     assert.equal(exportedUrl.searchParams.get("sort_by"), "load");
     assert.equal(exportedUrl.searchParams.get("sort_direction"), "asc");
-    assert.equal(exportedUrl.searchParams.get("include_private_note"), "true");
+    assert.equal(exportedUrl.searchParams.get("include_private_note"), "false");
     assert.equal(exportedUrl.searchParams.has("limit"), false);
     assert.equal(exportedUrl.searchParams.has("offset"), false);
     assert.equal(exportSearch.downloadCalls[0].filename, "training-search.csv");
     finishExport("training-search.csv");
     await exportInProgress;
     assert.equal(exportSearch.elements.searchStatus.textContent, "CSV export downloaded.");
-    assert.equal(exportSearch.elements.searchIncludePrivateNote.checked, false);
-    assert.equal(exportSearch.elements.searchPrivateNoteWarning.hidden, true);
+    assert.equal(exportSearch.elements.searchIncludePrivateNote.checked, true);
     assert.equal(exportSearch.elements.searchExport.textContent, "Export CSV");
     assert.equal(exportSearch.elements.searchExport.disabled, false);
     assert.equal(exportSearch.elements.searchText.value, "draft only", "export must preserve draft controls");
@@ -498,8 +494,7 @@ async function main() {
     rejectedExport.setResponse(async () => ({ items: [{ name: "Result" }], total_count: 1 }));
     rejectedExport.window.TrainingApp.features.search.activate();
     await rejectedExport.settle();
-    rejectedExport.elements.searchIncludePrivateNote.checked = true;
-    await rejectedExport.elements.searchIncludePrivateNote.trigger("change");
+    rejectedExport.elements.searchIncludePrivateNote.checked = false;
     rejectedExport.setDownloadResponse(async () => {
         const error = new Error("422 Unprocessable Entity");
         error.status = 422;
@@ -508,8 +503,7 @@ async function main() {
     await rejectedExport.elements.searchExport.trigger("click");
     assert.match(rejectedExport.elements.searchStatus.textContent, /More than 50,000 activities match/);
     assert.equal(rejectedExport.elements.searchStatus.dataset.state, "error");
-    assert.equal(rejectedExport.elements.searchIncludePrivateNote.checked, false);
-    assert.equal(rejectedExport.elements.searchPrivateNoteWarning.hidden, true);
+    assert.equal(rejectedExport.elements.searchIncludePrivateNote.checked, true);
     assert.equal(rejectedExport.elements.searchExport.disabled, false);
 
     const emptyExport = createSearchHarness();
@@ -524,10 +518,10 @@ async function main() {
     defaultExport.setResponse(async () => ({ items: [{ name: "Result" }], total_count: 1 }));
     defaultExport.window.TrainingApp.features.search.activate();
     await defaultExport.settle();
+    assert.equal(defaultExport.elements.searchIncludePrivateNote.checked, true);
     await defaultExport.elements.searchExport.trigger("click");
     assert.equal(new URL(defaultExport.downloadCalls[0].url, "http://localhost")
-        .searchParams.get("include_private_note"), "false");
-    assert.equal(defaultExport.elements.searchPrivateNoteWarning.hidden, true);
+        .searchParams.get("include_private_note"), "true");
 
     const actions = createSearchHarness();
     actions.setResponse(async () => ({

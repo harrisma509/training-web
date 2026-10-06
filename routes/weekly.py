@@ -7,18 +7,66 @@ This endpoint combines weekly_training, weekly_commentary, VO2 max, and falls da
 Do not add Weekly Audit logic in this refactor.
 """
 
-from fastapi import APIRouter
+import logging
+
+import psycopg
+from fastapi import APIRouter, HTTPException
 from fastapi.responses import JSONResponse
 
+from csv_export import CsvColumn, csv_response
 from db import db_conn, rows_to_json
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
+
+WEEKLY_EXPORT_LIMITS = (10, 52, 520)
+WEEKLY_EXPORT_COLUMNS = (
+    CsvColumn("week_start", "week_start"),
+    CsvColumn("week_end", "week_end"),
+    CsvColumn("weekly_total_hours", "weekly_total_hours"),
+    CsvColumn("weekly_total_miles", "weekly_total_miles"),
+    CsvColumn("weekly_total_elevation_ft", "weekly_total_elevation_ft"),
+    CsvColumn("weekly_avg_weight", "weekly_avg_weight"),
+    CsvColumn("total_load", "total_load"),
+    CsvColumn("main_ride_load", "main_ride_load"),
+    CsvColumn("other_load", "other_load"),
+    CsvColumn("activity_days", "activity_days"),
+    CsvColumn("ride_count", "ride_count"),
+    CsvColumn("walk_count", "walk_count"),
+    CsvColumn("hike_count", "hike_count"),
+    CsvColumn("strength_count", "strength_count"),
+    CsvColumn("very_hard_epic_days", "very_hard_epic_days"),
+    CsvColumn("chronic_weekly_cw", "chronic_weekly_cw"),
+    CsvColumn("ac_ratio", "ac_ratio"),
+    CsvColumn("ramp_pct", "ramp_pct"),
+    CsvColumn("status_level", "status_level"),
+    CsvColumn("status_text", "status_text"),
+    CsvColumn("vo2max", "vo2max"),
+    CsvColumn("falls", "falls"),
+    CsvColumn("audit_grade", "audit_grade"),
+    CsvColumn("audit_green_count", "audit_green_count"),
+    CsvColumn("audit_yellow_count", "audit_yellow_count"),
+    CsvColumn("audit_red_count", "audit_red_count"),
+    CsvColumn("audit_summary", "audit_summary"),
+    CsvColumn("audit_next_week_action", "audit_next_week_action"),
+    CsvColumn("weekly_comment", "weekly_comment"),
+    CsvColumn("week_type", "week_type"),
+    CsvColumn("event", "event"),
+    CsvColumn("planned_focus", "planned_focus"),
+    CsvColumn("actual_focus", "actual_focus"),
+    CsvColumn("risk_note", "risk_note"),
+    CsvColumn("lesson_learned", "lesson_learned"),
+    CsvColumn("status_override", "status_override"),
+    CsvColumn("is_travel_week", "is_travel_week"),
+    CsvColumn("is_sick_week", "is_sick_week"),
+    CsvColumn("is_injury_week", "is_injury_week"),
+    CsvColumn("is_bike_park_week", "is_bike_park_week"),
+    CsvColumn("is_recovery_week", "is_recovery_week"),
+    CsvColumn("is_goal_week", "is_goal_week"),
+)
 
 
-@router.get("/api/weekly")
-def api_weekly(limit: int = 60):
-    limit = max(1, min(limit, 260))
-
+def _query_weekly_rows(limit: int):
     sql = """
         with weeks AS (
             select week_start from weekly_training
@@ -127,4 +175,37 @@ def api_weekly(limit: int = 60):
             cur.execute(sql, (limit,))
             rows = cur.fetchall()
 
-    return JSONResponse(rows_to_json(rows))
+    return rows
+
+
+@router.get("/api/weekly")
+def api_weekly(limit: int = 60):
+    limit = max(1, min(limit, 520))
+    return JSONResponse(rows_to_json(_query_weekly_rows(limit)))
+
+
+@router.get("/api/weekly/export")
+def export_weekly(limit: int = 52):
+    if limit not in WEEKLY_EXPORT_LIMITS:
+        raise HTTPException(
+            status_code=422,
+            detail="limit must be one of 10, 52, or 520.",
+        )
+
+    try:
+        rows = _query_weekly_rows(limit)
+    except psycopg.Error as error:
+        logger.error("Weekly export query failed (%s).", type(error).__name__)
+        return JSONResponse(
+            {"detail": "Weekly export is temporarily unavailable."},
+            status_code=503,
+        )
+
+    try:
+        return csv_response(WEEKLY_EXPORT_COLUMNS, rows, "training-weekly.csv")
+    except (TypeError, ValueError, UnicodeError) as error:
+        logger.error("Weekly export serialization failed (%s).", type(error).__name__)
+        return JSONResponse(
+            {"detail": "Weekly export is temporarily unavailable."},
+            status_code=503,
+        )

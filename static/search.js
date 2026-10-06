@@ -371,12 +371,6 @@ if (typeof module !== "undefined" && module.exports) {
         if (button) button.disabled = state.exporting || !state.lastResult || state.lastResult.total_count === 0;
     }
 
-    function updatePrivateNoteWarning() {
-        const checkbox = field("searchIncludePrivateNote");
-        const warning = field("searchPrivateNoteWarning");
-        if (warning) warning.hidden = !checkbox?.checked;
-    }
-
     function buildExportUrl(query, includePrivateNote) {
         const params = new URLSearchParams();
         FILTER_KEYS.forEach(key => {
@@ -420,8 +414,7 @@ if (typeof module !== "undefined" && module.exports) {
         } finally {
             state.exporting = false;
             if (button) button.textContent = "Export CSV";
-            if (checkbox) checkbox.checked = false;
-            updatePrivateNoteWarning();
+            if (checkbox) checkbox.checked = true;
             updateExportControl();
         }
     }
@@ -998,6 +991,8 @@ if (typeof module !== "undefined" && module.exports) {
         const form = field("searchForm");
         if (!form) return;
         state.listenersAttached = true;
+        const includePrivateNote = field("searchIncludePrivateNote");
+        if (includePrivateNote) includePrivateNote.checked = true;
         loadActivityTypeOptions();
         document.addEventListener("click", event => {
             const openMenu = state.openActionsMenu;
@@ -1017,7 +1012,6 @@ if (typeof module !== "undefined" && module.exports) {
             control.addEventListener("change", captureDraft);
         });
         field("searchClear")?.addEventListener("click", clearSearch);
-        field("searchIncludePrivateNote")?.addEventListener("change", updatePrivateNoteWarning);
         field("searchExport")?.addEventListener("click", exportResults);
         field("searchPrevious")?.addEventListener("click", () => {
             if (!state.lastResult) return;

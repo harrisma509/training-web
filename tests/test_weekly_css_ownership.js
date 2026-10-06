@@ -60,5 +60,9 @@ assert.doesNotMatch(weeklySource, /@media\s*\(max-width:\s*1050px\)[\s\S]*\.week
 assert.doesNotMatch(weeklySource, /@media\s*\(max-width:\s*1050px\)[\s\S]*\.weekly-actions-(?:header|cell)[\s\S]*display:\s*none/);
 assert.match(weeklyPaneSource, /<div class="table-wrap">\s*<table id="weeklyTable"><\/table>\s*<\/div>/);
 assert.match(sharedSource, /\.table-wrap\s*\{[^}]*overflow-x:\s*auto;/s);
+assert.match(indexSource, /<select id="weeklyLimit">[\s\S]*?<\/select>\s*<button id="weeklyExport"[^>]*>Export CSV<\/button>/);
+assert.match(indexSource, /id="weeklyExportStatus" class="weekly-export-status" role="status" aria-live="polite"/);
+assert.match(weeklySource, /\.weekly-export-status\s*\{/);
+assert.doesNotMatch(sharedSource, /\.weekly-export-status\s*\{/);
 
 console.log("Weekly CSS ownership contract tests passed.");

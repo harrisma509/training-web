@@ -304,9 +304,7 @@ Use this stable column order:
 
 `activity_id,date_local,start_at_local,start_at_utc,timezone,utc_offset_seconds,name,sport_type,activity_category,gear_id,gear_name,distance_mi,elevation_ft,moving_sec,elapsed_sec,activity_load,description`
 
-Private note is excluded unless explicitly selected with the visibly labeled Include Private Note control. When selected, append `private_note` as the final column and show this warning:
-
-Private Notes may contain sensitive information and will be included in the downloaded file.
+Private Note is included by default as the final column after `description`. The Include Private Note checkbox is checked on initial render; uncheck it to omit `private_note` entirely. Its compact tooltip says “Uncheck to exclude Private Note.” There is no persistent warning line. The checkbox resets to checked after every export attempt and is not persisted.
 
 CSV output preserves Unicode and line breaks and uses a UTF-8 encoding suitable for modern spreadsheet applications. Dates and timestamps use their stored local/UTC values; distances are miles, elevation is feet, durations are seconds, and activity load is the persisted main-ride load joined by local date and activity ID. Missing values are blank. Description is included in V1; private note remains opt-in.
 

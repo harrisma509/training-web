@@ -479,7 +479,7 @@ def export_search_activities(
     sort_by: ActivitySortBy | None = None,
     sort_direction: ActivitySortDirection | None = None,
     sort: ActivitySort | None = None,
-    include_private_note: bool = Query(default=False),
+    include_private_note: bool = Query(default=True),
 ):
     (
         where_sql,

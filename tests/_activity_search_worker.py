@@ -559,6 +559,7 @@ class ActivitySearchRouteTests(unittest.TestCase):
                 ("min_distance_mi", "10"),
                 ("sort_by", "elevation"),
                 ("sort_direction", "asc"),
+                ("include_private_note", "false"),
                 ("limit", "1"),
                 ("offset", "500"),
             ],
@@ -596,12 +597,11 @@ class ActivitySearchRouteTests(unittest.TestCase):
         ))
         self.assertEqual(len(self.connection.cursor_value.executions), 1)
 
-    def test_export_private_note_is_appended_only_when_explicitly_selected(self):
+    def test_export_defaults_to_private_note_and_appends_column(self):
         row = activity_row(description="Description text", private_note="Private note text")
         (status, body, _), _ = self.response(
             path="/api/activities/search/export",
             raw=True,
-            params={"include_private_note": "true"},
             rows=[row],
         )
 
@@ -624,7 +624,7 @@ class ActivitySearchRouteTests(unittest.TestCase):
         records = list(csv.reader(io.StringIO(body.decode("utf-8-sig"), newline="")))
         self.assertEqual(len(records), 1)
         self.assertEqual(records[0][0], "activity_id")
-        self.assertEqual(records[0][-1], "description")
+        self.assertEqual(records[0][-2:], ["description", "private_note"])
 
     def test_export_accepts_exactly_50000_and_rejects_50001_without_partial_csv(self):
         one_row = activity_row()

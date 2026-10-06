@@ -165,12 +165,6 @@
     white-space: nowrap;
 }
 
-.search-private-note-warning {
-    flex-basis: 100%;
-    margin: 0;
-    color: var(--red);
-}
-
 .search-page-controls select {
     min-width: 76px;
 }

@@ -28,5 +28,9 @@ assert.match(weeklySource, /function openWeeklyDrawer\(/);
 assert.match(weeklySource, /function closeWeeklyDrawer\(/);
 assert.match(weeklySource, /function renderWeeklyTable\(/);
 assert.match(weeklySource, /function saveWeeklyDrawer\(/);
+assert.match(weeklySource, /function updateWeeklyExportButton\(/);
+assert.match(weeklySource, /function exportWeekly\(/);
+assert.match(weeklySource, /weeklyDataLoading \|\| weeklyExporting/);
+assert.match(weeklySource, /window\.api\.downloadCsv\(`\/api\/weekly\/export\?limit=\$\{limit\}`, "training-weekly\.csv"\)/);
 
 console.log("F28 Weekly compatibility-global contract tests passed.");

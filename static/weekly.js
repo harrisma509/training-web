@@ -17,6 +17,8 @@
   let weeklyInitialized = false;
   let weeklyLoadPromise = null;
   let weeklyLoaded = false;
+  let weeklyDataLoading = false;
+  let weeklyExporting = false;
 
   const weeklyDrawer = document.getElementById("weeklyDrawer");
   const weeklyDrawerContent = document.getElementById("weeklyDrawerContent");
@@ -649,42 +651,104 @@
     }
   }
 
+  function updateWeeklyExportButton() {
+    const button = document.getElementById("weeklyExport");
+    if (!button) {
+      return;
+    }
+    const rows = window.AppState.weeklyRows;
+    button.disabled = weeklyDataLoading || weeklyExporting || !Array.isArray(rows) || rows.length === 0;
+  }
+
+  function setWeeklyExportStatus(message, state = "") {
+    const status = document.getElementById("weeklyExportStatus");
+    if (!status) {
+      return;
+    }
+    status.textContent = message;
+    status.dataset.state = state;
+  }
+
+  async function exportWeekly() {
+    const rows = window.AppState.weeklyRows;
+    if (weeklyDataLoading || weeklyExporting || !Array.isArray(rows) || rows.length === 0) {
+      return;
+    }
+
+    const limit = Number(window.AppState.weeklyLimit);
+    const allowedLimits = window.APP_ROW_LIMITS?.weekly || [10, 52, 520];
+    if (!Number.isInteger(limit) || !allowedLimits.includes(limit)) {
+      setWeeklyExportStatus("Select 10, 52, or 520 Weekly rows.", "error");
+      return;
+    }
+
+    const button = document.getElementById("weeklyExport");
+    weeklyExporting = true;
+    if (button) {
+      button.textContent = "Exporting…";
+    }
+    updateWeeklyExportButton();
+    setWeeklyExportStatus("Exporting…", "loading");
+
+    try {
+      await window.api.downloadCsv(`/api/weekly/export?limit=${limit}`, "training-weekly.csv");
+      setWeeklyExportStatus("Weekly CSV downloaded.", "success");
+    } catch (_error) {
+      setWeeklyExportStatus("Weekly CSV export is temporarily unavailable.", "error");
+    } finally {
+      weeklyExporting = false;
+      if (button) {
+        button.textContent = "Export CSV";
+      }
+      updateWeeklyExportButton();
+    }
+  }
+
   async function loadWeeklyData() {
     const requestId = ++weeklyLoadRequestId;
     const limit = Number(window.AppState.weeklyLimit);
+    weeklyDataLoading = true;
+    updateWeeklyExportButton();
 
     try {
-      if (window.api && typeof window.api.fetchWeekly === "function") {
-        const rows = await window.api.fetchWeekly(limit);
+      try {
+        if (window.api && typeof window.api.fetchWeekly === "function") {
+          const rows = await window.api.fetchWeekly(limit);
+          if (requestId !== weeklyLoadRequestId) {
+            return false;
+          }
+          window.AppState.weeklyRows = rows;
+        } else {
+          const rows = await fetch(`/api/weekly?limit=${limit}`).then(response => response.json());
+          if (requestId !== weeklyLoadRequestId) {
+            return false;
+          }
+          window.AppState.weeklyRows = rows;
+        }
+      } catch (error) {
+        console.error(error);
         if (requestId !== weeklyLoadRequestId) {
           return false;
         }
-        window.AppState.weeklyRows = rows;
-      } else {
-        const rows = await fetch(`/api/weekly?limit=${limit}`).then(response => response.json());
-        if (requestId !== weeklyLoadRequestId) {
-          return false;
-        }
-        window.AppState.weeklyRows = rows;
+        window.AppState.weeklyRows = [];
       }
-    } catch (error) {
-      console.error(error);
+
       if (requestId !== weeklyLoadRequestId) {
         return false;
       }
-      window.AppState.weeklyRows = [];
-    }
 
-    if (requestId !== weeklyLoadRequestId) {
-      return false;
-    }
+      renderWeeklyTable();
 
-    renderWeeklyTable();
-
-    if (window.AppState.activeTab === "weekly") {
-      renderHeaderSummary();
+      if (window.AppState.activeTab === "weekly") {
+        renderHeaderSummary();
+      }
+      return true;
+    } finally {
+      if (requestId === weeklyLoadRequestId) {
+        weeklyDataLoading = false;
+        updateWeeklyExportButton();
+      }
     }
-    return true;
   }
 
   function loadWeekly(force = true) {
@@ -739,7 +803,9 @@
       }
     });
 
+    document.getElementById("weeklyExport")?.addEventListener("click", exportWeekly);
     weeklyLimitListenerBound = true;
+    updateWeeklyExportButton();
   }
 
   // Weekly table rendering
