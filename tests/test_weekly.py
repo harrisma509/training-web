@@ -150,5 +150,44 @@ process.stdout.write(JSON.stringify({{
         self.assertTrue(values["currentBefore"])
         self.assertTrue(values["currentAt"])
 
+    def test_weekly_hours_zero_keeps_existing_red_indicator(self):
+        weekly_js = ROOT / "static" / "weekly.js"
+        script = f"""
+const fs = require("node:fs");
+const vm = require("node:vm");
+const source = fs.readFileSync({json.dumps(weekly_js.as_posix())}, "utf8");
+const start = source.indexOf("function formatWeeklyFixed");
+const end = source.indexOf("// Inline comment editor", start);
+global.window = {{APP_CONSTANTS: {{WEEKLY_HOURS_GREEN_MIN: 6, WEEKLY_HOURS_YELLOW_MIN: 4}}}};
+global.escapeHtml = value => String(value).replaceAll("<", "&lt;").replaceAll(">", "&gt;");
+vm.runInThisContext(source.slice(start, end));
+const rendered = values => values.map(value => renderWeeklyHoursCell(value));
+process.stdout.write(JSON.stringify({{
+  zero: rendered([0])[0],
+  stringZero: rendered(["0"])[0],
+  low: rendered([2])[0],
+  green: rendered([6])[0],
+  nullValue: rendered([null])[0],
+  undefinedValue: rendered([undefined])[0],
+  empty: rendered([""])[0]
+}}));
+"""
+        result = subprocess.run(["node", "--eval", script], cwd=ROOT, capture_output=True, text=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        values = json.loads(result.stdout)
+        for key in ("zero", "stringZero", "low"):
+            self.assertIn("0.0" if key != "low" else "2.0", values[key])
+            self.assertIn("weekly-hours-red", values[key])
+            self.assertIn("weekly-status-dot red", values[key])
+            self.assertIn("Hours red: &lt; 4", values[key])
+        self.assertIn("6.0", values["green"])
+        self.assertIn("weekly-hours-green", values["green"])
+        self.assertIn("weekly-status-dot green", values["green"])
+        self.assertEqual(values["nullValue"], "")
+        self.assertEqual(values["undefinedValue"], "")
+        self.assertEqual(values["empty"], "")
+        self.assertNotIn("NaN", json.dumps(values))
+        self.assertNotIn("Infinity", json.dumps(values))
+
 if __name__ == "__main__":
     unittest.main()
