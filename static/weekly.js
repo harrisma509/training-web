@@ -116,6 +116,10 @@
   }
 
   function getAcRatioClass(acRatio) {
+    if (acRatio === null || acRatio === undefined || acRatio === "") {
+      return "";
+    }
+
     const parsed = Number(acRatio);
     if (!Number.isFinite(parsed)) {
       return "";
@@ -133,6 +137,10 @@
   }
 
   function getAcRatioTitle(acRatio) {
+    if (acRatio === null || acRatio === undefined || acRatio === "") {
+      return "";
+    }
+
     const parsed = Number(acRatio);
     if (!Number.isFinite(parsed)) {
       return "";

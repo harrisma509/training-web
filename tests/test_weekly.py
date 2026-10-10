@@ -1,9 +1,14 @@
 import json
+import subprocess
 import unittest
 from datetime import date
+from pathlib import Path
 from unittest.mock import patch
 
 from routes.weekly import api_weekly
+
+
+ROOT = Path(__file__).resolve().parents[1]
 
 
 class FakeCursor:
@@ -92,6 +97,32 @@ class WeeklyRouteCurrentEmptyWeekTests(unittest.TestCase):
         self.assertIn("THEN COALESCE(daily_activity_week.weekly_total_elevation_ft, 0)", sql)
         self.assertIn("order by weeks.week_start desc", sql.lower())
         self.assertEqual(conn.cursor_value.params, [(10,)])
+
+    def test_null_ac_ratio_does_not_render_as_zero(self):
+        weekly_js = ROOT / "static" / "weekly.js"
+        script = f"""
+const fs = require("node:fs");
+const vm = require("node:vm");
+const source = fs.readFileSync({json.dumps(weekly_js.as_posix())}, "utf8");
+const classStart = source.indexOf("function getAcRatioClass");
+const titleStart = source.indexOf("function getAcRatioTitle");
+const cellStart = source.indexOf("function renderAcRatioCell");
+vm.runInThisContext(source.slice(classStart, titleStart) + source.slice(titleStart, cellStart));
+global.window = {{APP_CONSTANTS: {{AC_RATIO_TARGET_MIN: 0.8, AC_RATIO_TARGET_MAX: 1.3, AC_RATIO_CAUTION_MAX: 1.5}}}};
+process.stdout.write(JSON.stringify({{
+  nullClass: getAcRatioClass(null),
+  nullTitle: getAcRatioTitle(null),
+  zeroClass: getAcRatioClass(0),
+  zeroTitle: getAcRatioTitle(0)
+}}));
+"""
+        result = subprocess.run(["node", "--eval", script], cwd=ROOT, capture_output=True, text=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        values = json.loads(result.stdout)
+        self.assertEqual(values["nullClass"], "")
+        self.assertEqual(values["nullTitle"], "")
+        self.assertEqual(values["zeroClass"], "ac-ratio-low")
+        self.assertEqual(values["zeroTitle"], "Low: A/C below 0.8. Week is below chronic load.")
 
 
 if __name__ == "__main__":
