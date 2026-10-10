@@ -125,9 +125,18 @@ def _query_weekly_rows(limit: int):
             wa.audit_summary AS audit_summary,
             wa.next_week_action AS audit_next_week_action,
             weekly_training.total_load,
-            daily_activity_week.weekly_total_hours,
-            daily_activity_week.weekly_total_miles,
-            daily_activity_week.weekly_total_elevation_ft,
+            CASE WHEN weekly_training.week_start IS NOT NULL
+                THEN COALESCE(daily_activity_week.weekly_total_hours, 0)
+                ELSE daily_activity_week.weekly_total_hours
+            END AS weekly_total_hours,
+            CASE WHEN weekly_training.week_start IS NOT NULL
+                THEN COALESCE(daily_activity_week.weekly_total_miles, 0)
+                ELSE daily_activity_week.weekly_total_miles
+            END AS weekly_total_miles,
+            CASE WHEN weekly_training.week_start IS NOT NULL
+                THEN COALESCE(daily_activity_week.weekly_total_elevation_ft, 0)
+                ELSE daily_activity_week.weekly_total_elevation_ft
+            END AS weekly_total_elevation_ft,
             weekly_weight.weekly_avg_weight,
             weekly_training.main_ride_load,
             weekly_training.other_load,
