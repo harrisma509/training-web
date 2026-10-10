@@ -30,6 +30,7 @@
   const weeklyAuditDrawer = createWeeklyAuditDrawer();
   const auditDrawerCloseBtn = document.getElementById("auditDrawerCloseBtn");
   const auditDrawerTitle = document.getElementById("auditDrawerTitle");
+  const auditDrawerProgressMarker = document.getElementById("auditDrawerProgressMarker");
   const auditDrawerScore = document.getElementById("auditDrawerScore");
   const auditDrawerSummary = document.getElementById("auditDrawerSummary");
   const auditDrawerNextAction = document.getElementById("auditDrawerNextAction");
@@ -296,6 +297,24 @@
     }
   }
 
+  function currentDenverWeekStart(asOf = new Date()) {
+    const parts = new Intl.DateTimeFormat("en-US", {
+      timeZone: "America/Denver",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      weekday: "short",
+    }).formatToParts(asOf);
+    const values = Object.fromEntries(parts.map(part => [part.type, part.value]));
+    const localDate = new Date(Date.UTC(Number(values.year), Number(values.month) - 1, Number(values.day)));
+    localDate.setUTCDate(localDate.getUTCDate() - ((localDate.getUTCDay() + 6) % 7));
+    return localDate.toISOString().slice(0, 10);
+  }
+
+  function isCurrentDenverWeek(weekStart, asOf = new Date()) {
+    return weekStart === currentDenverWeekStart(asOf);
+  }
+
   // Weekly audit drawer
   function createWeeklyAuditDrawer() {
     const markup = `
@@ -304,7 +323,10 @@
       <div class="audit-drawer-header">
         <div>
           <div id="auditDrawerTitle" class="audit-drawer-title">Weekly Audit</div>
-          <div id="auditDrawerSubtitle" class="audit-drawer-subtitle">Audit details for the selected week</div>
+          <div id="auditDrawerSubtitle" class="audit-drawer-subtitle">
+            Audit details for the selected week
+            <span id="auditDrawerProgressMarker" class="audit-in-progress-marker hidden" role="status"></span>
+          </div>
         </div>
         <button id="auditDrawerCloseBtn" type="button" class="drawer-close-button" aria-label="Close audit drawer">×</button>
       </div>
@@ -361,6 +383,10 @@
       auditDrawerSummary.textContent = "";
       auditDrawerSummary.classList.add("hidden");
     }
+
+    const inProgress = isCurrentDenverWeek(row.week_start);
+    auditDrawerProgressMarker.textContent = inProgress ? "In Progress" : "";
+    auditDrawerProgressMarker.classList.toggle("hidden", !inProgress);
 
     if (row.audit_next_week_action) {
       auditDrawerNextAction.textContent = row.audit_next_week_action;

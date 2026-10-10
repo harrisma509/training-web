@@ -124,6 +124,31 @@ process.stdout.write(JSON.stringify({{
         self.assertEqual(values["zeroClass"], "ac-ratio-low")
         self.assertEqual(values["zeroTitle"], "Low: A/C below 0.8. Week is below chronic load.")
 
+    def test_current_week_marker_uses_denver_monday_boundaries(self):
+        weekly_js = ROOT / "static" / "weekly.js"
+        script = f"""
+const fs = require("node:fs");
+const vm = require("node:vm");
+const source = fs.readFileSync({json.dumps(weekly_js.as_posix())}, "utf8");
+const start = source.indexOf("function currentDenverWeekStart");
+const end = source.indexOf("// Weekly audit drawer", start);
+vm.runInThisContext(source.slice(start, end));
+const beforeMonday = new Date("2026-10-12T05:59:00Z");
+const atMonday = new Date("2026-10-12T06:00:00Z");
+process.stdout.write(JSON.stringify({{
+  before: currentDenverWeekStart(beforeMonday),
+  at: currentDenverWeekStart(atMonday),
+  currentBefore: isCurrentDenverWeek("2026-10-05", beforeMonday),
+  currentAt: isCurrentDenverWeek("2026-10-12", atMonday)
+}}));
+"""
+        result = subprocess.run(["node", "--eval", script], cwd=ROOT, capture_output=True, text=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        values = json.loads(result.stdout)
+        self.assertEqual(values["before"], "2026-10-05")
+        self.assertEqual(values["at"], "2026-10-12")
+        self.assertTrue(values["currentBefore"])
+        self.assertTrue(values["currentAt"])
 
 if __name__ == "__main__":
     unittest.main()
