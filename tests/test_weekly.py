@@ -189,5 +189,41 @@ process.stdout.write(JSON.stringify({{
         self.assertNotIn("NaN", json.dumps(values))
         self.assertNotIn("Infinity", json.dumps(values))
 
+    def test_load_review_labels_known_zero_activity_without_changing_status_text(self):
+        weekly_js = ROOT / "static" / "weekly.js"
+        source = weekly_js.read_text()
+        self.assertIn("<th>Load Review</th>", source)
+        self.assertNotIn("<th>Status Text</th>", source)
+        script = f"""
+const fs = require("node:fs");
+const vm = require("node:vm");
+const source = fs.readFileSync({json.dumps(weekly_js.as_posix())}, "utf8");
+const start = source.indexOf("function isKnownZero");
+const end = source.indexOf("// Inline comment editor", start);
+vm.runInThisContext(source.slice(start, end));
+const review = row => getWeeklyLoadReview(row);
+process.stdout.write(JSON.stringify({{
+  numericZero: review({{total_load: 0, weekly_total_hours: 0, status_text: null}}),
+  stringZero: review({{total_load: "0", weekly_total_hours: "0", status_text: ""}}),
+  historicalZero: review({{total_load: 0, weekly_total_hours: 0, status_text: undefined}}),
+  authoritative: review({{total_load: 0, weekly_total_hours: 0, status_text: "Load data incomplete"}}),
+  positiveActivity: review({{total_load: 10, weekly_total_hours: 2, status_text: null}}),
+  missingTotals: review({{total_load: null, weekly_total_hours: null, status_text: null}}),
+  malformedTotals: review({{total_load: "NaN", weekly_total_hours: "Infinity", status_text: null}})
+}}));
+"""
+        result = subprocess.run(["node", "--eval", script], cwd=ROOT, capture_output=True, text=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        values = json.loads(result.stdout)
+        self.assertEqual(values["numericZero"], "No Activities")
+        self.assertEqual(values["stringZero"], "No Activities")
+        self.assertEqual(values["historicalZero"], "No Activities")
+        self.assertEqual(values["authoritative"], "Load data incomplete")
+        self.assertEqual(values["positiveActivity"], "")
+        self.assertEqual(values["missingTotals"], "")
+        self.assertEqual(values["malformedTotals"], "")
+        self.assertNotIn("NaN", json.dumps(values))
+        self.assertNotIn("Infinity", json.dumps(values))
+
 if __name__ == "__main__":
     unittest.main()

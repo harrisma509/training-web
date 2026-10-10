@@ -213,6 +213,28 @@
     return `<span class="weekly-hours-value ${status.cssClass}"><span class="weekly-status-dot ${colorName}" title="${escapeHtml(status.title)}"></span>${valueText}</span>`;
   }
 
+  function isKnownZero(value) {
+    if (value === null || value === undefined || value === "") {
+      return false;
+    }
+
+    const parsed = Number(value);
+    return Number.isFinite(parsed) && parsed === 0;
+  }
+
+  function getWeeklyLoadReview(row) {
+    const statusText = row.status_text;
+    if (statusText !== null && statusText !== undefined && String(statusText).trim() !== "") {
+      return String(statusText);
+    }
+
+    if (isKnownZero(row.total_load) && isKnownZero(row.weekly_total_hours)) {
+      return "No Activities";
+    }
+
+    return "";
+  }
+
   // Inline comment editor
   function getWeeklyCommentText(weekStart) {
     const row = window.AppState.weeklyRows.find(r => r.week_start === weekStart);
@@ -865,7 +887,7 @@
     ${renderAcRatioCell(row.ac_ratio)}
     <td>${safe(row.ramp_pct_display)}</td>
     <td>${statusPill(row.status_level)}</td>
-    <td>${safe(row.status_text)}</td>
+    <td>${safe(getWeeklyLoadReview(row))}</td>
     <td>${safe(row.main_ride_load)}</td>
     <td>${safe(row.other_load)}</td>
     <td>${safe(row.activity_days)}</td>
@@ -894,7 +916,7 @@
       <th title="A/C = acute weekly load vs 28-day chronic baseline. Target 0.8-1.3.">A/C</th>
       <th>Ramp</th>
       <th>Status</th>
-      <th>Status Text</th>
+      <th>Load Review</th>
       <th>Main</th>
       <th>Other</th>
       <th>Days</th>
