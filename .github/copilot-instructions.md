@@ -12,6 +12,22 @@ Feature documents define detailed contracts and current behavior.
 
 # GitHub Copilot Instructions for training-web
 
+## Mandatory fresh-session Git gate
+
+Before any mutating work, every new or resumed session MUST run the
+[Fresh-Session Git Synchronization Gate](../docs/ENGINEERING_CONSTITUTION.md#fresh-session-git-synchronization-gate)
+in this repository and every affected sibling repository. Run `git fetch
+origin` as part of the preflight; stale remote-tracking refs are not proof of
+current state. A dirty, divergent, active-operation, cross-repository mismatch,
+or unverifiable remote state is a hard STOP, not a warning. Do not
+automatically pull, rebase, merge, reset, clean, stash, overwrite, or
+force-push unpreserved work.
+
+Before deployment, the tested commit MUST be on the intended release branch,
+the worktree MUST be clean, no Git operation may be active, and local `HEAD`
+MUST equal freshly fetched `origin/main` exactly. Record the preflight and
+release hashes.
+
 ## Project
 
 This repo contains the FastAPI web app and browser dashboard for the Training Dashboard.
