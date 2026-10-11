@@ -141,6 +141,16 @@
       return fetchJson(`/api/plan/templates/${encodeURIComponent(templateId)}`);
     },
 
+    async fetchPlanItems(startDate, endDate, options = {}) {
+      const params = new URLSearchParams({
+        start_date: String(startDate),
+        end_date: String(endDate),
+      });
+      return fetchJson(`/api/plan/items?${params.toString()}`, {
+        signal: options.signal,
+      });
+    },
+
     async createPlanTemplate(payload) {
       return fetchJson("/api/plan/templates", {
         method: "POST",

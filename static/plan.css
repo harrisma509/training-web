@@ -715,6 +715,91 @@
     min-width: 0;
 }
 
+.plan-planned-section {
+    display: grid;
+    gap: 5px;
+    padding: 6px;
+    border-left: 3px solid var(--blue);
+    border-radius: 6px;
+    background: var(--panel2);
+}
+
+.plan-planned-heading,
+.plan-planned-badge,
+.plan-planned-state {
+    font-size: 10px;
+    font-weight: 800;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+}
+
+.plan-planned-heading {
+    color: var(--blue);
+}
+
+.plan-planned-list {
+    display: grid;
+    gap: 5px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.plan-planned-card {
+    display: grid;
+    gap: 2px;
+    min-width: 0;
+    padding: 5px 6px;
+    border: 1px solid var(--line);
+    border-radius: 5px;
+    background: var(--panel);
+}
+
+.plan-planned-card.is-historical {
+    border-style: dashed;
+}
+
+.plan-planned-card-heading {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 6px;
+}
+
+.plan-planned-badge {
+    color: var(--blue);
+}
+
+.plan-planned-state {
+    color: var(--muted);
+}
+
+.plan-planned-title {
+    min-width: 0;
+    color: var(--text);
+    font-weight: 700;
+    overflow-wrap: anywhere;
+}
+
+.plan-planned-meta,
+.plan-planned-metrics,
+.plan-planned-structure,
+.plan-planned-status {
+    color: var(--muted);
+    font-size: 11px;
+    overflow-wrap: anywhere;
+}
+
+.plan-planned-status {
+    padding: 5px 6px;
+    border-left: 3px solid var(--line);
+}
+
+.plan-planned-status.is-error {
+    border-left-color: var(--red);
+    color: var(--red);
+}
+
 .plan-primary-name,
 .plan-support-name,
 .plan-support-more,

@@ -881,14 +881,22 @@
     const hasSupport = supportNames.length > 0;
     const hasActualActivity = hasMainRide || hasStructuredSupport || hasSupport || Number(row?.activity_count) > 0;
     const supportVisibleLimit = Math.max(0, PLAN_VISIBLE_ACTIVITY_LIMIT - 1);
+    const plannedController = window.PlanItemsController;
+    const plannedState = plannedController?.getState?.() || { status: "idle" };
+    const plannedItems = plannedController?.getItemsForDate?.(dayKey) || [];
+    const plannedHtml = plannedController?.renderDaySection?.(dayKey) || "";
 
     let bodyHtml = "";
     if (!hasActualActivity) {
-      const todayKey = getDenverTodayKey();
-      const emptyCopy = dayKey > todayKey
-        ? "Nothing planned"
-        : dayKey === todayKey ? "No activity recorded today" : "No activity recorded";
-      bodyHtml = `<div class="plan-empty-state">${emptyCopy}</div>`;
+      if (plannedState.status === "success" && plannedItems.length > 0) {
+        bodyHtml = '<div class="plan-empty-state">No activity recorded yet</div>';
+      } else if (!plannedController || plannedState.status === "success") {
+        const todayKey = getDenverTodayKey();
+        const emptyCopy = dayKey > todayKey
+          ? "Nothing planned"
+          : dayKey === todayKey ? "No activity recorded today" : "No activity recorded";
+        bodyHtml = `<div class="plan-empty-state">${emptyCopy}</div>`;
+      }
     } else if (hasMainRide) {
       bodyHtml += `<div class="plan-primary-name">${renderActivityWithIcon(mainRideName, row?.main_ride_sport_type, row?.main_ride_category)}</div>`;
       if (mainRideTime) {
@@ -926,6 +934,7 @@
     } else {
       bodyHtml = '<div class="plan-empty-state">No activity details</div>';
     }
+    bodyHtml = `${plannedHtml}${bodyHtml}`;
 
     return `
       <div class="plan-day ${isWeekCollapsed ? "is-collapsed" : ""}">
@@ -1100,7 +1109,7 @@
     }
   }
 
-  async function loadPlanData() {
+  async function loadPlanData(force = false) {
     const strip = document.getElementById("planStrip");
     if (!strip) {
       return false;
@@ -1110,6 +1119,7 @@
     const range = getPlanRange();
 
     strip.innerHTML = '<div class="plan-empty-state">Loading plan…</div>';
+    window.PlanItemsController?.load?.(range, { force });
 
     try {
       if (!window.api || typeof window.api.fetchDaily !== "function") {
@@ -1148,7 +1158,7 @@
     if (!force && planLoadPromise) {
       return planLoadPromise;
     }
-    planLoadPromise = loadPlanData()
+    planLoadPromise = loadPlanData(force)
       .then(result => {
         planLoaded = result === true;
         return result;
@@ -1172,6 +1182,7 @@
       window.history.replaceState({}, "", initialUrl);
     }
     setupPlanNavigation();
+    window.PlanItemsController?.init?.({ onChange: renderPlanStrip });
     window.PlanTemplateLibraryController?.init?.();
     const dateInput = document.getElementById("planDateJump");
     if (dateInput) dateInput.value = planAnchor;
