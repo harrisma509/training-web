@@ -154,6 +154,12 @@
     return toLocalDateKey(getDenverTodayDate());
   }
 
+  function getDefaultPlanAnchor() {
+    const currentWeekStart = getWeekStart(getDenverTodayDate());
+    currentWeekStart.setUTCDate(currentWeekStart.getUTCDate() - 21);
+    return toLocalDateKey(currentWeekStart);
+  }
+
   function toLocalDateKey(dateValue) {
     const date = dateValue instanceof Date ? dateValue : parsePlanDate(String(dateValue));
     if (!date || Number.isNaN(date.getTime())) {
@@ -958,7 +964,7 @@
 
   function normalizePlanAnchor(value) {
     const parsed = parsePlanDate(value);
-    return toLocalDateKey(getWeekStart(parsed || getDenverTodayDate()));
+    return parsed ? toLocalDateKey(getWeekStart(parsed)) : getDefaultPlanAnchor();
   }
 
   function getPlanRange() {
@@ -999,7 +1005,7 @@
     }
     const today = document.getElementById("planToday");
     if (today && today.dataset.planNavigationBound !== "true") {
-      today.addEventListener("click", () => setPlanAnchor(normalizePlanAnchor(getDenverTodayKey())));
+      today.addEventListener("click", () => setPlanAnchor(getDefaultPlanAnchor()));
       today.dataset.planNavigationBound = "true";
     }
     const dateInput = document.getElementById("planDateJump");

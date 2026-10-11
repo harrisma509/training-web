@@ -3,6 +3,9 @@
     --plan-load-target: #16a34a;
     --plan-load-high: #dc2626;
     --plan-current-outline: #16a34a;
+    --plan-current-week-fill: rgba(34, 197, 94, 0.16);
+    --plan-current-day-fill: rgba(34, 197, 94, 0.28);
+    --plan-current-text: #166534;
 }
 
 :root[data-theme="light"] {
@@ -10,6 +13,9 @@
     --plan-load-target: #16a34a;
     --plan-load-high: #dc2626;
     --plan-current-outline: #15803d;
+    --plan-current-week-fill: rgba(34, 197, 94, 0.16);
+    --plan-current-day-fill: rgba(34, 197, 94, 0.28);
+    --plan-current-text: #166534;
 }
 
 :root[data-theme="dark"] {
@@ -17,6 +23,9 @@
     --plan-load-target: #16a34a;
     --plan-load-high: #dc2626;
     --plan-current-outline: #4ade80;
+    --plan-current-week-fill: rgba(74, 222, 128, 0.18);
+    --plan-current-day-fill: rgba(74, 222, 128, 0.32);
+    --plan-current-text: #bbf7d0;
 }
 
 #planPane,
@@ -122,13 +131,15 @@
 
 .plan-day-header.is-current-week {
     box-sizing: border-box;
-    outline: 1px solid var(--plan-current-outline);
-    outline-offset: -1px;
+    background: var(--plan-current-week-fill);
+    box-shadow: inset 0 0 0 2px var(--plan-current-outline);
+    color: var(--plan-current-text);
 }
 
 .plan-day-header.is-current-day {
-    outline: 2px solid var(--plan-current-outline);
-    outline-offset: -2px;
+    background: var(--plan-current-day-fill);
+    box-shadow: inset 0 0 0 4px var(--plan-current-outline);
+    color: var(--plan-current-text);
 }
 
 .plan-week-toggle {
