@@ -6,6 +6,7 @@ from unittest.mock import patch
 
 from fastapi import HTTPException
 from fastapi.testclient import TestClient
+from pydantic import ValidationError
 from starlette.requests import Request
 
 from app import app as training_app
@@ -43,6 +44,7 @@ def template_row(**overrides):
         "template_name": "Tempo Ride",
         "template_description": "Controlled sustained effort.",
         "sort_order": 1,
+        "is_favorite": False,
         "is_active": True,
         **category_row(),
         "category_sort_order": 1,
@@ -90,6 +92,7 @@ def mutation_payload(**overrides):
         "template_description": "Controlled sustained effort.",
         "category_id": 1,
         "sort_order": 1,
+        "is_favorite": False,
         "prescription": {
             "title": "Tempo Ride",
             "description": "Controlled sustained effort.",
@@ -249,6 +252,7 @@ class PlanRouteTests(unittest.TestCase):
 
         payload = response_json(response)["templates"][0]
         self.assertEqual(response.status_code, 200)
+        self.assertFalse(payload["is_favorite"])
         self.assertEqual(payload["prescription"]["sport_type"], "Unlisted Future Sport")
         self.assertEqual(payload["prescription"]["target_load"], 0)
         self.assertEqual(payload["prescription"]["target_distance_mi"], 0.0)
@@ -297,6 +301,7 @@ class PlanRouteTests(unittest.TestCase):
         payload = response_json(response)
         self.assertEqual(response.status_code, 200)
         self.assertEqual([segment["segment_order"] for segment in payload["prescription"]["segments"]], [1, 2])
+        self.assertFalse(payload["is_favorite"])
         self.assertEqual(len(cursor.executed), 2)
         self.assertEqual(cursor.executed[1][1], (42,))
         self.assertEqual(payload["prescription"]["target_load"], 0)
@@ -356,6 +361,21 @@ class PlanMutationRouteTests(unittest.TestCase):
                     request_with_headers([(header_name, value)])
                 )
                 self.assertEqual(response.status_code, 403)
+
+    def test_favorite_field_is_strict_and_create_defaults_false(self):
+        payload = PlanTemplatePayload.model_validate(mutation_payload())
+        self.assertFalse(payload.is_favorite)
+        self.assertTrue(
+            PlanTemplatePayload.model_validate(
+                mutation_payload(is_favorite=True)
+            ).is_favorite
+        )
+        for value in (None, "true", 1):
+            with self.subTest(value=value):
+                with self.assertRaises(ValidationError):
+                    PlanTemplatePayload.model_validate(
+                        mutation_payload(is_favorite=value)
+                    )
 
     def test_structural_errors_use_fastapi_422_and_semantic_order_uses_400(self):
         client = TestClient(training_app)
@@ -452,6 +472,7 @@ class PlanMutationRouteTests(unittest.TestCase):
             )
         self.assertEqual(response.status_code, 201)
         self.assertEqual(response_json(response)["plan_template_id"], 12)
+        self.assertFalse(response_json(response)["is_favorite"])
 
     def test_cross_origin_create_is_rejected_without_service_call(self):
         with patch("routes.plan.create_template") as create:
@@ -578,6 +599,35 @@ class PlanServiceTransactionTests(unittest.TestCase):
             statements[5],
         )
         self.assertNotIn("plan_item", "\n".join(statements))
+
+    def test_update_omitting_favorite_preserves_existing_value(self):
+        cursor = TransactionCursor(
+            [
+                {
+                    "plan_template_id": 12,
+                    "plan_prescription_id": 42,
+                    "prescription_owner_kind": "template",
+                    "is_active": True,
+                },
+                {"plan_prescription_id": 42, "owner_kind": "template"},
+                {"plan_category_id": 1},
+                template_row(is_favorite=True),
+                [],
+            ]
+        )
+        payload = mutation_payload()
+        payload.pop("is_favorite")
+        conn = TransactionConnection(cursor)
+        with patch("services.plan_service.db_conn", return_value=conn):
+            update_template(
+                12,
+                PlanTemplatePayload.model_validate(payload),
+            )
+        template_update = next(
+            statement for statement, _ in cursor.executed
+            if "update public.plan_template" in statement.lower()
+        )
+        self.assertNotIn("is_favorite", template_update.lower())
 
     def test_deactivate_already_inactive_does_not_update_or_commit(self):
         cursor = TransactionCursor([{"is_active": False}])

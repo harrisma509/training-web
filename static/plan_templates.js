@@ -25,6 +25,7 @@
     template_name: "",
     template_description: null,
     sort_order: 0,
+    is_favorite: false,
     category: null,
     is_active: true,
     prescription: {
@@ -172,6 +173,7 @@
           <div class="plan-template-card-meta">
             <span>${escapeHtml(row.category?.category_name || "Uncategorized")}</span>
             ${prescription.trainer === true ? '<span class="plan-template-badge">Trainer</span>' : ""}
+            ${row.is_favorite === true ? '<span class="plan-template-badge plan-template-quick-pick-badge">Quick Pick</span>' : ""}
           </div>
           ${details.length ? `<div class="plan-template-card-details">${details.join(" · ")}</div>` : ""}
           ${prescription.description || row.template_description
@@ -312,6 +314,15 @@
           <h3 id="plan-template-details-heading">Template details</h3>
           ${inputMarkup({ field: "template_name", label: "Name", value: draft.template_name, required: true })}
           ${selectMarkup({ field: "category_id", label: "Category", value: draft.category?.plan_category_id || draft.category_id, options: categoryOptions(draft.category?.plan_category_id || draft.category_id), required: true })}
+          <div class="plan-template-field plan-template-field-is-favorite">
+            <label for="plan-template-is-favorite">
+              <input id="plan-template-is-favorite" name="is_favorite" type="checkbox"
+                data-plan-template-field="is_favorite"${draft.is_favorite === true ? " checked" : ""}
+                aria-describedby="plan-template-is-favorite-help">
+              Show in Quick Picks
+            </label>
+            <small id="plan-template-is-favorite-help">Show this template in the fast-access section of the Plan Palette.</small>
+          </div>
           ${selectMarkup({ field: "sport_type", label: "Sport", value: sportCustom ? "__custom__" : prescription.sport_type, options: optionMarkup(SPORT_CHOICES, prescription.sport_type) })}
           ${sportCustom ? inputMarkup({ field: "sport_type_custom", label: "Custom sport", value: customSport }) : ""}
           ${inputMarkup({ field: "target_duration_min", label: "Duration (min)", value: prescription.target_duration_min, type: "number", step: "0.01", min: "0" })}
@@ -543,6 +554,7 @@
       template_description: sharedDescription,
       category_id: Number(draft.category_id),
       sort_order: confirmed?.sort_order ?? 0,
+      is_favorite: draft.is_favorite === true,
       prescription: {
         title: state.view === "create" || state.sharedFieldsChanged.name
           ? sharedName
@@ -702,7 +714,7 @@
       loadTemplates(event.target.value ? Number(event.target.value) : null);
       return;
     }
-    const value = event.target.value;
+    const value = event.target.type === "checkbox" ? event.target.checked : event.target.value;
     updateDraftField(field, value);
     if (field === "sport_type" || field === "activity_category") {
       render();

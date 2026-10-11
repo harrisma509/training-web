@@ -36,6 +36,10 @@ assert.match(moduleSource, /Template details/);
 assert.doesNotMatch(moduleSource, /<legend>Prescription<\/legend>/);
 assert.doesNotMatch(moduleSource, /Prescription title|Prescription description/);
 assert.match(moduleSource, /template_name: sharedName/);
+assert.match(moduleSource, /Show in Quick Picks/);
+assert.match(moduleSource, /fast-access section of the Plan Palette/);
+assert.match(moduleSource, /is_favorite: draft\.is_favorite === true/);
+assert.match(moduleSource, /row\.is_favorite === true/);
 assert.match(moduleSource, /title: state\.view === "create" \|\| state\.sharedFieldsChanged\.name/);
 assert.match(moduleSource, /<details class="plan-template-more-options"/);
 assert.match(moduleSource, /Save changes/);
@@ -181,6 +185,7 @@ function createPlanHarness() {
       template_name: "Existing name",
       template_description: "Existing description",
       sort_order: 4,
+      is_favorite: true,
       category: { plan_category_id: 1 },
       prescription: {
         title: "Legacy prescription title",
@@ -206,6 +211,7 @@ function createPlanHarness() {
       template_name: payload.template_name,
       template_description: payload.template_description,
       sort_order: payload.sort_order,
+      is_favorite: payload.is_favorite,
       category: { plan_category_id: payload.category_id },
       prescription: { ...payload.prescription, segments: payload.segments },
     });
@@ -217,6 +223,7 @@ function createPlanHarness() {
       template_name: payload.template_name,
       template_description: payload.template_description,
       sort_order: payload.sort_order,
+      is_favorite: payload.is_favorite,
       category: { plan_category_id: payload.category_id },
       prescription: { ...payload.prescription, segments: payload.segments },
     });
@@ -345,12 +352,14 @@ async function runBehavioralTests() {
   assert.equal(serializerHarness.mutationPayloads[0].segments.length, 0);
   assert.equal(serializerHarness.mutationPayloads[0].prescription.target_load_source, null);
   assert.equal(serializerHarness.mutationPayloads[0].sort_order, 0);
+  assert.equal(serializerHarness.mutationPayloads[0].is_favorite, false);
 
   const editHarness = createPlanHarness();
   editHarness.controller.open();
   editHarness.dispatchRootAction("edit", 7);
   await flush();
   assert.match(editHarness.content.innerHTML, /<details class="plan-template-more-options" open>/);
+  assert.match(editHarness.content.innerHTML, /id="plan-template-is-favorite"[^>]*checked/);
   assert.match(editHarness.content.innerHTML, /Distance \(mi\)/);
   assert.match(editHarness.content.innerHTML, /Elevation \(ft\)/);
   editHarness.content.dispatch("submit", { target: { id: "planTemplateForm" }, preventDefault() {} });
@@ -358,6 +367,7 @@ async function runBehavioralTests() {
   const preservedPayload = editHarness.mutationPayloads[0];
   assert.equal(preservedPayload.prescription.title, "Legacy prescription title");
   assert.equal(preservedPayload.prescription.description, "Legacy prescription description");
+  assert.equal(preservedPayload.is_favorite, true);
   editHarness.dispatchChange("template_name", "Unified name");
   editHarness.dispatchChange("template_description", "Unified description");
   editHarness.content.dispatch("submit", { target: { id: "planTemplateForm" }, preventDefault() {} });

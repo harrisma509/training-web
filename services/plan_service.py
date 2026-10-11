@@ -47,6 +47,7 @@ def _detail_queries(cur, plan_template_id, *, active_only):
                 pt.template_description,
                 pt.sort_order,
                 pt.is_active,
+                pt.is_favorite,
                 pc.plan_category_id,
                 pc.category_key,
                 pc.category_name,
@@ -306,9 +307,10 @@ def create_template(payload):
                         template_name,
                         template_description,
                         sort_order,
+                        is_favorite,
                         is_active
                     )
-                    values (%s, %s, 'template', %s, %s, %s, true)
+                    values (%s, %s, 'template', %s, %s, %s, %s, true)
                     returning plan_template_id
                 """,
                 (
@@ -317,6 +319,7 @@ def create_template(payload):
                     payload.template_name,
                     payload.template_description,
                     payload.sort_order,
+                    payload.is_favorite,
                 ),
             )
             template_id = cur.fetchone()["plan_template_id"]
@@ -366,23 +369,30 @@ def update_template(plan_template_id, payload):
                 raise PlanOwnershipCorrupt()
 
             _require_active_category(cur, payload.category_id)
+            update_fields = [
+                "plan_category_id = %s",
+                "template_name = %s",
+                "template_description = %s",
+                "sort_order = %s",
+            ]
+            update_params = [
+                payload.category_id,
+                payload.template_name,
+                payload.template_description,
+                payload.sort_order,
+            ]
+            if "is_favorite" in getattr(payload, "model_fields_set", set()):
+                update_fields.append("is_favorite = %s")
+                update_params.append(payload.is_favorite)
+            update_fields.append("updated_at = now()")
+            update_params.append(plan_template_id)
             cur.execute(
-                """
+                f"""
                     update public.plan_template
-                    set plan_category_id = %s,
-                        template_name = %s,
-                        template_description = %s,
-                        sort_order = %s,
-                        updated_at = now()
+                    set {", ".join(update_fields)}
                     where plan_template_id = %s
                 """,
-                (
-                    payload.category_id,
-                    payload.template_name,
-                    payload.template_description,
-                    payload.sort_order,
-                    plan_template_id,
-                ),
+                tuple(update_params),
             )
             cur.execute(
                 """

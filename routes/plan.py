@@ -122,6 +122,7 @@ class PlanTemplatePayload(BaseModel):
     template_description: OptionalText = Field(max_length=2000)
     category_id: StrictInt = Field(gt=0)
     sort_order: StrictInt = Field(ge=0)
+    is_favorite: StrictBool = False
     prescription: PlanPrescriptionPayload
     segments: list[PlanPrescriptionSegmentPayload] = Field(max_length=200)
 
@@ -215,6 +216,7 @@ def _template_summary_payload(row):
         "template_name": row["template_name"],
         "template_description": row["template_description"],
         "sort_order": row["sort_order"],
+        "is_favorite": row["is_favorite"],
         "category": _category_payload(row, include_sort_order=False),
         "prescription": _prescription_payload(row),
     }
@@ -226,6 +228,7 @@ def _template_detail_payload(row, segments):
         "template_name": row["template_name"],
         "template_description": row["template_description"],
         "sort_order": row["sort_order"],
+        "is_favorite": row["is_favorite"],
         "is_active": row["is_active"],
         "category": _category_payload(row),
         "prescription": _prescription_payload(row, segments),
@@ -368,6 +371,7 @@ def api_plan_templates(category_id: int | None = None, limit: int = 100):
                             pt.template_name,
                             pt.template_description,
                             pt.sort_order,
+                            pt.is_favorite,
                             pc.plan_category_id,
                             pc.category_key,
                             pc.category_name,
@@ -401,6 +405,7 @@ def api_plan_templates(category_id: int | None = None, limit: int = 100):
                             pt.template_name,
                             pt.template_description,
                             pt.sort_order,
+                            pt.is_favorite,
                             pc.plan_category_id,
                             pc.category_key,
                             pc.category_name,

@@ -587,6 +587,28 @@
     opacity: 0.65;
 }
 
+.plan-template-field-is-favorite {
+    display: grid;
+    gap: 5px;
+}
+
+.plan-template-field-is-favorite label {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    font-weight: 700;
+}
+
+.plan-template-field-is-favorite input {
+    width: 16px;
+    height: 16px;
+}
+
+.plan-template-field-is-favorite small {
+    color: var(--muted);
+    font-size: 11px;
+}
+
 @media (min-width: 1200px) {
     .plan-workspace.plan-palette-open {
         grid-template-columns: minmax(0, 1fr) 312px;
