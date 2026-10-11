@@ -1,15 +1,23 @@
 import json
 import unittest
 from decimal import Decimal
+from types import SimpleNamespace
 from unittest.mock import patch
 
-from fastapi import HTTPException
+from starlette.requests import Request
 
 from routes.plan import (
+    PlanTemplatePayload,
+    _mutation_guard,
+    _mutation_payload,
     api_plan_categories,
+    api_plan_template_create,
     api_plan_template_detail,
+    api_plan_template_deactivate,
     api_plan_templates,
+    api_plan_template_update,
 )
+from services.plan_service import create_template, deactivate_template, update_template
 
 
 def category_row(**overrides):
@@ -72,6 +80,48 @@ def segment_row(order, **overrides):
     return row
 
 
+def mutation_payload(**overrides):
+    payload = {
+        "template_name": "Tempo Ride",
+        "template_description": "Controlled sustained effort.",
+        "category_id": 1,
+        "sort_order": 1,
+        "prescription": {
+            "title": "Tempo Ride",
+            "description": "Controlled sustained effort.",
+            "sport_type": "Ride",
+            "activity_category": "tempo",
+            "trainer": False,
+            "target_duration_min": 90.0,
+            "target_load": 0,
+            "target_load_source": None,
+            "target_distance_mi": None,
+            "target_elevation_ft": None,
+            "instruction_text": "Ride steadily.",
+        },
+        "segments": [],
+    }
+    payload.update(overrides)
+    return payload
+
+
+def request_with_headers(headers=()):
+    return Request(
+        {
+            "type": "http",
+            "method": "POST",
+            "path": "/api/plan/templates",
+            "headers": [
+                (key.lower().encode("ascii"), value.encode("ascii"))
+                for key, value in headers
+            ],
+            "scheme": "http",
+            "server": ("192.168.1.100", 8088),
+            "client": ("192.168.1.20", 50000),
+        }
+    )
+
+
 class FakeCursor:
     def __init__(self, *, rows=None, one=None, error=None):
         self.rows = list(rows or [])
@@ -108,6 +158,54 @@ class FakeConnection:
         return self
 
     def __exit__(self, *args):
+        return False
+
+
+class TransactionCursor:
+    def __init__(self, results, error_on=None):
+        self.results = list(results)
+        self.error_on = error_on
+        self.executed = []
+
+    def execute(self, sql, params=()):
+        self.executed.append((sql, params))
+        if self.error_on and self.error_on in sql.lower():
+            raise RuntimeError("planned failure")
+
+    def fetchone(self):
+        return self.results.pop(0)
+
+    def fetchall(self):
+        return self.results.pop(0)
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *args):
+        return False
+
+
+class TransactionConnection:
+    def __init__(self, cursor):
+        self.cursor_value = cursor
+        self.commit_count = 0
+        self.rollback_count = 0
+
+    def cursor(self):
+        return self.cursor_value
+
+    def commit(self):
+        self.commit_count += 1
+
+    def rollback(self):
+        self.rollback_count += 1
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, *_):
+        if exc_type is not None:
+            self.rollback()
         return False
 
 
@@ -217,6 +315,183 @@ class PlanRouteTests(unittest.TestCase):
             response = api_plan_template_detail(12)
         self.assertEqual(response.status_code, 503)
         self.assertEqual(response_json(response), {"detail": "Plan templates are unavailable."})
+
+
+class PlanMutationRouteTests(unittest.TestCase):
+    def test_mutation_guard_accepts_same_origin_and_missing_headers(self):
+        self.assertIsNone(
+            _mutation_guard(
+                request_with_headers(
+                    [("Origin", "http://192.168.1.100:8088")]
+                )
+            )
+        )
+        self.assertIsNone(_mutation_guard(request_with_headers()))
+
+    def test_mutation_guard_rejects_cross_origin_before_database(self):
+        response = _mutation_guard(
+            request_with_headers([("Origin", "http://evil.example")])
+        )
+        self.assertEqual(response.status_code, 403)
+        response = _mutation_guard(
+            request_with_headers(
+                [("Referer", "http://192.168.1.100.evil:8088/x")]
+            )
+        )
+        self.assertEqual(response.status_code, 403)
+
+    def test_mutation_payload_rejects_forbidden_fields_and_semantic_errors(self):
+        response = _mutation_payload({**mutation_payload(), "plan_template_id": 12})
+        self.assertEqual(response.status_code, 400)
+        response = _mutation_payload(
+            {
+                **mutation_payload(),
+                "segments": [
+                    {
+                        "segment_order": 2,
+                        "segment_name": None,
+                        "repeat_group_key": None,
+                        "repeat_count": 1,
+                        "target_duration_min": None,
+                        "target_metric": "none",
+                        "zone_min": None,
+                        "zone_max": None,
+                        "target_value_min": None,
+                        "target_value_max": None,
+                        "instruction_text": None,
+                    }
+                ],
+            }
+        )
+        self.assertEqual(response.status_code, 400)
+
+    def test_create_route_returns_full_detail_and_201(self):
+        detail = SimpleNamespace(row=template_row(), segments=[segment_row(1)])
+        with patch("routes.plan.create_template", return_value=detail):
+            response = api_plan_template_create(
+                request_with_headers(),
+                mutation_payload(),
+            )
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(response_json(response)["plan_template_id"], 12)
+
+    def test_cross_origin_create_is_rejected_without_service_call(self):
+        with patch("routes.plan.create_template") as create:
+            response = api_plan_template_create(
+                request_with_headers([("Origin", "http://evil.example")]),
+                mutation_payload(),
+            )
+        self.assertEqual(response.status_code, 403)
+        create.assert_not_called()
+
+    def test_update_and_deactivate_reject_nonpositive_ids(self):
+        request = request_with_headers()
+        response = api_plan_template_update(0, request, mutation_payload())
+        self.assertEqual(response.status_code, 400)
+        response = api_plan_template_deactivate(0, request)
+        self.assertEqual(response.status_code, 400)
+
+
+class PlanServiceTransactionTests(unittest.TestCase):
+    def test_create_commits_once_after_detail_load(self):
+        cursor = TransactionCursor(
+            [
+                {"plan_category_id": 1},
+                {"plan_prescription_id": 42},
+                {"plan_template_id": 12},
+                template_row(),
+                [segment_row(1)],
+            ]
+        )
+        conn = TransactionConnection(cursor)
+        with patch("services.plan_service.db_conn", return_value=conn):
+            detail = create_template(
+                PlanTemplatePayload.model_validate(mutation_payload())
+            )
+        self.assertEqual(detail.row["plan_template_id"], 12)
+        self.assertEqual(conn.commit_count, 1)
+        self.assertEqual(conn.rollback_count, 0)
+        sql = "\n".join(statement for statement, _ in cursor.executed).lower()
+        self.assertNotIn("plan_item", sql)
+        self.assertNotIn("plan_batch", sql)
+
+    def test_create_failure_rolls_back_without_commit(self):
+        cursor = TransactionCursor(
+            [
+                {"plan_category_id": 1},
+                {"plan_prescription_id": 42},
+            ],
+            error_on="insert into public.plan_prescription_segment",
+        )
+        conn = TransactionConnection(cursor)
+        payload = mutation_payload(
+            segments=[
+                {
+                    "segment_order": 1,
+                    "segment_name": "Warm-up",
+                    "repeat_group_key": None,
+                    "repeat_count": 1,
+                    "target_duration_min": 15.0,
+                    "target_metric": "none",
+                    "zone_min": None,
+                    "zone_max": None,
+                    "target_value_min": None,
+                    "target_value_max": None,
+                    "instruction_text": None,
+                }
+            ]
+        )
+        with patch("services.plan_service.db_conn", return_value=conn):
+            with self.assertRaises(RuntimeError):
+                create_template(PlanTemplatePayload.model_validate(payload))
+        self.assertEqual(conn.commit_count, 0)
+        self.assertEqual(conn.rollback_count, 1)
+
+    def test_update_locks_template_then_prescription_and_replaces_segments(self):
+        cursor = TransactionCursor(
+            [
+                {
+                    "plan_template_id": 12,
+                    "plan_prescription_id": 42,
+                    "prescription_owner_kind": "template",
+                    "is_active": True,
+                },
+                {"plan_prescription_id": 42, "owner_kind": "template"},
+                {"plan_category_id": 1},
+                template_row(),
+                [],
+            ]
+        )
+        conn = TransactionConnection(cursor)
+        with patch("services.plan_service.db_conn", return_value=conn):
+            detail = update_template(
+                12,
+                PlanTemplatePayload.model_validate(mutation_payload()),
+            )
+        self.assertEqual(detail.row["plan_template_id"], 12)
+        self.assertEqual(conn.commit_count, 1)
+        statements = [statement.lower() for statement, _ in cursor.executed]
+        self.assertIn("for update", statements[0])
+        self.assertIn("for update", statements[1])
+        self.assertIn(
+            "delete from public.plan_prescription_segment",
+            statements[5],
+        )
+        self.assertNotIn("plan_item", "\n".join(statements))
+
+    def test_deactivate_already_inactive_does_not_update_or_commit(self):
+        cursor = TransactionCursor([{"is_active": False}])
+        conn = TransactionConnection(cursor)
+        with patch("services.plan_service.db_conn", return_value=conn):
+            result = deactivate_template(12)
+        self.assertEqual(result, {"plan_template_id": 12, "is_active": False})
+        self.assertEqual(conn.commit_count, 0)
+        self.assertFalse(
+            any(
+                "update public.plan_template" in sql.lower()
+                for sql, _ in cursor.executed
+            )
+        )
 
 
 if __name__ == "__main__":

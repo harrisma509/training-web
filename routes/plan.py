@@ -1,14 +1,217 @@
-"""Bounded read routes for Plan categories and templates."""
+"""Bounded Plan category/template reads and template mutations."""
 
 import logging
+from decimal import Decimal, InvalidOperation
+from typing import Annotated
+from urllib.parse import urlsplit
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Body, Request
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    StrictBool,
+    StrictInt,
+    StrictStr,
+    BeforeValidator,
+    ValidationError,
+    field_validator,
+    model_validator,
+)
 from fastapi.responses import JSONResponse
 
 from db import db_conn, json_safe
+from services.plan_service import (
+    PlanCategoryNotFound,
+    PlanOwnershipCorrupt,
+    PlanTemplateNotFound,
+    create_template,
+    deactivate_template,
+    load_template_detail,
+    update_template,
+)
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
+
+
+def _strict_decimal(value):
+    if isinstance(value, bool) or not isinstance(value, (int, float, Decimal)):
+        raise ValueError("must be a JSON number")
+    try:
+        return Decimal(str(value))
+    except (InvalidOperation, ValueError):
+        raise ValueError("must be a valid decimal") from None
+
+
+def _required_text(value):
+    if not isinstance(value, str):
+        raise ValueError("must be a string")
+    value = value.strip()
+    if not value:
+        raise ValueError("must not be blank")
+    return value
+
+
+def _optional_text(value):
+    if value is None:
+        return None
+    if not isinstance(value, str):
+        raise ValueError("must be a string or null")
+    value = value.strip()
+    return value or None
+
+
+PlanDecimal = Annotated[Decimal, BeforeValidator(_strict_decimal)]
+RequiredText = Annotated[StrictStr, BeforeValidator(_required_text)]
+OptionalText = Annotated[str | None, BeforeValidator(_optional_text)]
+
+
+class PlanPrescriptionSegmentPayload(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    segment_order: StrictInt = Field(gt=0)
+    segment_name: OptionalText = Field(max_length=200)
+    repeat_group_key: StrictInt | None = Field(gt=0, le=32767)
+    repeat_count: StrictInt = Field(gt=0, le=32767)
+    target_duration_min: PlanDecimal | None = Field(
+        ge=0,
+        max_digits=7,
+        decimal_places=2,
+    )
+    target_metric: RequiredText = Field(max_length=100)
+    zone_min: StrictInt | None = Field(gt=0, le=32767)
+    zone_max: StrictInt | None = Field(gt=0, le=32767)
+    target_value_min: PlanDecimal | None = Field(
+        ge=0,
+        max_digits=8,
+        decimal_places=2,
+    )
+    target_value_max: PlanDecimal | None = Field(
+        ge=0,
+        max_digits=8,
+        decimal_places=2,
+    )
+    instruction_text: OptionalText = Field(max_length=4000)
+
+    @model_validator(mode="after")
+    def validate_targets(self):
+        if self.repeat_group_key is None and self.repeat_count != 1:
+            raise ValueError("repeat_count must be 1 without a repeat group")
+        zones_complete = self.zone_min is not None and self.zone_max is not None
+        values_complete = (
+            self.target_value_min is not None
+            and self.target_value_max is not None
+        )
+        if (self.zone_min is None) != (self.zone_max is None):
+            raise ValueError("zone_min and zone_max must be provided together")
+        if (self.target_value_min is None) != (self.target_value_max is None):
+            raise ValueError(
+                "target_value_min and target_value_max must be provided together"
+            )
+        if zones_complete and self.zone_min > self.zone_max:
+            raise ValueError("zone_min must not exceed zone_max")
+        if values_complete and self.target_value_min > self.target_value_max:
+            raise ValueError("target_value_min must not exceed target_value_max")
+        if zones_complete and values_complete:
+            raise ValueError("zone and value targets are mutually exclusive")
+        if self.target_metric == "none" and (zones_complete or values_complete):
+            raise ValueError("target_metric none cannot have a target")
+        if self.target_metric != "none" and not (zones_complete or values_complete):
+            raise ValueError(
+                "non-none target_metric requires a zone or value target"
+            )
+        if not any(
+            (
+                self.segment_name,
+                self.instruction_text,
+                self.target_duration_min is not None,
+                zones_complete,
+                values_complete,
+            )
+        ):
+            raise ValueError("segment must contain meaningful content")
+        return self
+
+
+class PlanPrescriptionPayload(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    title: RequiredText = Field(max_length=200)
+    description: OptionalText = Field(max_length=2000)
+    sport_type: OptionalText = Field(max_length=100)
+    activity_category: OptionalText = Field(max_length=100)
+    trainer: StrictBool | None
+    target_duration_min: PlanDecimal | None = Field(
+        ge=0,
+        max_digits=7,
+        decimal_places=2,
+    )
+    target_load: StrictInt | None = Field(ge=0)
+    target_load_source: OptionalText = Field(max_length=100)
+    target_distance_mi: PlanDecimal | None = Field(
+        ge=0,
+        max_digits=10,
+        decimal_places=3,
+    )
+    target_elevation_ft: StrictInt | None = Field(ge=0)
+    instruction_text: OptionalText = Field(max_length=4000)
+
+
+class PlanTemplatePayload(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    template_name: RequiredText = Field(max_length=200)
+    template_description: OptionalText = Field(max_length=2000)
+    category_id: StrictInt = Field(gt=0)
+    sort_order: StrictInt = Field(ge=0)
+    prescription: PlanPrescriptionPayload
+    segments: list[PlanPrescriptionSegmentPayload] = Field(max_length=200)
+
+    @field_validator("segments")
+    @classmethod
+    def validate_segment_orders(cls, segments):
+        orders = [segment.segment_order for segment in segments]
+        if orders != list(range(1, len(segments) + 1)):
+            raise ValueError("segment_order values must be contiguous from 1")
+        return segments
+
+
+def _request_origin(request: Request):
+    port = request.url.port
+    if port is None:
+        port = 443 if request.url.scheme == "https" else 80
+    return request.url.scheme.lower(), request.url.hostname.lower(), port
+
+
+def _header_origin(value):
+    parsed = urlsplit(value)
+    if parsed.scheme.lower() not in {"http", "https"} or parsed.hostname is None:
+        return None
+    if parsed.username or parsed.password or parsed.path not in {"", "/"}:
+        return None
+    try:
+        port = parsed.port
+    except ValueError:
+        return None
+    if port is None:
+        port = 443 if parsed.scheme.lower() == "https" else 80
+    return parsed.scheme.lower(), parsed.hostname.lower(), port
+
+
+def _mutation_guard(request: Request):
+    expected = _request_origin(request)
+    for header_name in ("origin", "referer"):
+        header_value = request.headers.get(header_name)
+        if header_value is None:
+            continue
+        parsed = _header_origin(header_value)
+        if parsed != expected:
+            return JSONResponse(
+                {"detail": "Cross-origin Plan mutations are not allowed."},
+                status_code=403,
+            )
+    return None
 
 
 def _json_value(value):
@@ -84,6 +287,14 @@ def _template_detail_payload(row, segments):
 def _unavailable(detail):
     logger.exception("Plan persistence read failed.")
     return JSONResponse({"detail": detail}, status_code=503)
+
+
+def _mutation_payload(payload):
+    try:
+        return PlanTemplatePayload.model_validate(payload)
+    except ValidationError as exc:
+        detail = exc.errors()[0].get("msg", "Invalid Plan template payload.")
+        return JSONResponse({"detail": detail}, status_code=400)
 
 
 @router.get("/api/plan/categories")
@@ -205,71 +416,82 @@ def api_plan_template_detail(plan_template_id: int):
     try:
         with db_conn() as conn:
             with conn.cursor() as cur:
-                cur.execute(
-                    """
-                        select
-                            pt.plan_template_id,
-                            pt.template_name,
-                            pt.template_description,
-                            pt.sort_order,
-                            pt.is_active,
-                            pc.plan_category_id,
-                            pc.category_key,
-                            pc.category_name,
-                            pc.color_key,
-                            pc.icon_key,
-                            pc.sort_order as category_sort_order,
-                            pp.plan_prescription_id,
-                            pp.owner_kind,
-                            pp.title,
-                            pp.description,
-                            pp.sport_type,
-                            pp.activity_category,
-                            pp.trainer,
-                            pp.target_duration_min,
-                            pp.target_load,
-                            pp.target_load_source,
-                            pp.target_distance_mi,
-                            pp.target_elevation_ft,
-                            pp.instruction_text
-                        from public.plan_template pt
-                        join public.plan_category pc
-                            on pc.plan_category_id = pt.plan_category_id
-                        join public.plan_prescription pp
-                            on pp.plan_prescription_id = pt.plan_prescription_id
-                           and pp.owner_kind = 'template'
-                        where pt.plan_template_id = %s
-                          and pt.is_active = true
-                    """,
-                    (plan_template_id,),
-                )
-                row = cur.fetchone()
-                if row is None:
+                detail = load_template_detail(cur, plan_template_id)
+                if detail is None:
                     return JSONResponse({"detail": "Plan template not found."}, status_code=404)
-
-                cur.execute(
-                    """
-                        select
-                            plan_prescription_segment_id,
-                            segment_order,
-                            segment_name,
-                            repeat_group_key,
-                            repeat_count,
-                            target_duration_min,
-                            target_metric,
-                            zone_min,
-                            zone_max,
-                            target_value_min,
-                            target_value_max,
-                            instruction_text
-                        from public.plan_prescription_segment
-                        where plan_prescription_id = %s
-                        order by segment_order asc
-                    """,
-                    (row["plan_prescription_id"],),
-                )
-                segments = cur.fetchall()
     except Exception:
         return _unavailable("Plan templates are unavailable.")
 
-    return JSONResponse(_template_detail_payload(row, segments))
+    return JSONResponse(_template_detail_payload(detail.row, detail.segments))
+
+
+def _mutation_error(exc):
+    if isinstance(exc, PlanCategoryNotFound):
+        return JSONResponse({"detail": "Plan category not found."}, status_code=404)
+    if isinstance(exc, PlanTemplateNotFound):
+        return JSONResponse({"detail": "Plan template not found."}, status_code=404)
+    if isinstance(exc, PlanOwnershipCorrupt):
+        return JSONResponse(
+            {"detail": "Plan template ownership is invalid."},
+            status_code=409,
+        )
+    logger.exception("Plan template mutation failed.")
+    return JSONResponse(
+        {"detail": "Plan template persistence is unavailable."},
+        status_code=503,
+    )
+
+
+@router.post("/api/plan/templates", status_code=201)
+def api_plan_template_create(request: Request, payload: dict = Body(...)):
+    guard_response = _mutation_guard(request)
+    if guard_response is not None:
+        return guard_response
+    parsed = _mutation_payload(payload)
+    if isinstance(parsed, JSONResponse):
+        return parsed
+    try:
+        detail = create_template(parsed)
+    except Exception as exc:
+        return _mutation_error(exc)
+    return JSONResponse(_template_detail_payload(detail.row, detail.segments), status_code=201)
+
+
+@router.put("/api/plan/templates/{plan_template_id}")
+def api_plan_template_update(
+    plan_template_id: int,
+    request: Request,
+    payload: dict = Body(...),
+):
+    if plan_template_id <= 0:
+        return JSONResponse(
+            {"detail": "plan_template_id must be positive."},
+            status_code=400,
+        )
+    guard_response = _mutation_guard(request)
+    if guard_response is not None:
+        return guard_response
+    parsed = _mutation_payload(payload)
+    if isinstance(parsed, JSONResponse):
+        return parsed
+    try:
+        detail = update_template(plan_template_id, parsed)
+    except Exception as exc:
+        return _mutation_error(exc)
+    return JSONResponse(_template_detail_payload(detail.row, detail.segments))
+
+
+@router.post("/api/plan/templates/{plan_template_id}/deactivate")
+def api_plan_template_deactivate(plan_template_id: int, request: Request):
+    if plan_template_id <= 0:
+        return JSONResponse(
+            {"detail": "plan_template_id must be positive."},
+            status_code=400,
+        )
+    guard_response = _mutation_guard(request)
+    if guard_response is not None:
+        return guard_response
+    try:
+        return JSONResponse(deactivate_template(plan_template_id))
+    except Exception as exc:
+        return _mutation_error(exc)
