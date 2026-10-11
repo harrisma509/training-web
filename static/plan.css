@@ -2,18 +2,21 @@
     --plan-load-low: #ffff00;
     --plan-load-target: #16a34a;
     --plan-load-high: #dc2626;
+    --plan-current-outline: #16a34a;
 }
 
 :root[data-theme="light"] {
     --plan-load-low: #facc15;
     --plan-load-target: #16a34a;
     --plan-load-high: #dc2626;
+    --plan-current-outline: #15803d;
 }
 
 :root[data-theme="dark"] {
     --plan-load-low: #ffff00;
     --plan-load-target: #16a34a;
     --plan-load-high: #dc2626;
+    --plan-current-outline: #4ade80;
 }
 
 #planPane,
@@ -115,6 +118,17 @@
     padding: 8px 9px 7px;
     border-bottom: 1px solid var(--line);
     background: rgba(96, 165, 250, 0.08);
+}
+
+.plan-day-header.is-current-week {
+    box-sizing: border-box;
+    outline: 1px solid var(--plan-current-outline);
+    outline-offset: -1px;
+}
+
+.plan-day-header.is-current-day {
+    outline: 2px solid var(--plan-current-outline);
+    outline-offset: -2px;
 }
 
 .plan-week-toggle {

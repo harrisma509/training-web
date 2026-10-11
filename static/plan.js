@@ -858,9 +858,10 @@
     strip.dataset.planCheckinBound = "true";
   }
 
-  function renderPlanDayCell(date, row, isWeekCollapsed) {
+  function renderPlanDayCell(date, row, isWeekCollapsed, isCurrentWeek) {
     const label = formatPlanDay(date);
     const dayKey = toLocalDateKey(date);
+    const isCurrentDay = dayKey === getDenverTodayKey();
     const isDayExpanded = PLAN_EXPANDED_DAY_KEYS.has(dayKey);
     const formattedDateLabel = [label.weekday, label.month, label.date].filter(Boolean).join(" ").trim() || "this day";
     const mainRideName = row?.main_ride_name == null ? "" : String(row.main_ride_name).trim();
@@ -922,7 +923,7 @@
 
     return `
       <div class="plan-day ${isWeekCollapsed ? "is-collapsed" : ""}">
-        <div class="plan-day-header">
+        <div class="plan-day-header${isCurrentWeek ? " is-current-week" : ""}${isCurrentDay ? " is-current-day" : ""}"${isCurrentDay ? ' aria-current="date"' : ""}>
           <span class="plan-weekday">${escapeHtml(label.weekday || "")}</span>
           <span class="plan-day-load" aria-label="${escapeHtml(loadLabel)}" title="${escapeHtml(loadLabel)}">${escapeHtml(loadDisplay)}</span>
           <span class="plan-date">${escapeHtml(label.month || "")} ${escapeHtml(label.date || "")}</span>
@@ -1039,7 +1040,7 @@
     const html = dates.map((date) => {
       const key = toLocalDateKey(date);
       const row = rowMap.get(key) || null;
-      return renderPlanDayCell(date, row, collapsed);
+      return renderPlanDayCell(date, row, collapsed, isCurrentWeek);
     }).join("");
 
     return `
@@ -1068,7 +1069,7 @@
     const html = weekOffsets.map((weeksBack) => {
       const weekDates = getWeekDatesOffset(weeksBack);
       const weekKey = getPlanWeekKey(weekDates[0]);
-      const defaultCollapsed = weeksBack >= 2;
+      const defaultCollapsed = false;
       return renderPlanWeekRow(weekDates[0], rowMap, weeklyRowMap, defaultCollapsed);
     }).join("");
 

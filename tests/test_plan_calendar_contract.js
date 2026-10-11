@@ -15,7 +15,11 @@ assert.match(planSource, /setUTCDate\(start\.getUTCDate\(\) \+ index\)/);
 assert.match(planSource, /Nothing planned/);
 assert.match(planSource, /No activity recorded today/);
 assert.match(planSource, /No activity recorded/);
-assert.match(planSource, /const defaultCollapsed = weeksBack >= 2/);
+assert.match(planSource, /const defaultCollapsed = false/);
+assert.match(planSource, /is-current-week/);
+assert.match(planSource, /is-current-day/);
+assert.match(planSource, /aria-current="date"/);
+assert.match(planSource, /const isCurrentDay = dayKey === getDenverTodayKey\(\)/);
 assert.match(planSource, /fetchDaily\(28, "", "", range\.start, range\.end\)/);
 assert.match(planSource, /fetchWeekly\(4, range\.start, range\.end\)/);
 assert.match(planSource, /PLAN_WEEK_COLLAPSE_STATE/);
@@ -38,5 +42,12 @@ assert.match(weeklySource, /start_date: Date \| None = None/);
 assert.match(weeklySource, /weeks\.week_start >= %s/);
 assert.match(appSource, /if \(tab !== "plan"\) url\.searchParams\.delete\("plan_start"\)/);
 assert.match(appSource, /window\.TrainingApp\.navigatePlan = function navigatePlan/);
+
+const planCss = fs.readFileSync("static/plan.css", "utf8");
+assert.match(planCss, /--plan-current-outline/);
+assert.match(planCss, /\.plan-day-header\.is-current-week/);
+assert.match(planCss, /\.plan-day-header\.is-current-day/);
+assert.match(planCss, /outline: 1px solid var\(--plan-current-outline\)/);
+assert.match(planCss, /outline: 2px solid var\(--plan-current-outline\)/);
 
 console.log("Plan four-week calendar contract tests passed.");
