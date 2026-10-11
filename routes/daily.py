@@ -9,7 +9,7 @@ Do not put Weekly, Zones, Sync, or Weekly Audit logic here.
 
 from datetime import date as Date
 
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException
 from fastapi.responses import JSONResponse
 
 from db import db_conn, rows_to_json
@@ -68,13 +68,38 @@ def api_ride_search(q: str = "", limit: int = 5):
 
 
 @router.get("/api/daily")
-def api_daily(limit: int = 365, q: str = "", date: Date | None = None):
+def api_daily(
+    limit: int = 365,
+    q: str = "",
+    date: Date | None = None,
+    start_date: Date | None = None,
+    end_date: Date | None = None,
+):
+    if date is not None and (start_date is not None or end_date is not None):
+        raise HTTPException(status_code=422, detail="date cannot be combined with a date range")
+    if (start_date is None) != (end_date is None):
+        raise HTTPException(status_code=422, detail="start_date and end_date must be provided together")
+    if start_date is not None and start_date >= end_date:
+        raise HTTPException(status_code=422, detail="start_date must be before end_date")
+    if start_date is not None and (end_date - start_date).days > 31:
+        raise HTTPException(status_code=422, detail="date range must not exceed 31 days")
+
     trimmed_q = (q or "").strip()
     if trimmed_q:
         limit = max(1, min(int(limit or 1000), 1000))
         like_pattern = _ride_search_pattern(trimmed_q)
         date_filter = "\n                and daily_training.date = %s" if date is not None else ""
+        range_filter = (
+            "\n                and daily_training.date >= %s"
+            "\n                and daily_training.date < %s"
+            if start_date is not None else ""
+        )
         count_date_filter = "\n                and date = %s" if date is not None else ""
+        count_range_filter = (
+            "\n                and date >= %s"
+            "\n                and date < %s"
+            if start_date is not None else ""
+        )
         sql = f"""
             select
                 daily_training.date AS date,
@@ -132,6 +157,7 @@ def api_daily(limit: int = 365, q: str = "", date: Date | None = None):
                 and trim(daily_training.main_ride_name) <> ''
                 and lower(daily_training.main_ride_name) like lower(%s) escape '\\'
                 {date_filter}
+                {range_filter}
             order by daily_training.date desc
             limit %s
         """
@@ -143,9 +169,18 @@ def api_daily(limit: int = 365, q: str = "", date: Date | None = None):
                 and trim(main_ride_name) <> ''
                 and lower(main_ride_name) like lower(%s) escape '\\'
                 {count_date_filter}
+                {count_range_filter}
         """
-        count_params = (like_pattern, date) if date is not None else (like_pattern,)
-        query_params = (like_pattern, date, limit) if date is not None else (like_pattern, limit)
+        count_params = (
+            (like_pattern, date) if date is not None
+            else (like_pattern, start_date, end_date) if start_date is not None
+            else (like_pattern,)
+        )
+        query_params = (
+            (like_pattern, date, limit) if date is not None
+            else (like_pattern, start_date, end_date, limit) if start_date is not None
+            else (like_pattern, limit)
+        )
         with db_conn() as conn:
             with conn.cursor() as cur:
                 cur.execute(count_sql, count_params)
@@ -225,13 +260,22 @@ def api_daily(limit: int = 365, q: str = "", date: Date | None = None):
         left join strava_activities AS narrative_activity
             on narrative_activity.activity_id = daily_training.main_ride_id
     """
+    filters = []
+    params = []
     if date is not None:
-        sql += "\n        where dates.date = %s"
+        filters.append("dates.date = %s")
+        params.append(date)
+    if start_date is not None:
+        filters.extend(["dates.date >= %s", "dates.date < %s"])
+        params.extend([start_date, end_date])
+    if filters:
+        sql += "\n        where " + " and ".join(filters)
     sql += "\n        order by dates.date desc\n        limit %s"
+    params.append(limit)
 
     with db_conn() as conn:
         with conn.cursor() as cur:
-            cur.execute(sql, (date, limit) if date is not None else (limit,))
+            cur.execute(sql, tuple(params))
             rows = cur.fetchall()
 
     return JSONResponse(rows_to_json(rows))

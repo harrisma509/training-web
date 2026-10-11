@@ -8,6 +8,7 @@ Do not add Weekly Audit logic in this refactor.
 """
 
 import logging
+from datetime import date as Date
 
 import psycopg
 from fastapi import APIRouter, HTTPException
@@ -66,7 +67,22 @@ WEEKLY_EXPORT_COLUMNS = (
 )
 
 
-def _query_weekly_rows(limit: int):
+def _query_weekly_rows(limit: int, start_date: Date | None = None, end_date: Date | None = None):
+    if (start_date is None) != (end_date is None):
+        raise HTTPException(status_code=422, detail="start_date and end_date must be provided together")
+    if start_date is not None and start_date >= end_date:
+        raise HTTPException(status_code=422, detail="start_date must be before end_date")
+    if start_date is not None and (end_date - start_date).days > 31:
+        raise HTTPException(status_code=422, detail="date range must not exceed 31 days")
+
+    range_filter = ""
+    order_clause = "order by weeks.week_start desc"
+    params = [limit]
+    if start_date is not None:
+        range_filter = " where weeks.week_start >= %s and weeks.week_start < %s"
+        order_clause = "order by weeks.week_start asc"
+        params = [start_date, end_date, limit]
+
     sql = """
         with weeks AS (
             select week_start from weekly_training
@@ -175,22 +191,27 @@ def _query_weekly_rows(limit: int):
             group by 1
         ) fall_weeks
             on fall_weeks.week_start = weeks.week_start
-        order by weeks.week_start desc
+        {range_filter}
+        {order_clause}
         limit %s
-    """
+    """.format(range_filter=range_filter, order_clause=order_clause)
 
     with db_conn() as conn:
         with conn.cursor() as cur:
-            cur.execute(sql, (limit,))
+            cur.execute(sql, tuple(params))
             rows = cur.fetchall()
 
     return rows
 
 
 @router.get("/api/weekly")
-def api_weekly(limit: int = 60):
+def api_weekly(
+    limit: int = 60,
+    start_date: Date | None = None,
+    end_date: Date | None = None,
+):
     limit = max(1, min(limit, 520))
-    return JSONResponse(rows_to_json(_query_weekly_rows(limit)))
+    return JSONResponse(rows_to_json(_query_weekly_rows(limit, start_date, end_date)))
 
 
 @router.get("/api/weekly/export")

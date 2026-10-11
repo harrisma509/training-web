@@ -1,5 +1,15 @@
 <section id="planPane" class="hidden">
     <div class="plan-shell">
+        <div class="plan-toolbar" aria-label="Plan calendar navigation">
+            <button id="planPreviousFour" type="button" aria-label="Show the previous four weeks">−4 weeks</button>
+            <button id="planPreviousOne" type="button" aria-label="Show the previous week">−1 week</button>
+            <button id="planToday" type="button" aria-label="Show the current week and next three weeks">Today</button>
+            <label class="plan-date-jump" for="planDateJump">Jump to date
+                <input id="planDateJump" type="date">
+            </label>
+            <button id="planNextOne" type="button" aria-label="Show the next week">+1 week</button>
+            <button id="planNextFour" type="button" aria-label="Show the next four weeks">+4 weeks</button>
+        </div>
         <div id="planStrip" class="plan-weeks" aria-live="polite"></div>
     </div>
 </section>

@@ -28,6 +28,43 @@
     padding: 12px;
 }
 
+.plan-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 12px;
+}
+
+.plan-toolbar button,
+.plan-date-jump input {
+    min-height: 36px;
+}
+
+.plan-toolbar button {
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 6px 10px;
+    background: var(--panel2);
+    color: var(--text);
+    cursor: pointer;
+}
+
+.plan-toolbar button:focus-visible,
+.plan-date-jump input:focus-visible {
+    outline: 2px solid var(--focus-ring, rgba(96, 165, 250, 0.9));
+    outline-offset: 2px;
+}
+
+.plan-date-jump {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    min-height: 36px;
+    color: var(--muted);
+    font-size: 12px;
+}
+
 .plan-weeks {
     display: flex;
     flex-direction: column;

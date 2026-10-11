@@ -10,7 +10,8 @@ assert.match(
 );
 assert.doesNotMatch(planSource, /window\.loadPlan\s*=\s*loadPlan;/);
 assert.match(planSource, /init: initPlan/);
-assert.match(planSource, /activate: \(\) => loadPlan\(false\)/);
+assert.match(planSource, /activate: context =>/);
+assert.match(planSource, /context\?\.routeChanged/);
 assert.match(planSource, /refresh: \(\) => loadPlan\(true\)/);
 assert.match(appSource, /window\.TrainingApp\.registerFeature = window\.TrainingApp\.registerFeature \|\| function/);
 assert.match(appSource, /function createFeatureActivationDispatcher/);

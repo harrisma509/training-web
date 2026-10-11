@@ -205,11 +205,13 @@
       return fetchJson(`/api/gear/dashboard?limit=${limit}`);
     },
 
-    async fetchDaily(limit = 60, q = "", date = "") {
+    async fetchDaily(limit = 60, q = "", date = "", startDate = "", endDate = "") {
       const trimmedQuery = typeof q === "string" ? q.trim() : "";
       const effectiveLimit = trimmedQuery ? 1000 : Math.max(1, Number(limit) || 60);
       const params = new URLSearchParams({ limit: String(effectiveLimit) });
       if (date) params.set("date", String(date));
+      if (startDate) params.set("start_date", String(startDate));
+      if (endDate) params.set("end_date", String(endDate));
       if (trimmedQuery) {
         params.set("q", trimmedQuery);
       }
@@ -288,8 +290,11 @@
       return fetchJson(`/api/rides/search?q=${encodeURIComponent(q)}&limit=${safeLimit}`);
     },
 
-    async fetchWeekly(limit = 60) {
-      return fetchJson(`/api/weekly?limit=${limit}`);
+    async fetchWeekly(limit = 60, startDate = "", endDate = "") {
+      const params = new URLSearchParams({ limit: String(limit) });
+      if (startDate) params.set("start_date", String(startDate));
+      if (endDate) params.set("end_date", String(endDate));
+      return fetchJson(`/api/weekly?${params.toString()}`);
     },
 
     async fetchZones(limit = 60) {

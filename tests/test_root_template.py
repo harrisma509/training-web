@@ -518,7 +518,21 @@ def test_core_pane_partials_are_single_authority_at_original_composition_points(
     root_source = (REPO_ROOT / "templates" / "index.html").read_text(encoding="utf-8")
     rendered_source, document = parse_index()
     pane_specs = (
-        ("planPane", "plan_pane.html", ["planStrip"], [], True),
+        (
+            "planPane",
+            "plan_pane.html",
+            [
+                "planPreviousFour",
+                "planPreviousOne",
+                "planToday",
+                "planDateJump",
+                "planNextOne",
+                "planNextFour",
+                "planStrip",
+            ],
+            [],
+            True,
+        ),
         ("goalsPane", "goals_pane.html", [], [], True),
         ("kpisPane", "kpis_pane.html", [], [], True),
         (

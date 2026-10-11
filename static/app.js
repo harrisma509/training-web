@@ -362,6 +362,7 @@ function buildFeatureUrl(tab) {
   const url = new URL(window.location.href);
   url.searchParams.set("tab", tab);
   if (tab !== "daily") url.searchParams.delete("date");
+  if (tab !== "plan") url.searchParams.delete("plan_start");
   if (tab !== "search") window.TrainingApp?.features?.search?.removeSearchParameters(url);
   return url;
 }
@@ -380,6 +381,7 @@ function buildFeatureActivationContext(featureName, previousFeatureName, options
     previousFeatureName,
     source,
     reason: options.reason || source,
+    routeChanged: Boolean(options.routeChanged),
     fromHistory,
     activationKey: `${featureName}:${url.pathname}${url.search}`,
     route: {
@@ -489,6 +491,19 @@ function activateFeature(tab, options = {}) {
 
 window.TrainingApp.activateFeature = activateFeature;
 window.activateFeature = activateFeature;
+
+window.TrainingApp.navigatePlan = function navigatePlan(planStart) {
+  const url = buildFeatureUrl("plan");
+  url.searchParams.set("plan_start", planStart);
+  if (url.href !== window.location.href) {
+    window.history.pushState({}, "", url);
+  }
+  return activateFeature("plan", {
+    force: true,
+    routeChanged: true,
+    source: "plan-navigation",
+  });
+};
 
 function showTab(tab, options = {}) {
   return activateFeature(tab, {
