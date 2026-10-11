@@ -17,10 +17,6 @@ class PlanTemplateNotFound(PlanServiceError):
     pass
 
 
-class PlanTemplateInactive(PlanServiceError):
-    pass
-
-
 class PlanOwnershipCorrupt(PlanServiceError):
     pass
 

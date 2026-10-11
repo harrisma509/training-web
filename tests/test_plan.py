@@ -4,12 +4,15 @@ from decimal import Decimal
 from types import SimpleNamespace
 from unittest.mock import patch
 
+from fastapi import HTTPException
+from fastapi.testclient import TestClient
 from starlette.requests import Request
 
+from app import app as training_app
 from routes.plan import (
     PlanTemplatePayload,
     _mutation_guard,
-    _mutation_payload,
+    _validate_semantic_payload,
     api_plan_categories,
     api_plan_template_create,
     api_plan_template_detail,
@@ -18,6 +21,7 @@ from routes.plan import (
     api_plan_template_update,
 )
 from services.plan_service import create_template, deactivate_template, update_template
+from services.plan_service import PlanOwnershipCorrupt
 
 
 def category_row(**overrides):
@@ -327,32 +331,96 @@ class PlanMutationRouteTests(unittest.TestCase):
             )
         )
         self.assertIsNone(_mutation_guard(request_with_headers()))
+        for referer in (
+            "http://192.168.1.100:8088/",
+            "http://192.168.1.100:8088/?tab=plan",
+            "http://192.168.1.100:8088/calendar/plan",
+            "http://192.168.1.100:8088/calendar/plan?tab=plan#today",
+        ):
+            with self.subTest(referer=referer):
+                self.assertIsNone(
+                    _mutation_guard(request_with_headers([("Referer", referer)]))
+                )
 
     def test_mutation_guard_rejects_cross_origin_before_database(self):
-        response = _mutation_guard(
-            request_with_headers([("Origin", "http://evil.example")])
-        )
-        self.assertEqual(response.status_code, 403)
-        response = _mutation_guard(
-            request_with_headers(
-                [("Referer", "http://192.168.1.100.evil:8088/x")]
+        for header_name, value in (
+            ("Origin", "http://evil.example"),
+            ("Referer", "http://192.168.1.100:8089/"),
+            ("Referer", "https://192.168.1.100:8088/"),
+            ("Referer", "http://192.168.1.100.evil:8088/x"),
+            ("Referer", "http://user:password@192.168.1.100:8088/x"),
+            ("Referer", "http://192.168.1.100:bad-port/x"),
+        ):
+            with self.subTest(header_name=header_name, value=value):
+                response = _mutation_guard(
+                    request_with_headers([(header_name, value)])
+                )
+                self.assertEqual(response.status_code, 403)
+
+    def test_structural_errors_use_fastapi_422_and_semantic_order_uses_400(self):
+        client = TestClient(training_app)
+        with patch("routes.plan.create_template") as create:
+            response = client.post(
+                "/api/plan/templates",
+                json={
+                    key: value
+                    for key, value in mutation_payload().items()
+                    if key != "prescription"
+                },
             )
-        )
-        self.assertEqual(response.status_code, 403)
+            self.assertEqual(response.status_code, 422)
+            create.assert_not_called()
+
+            response = client.post(
+                "/api/plan/templates",
+                json={**mutation_payload(), "category_id": "1"},
+            )
+            self.assertEqual(response.status_code, 422)
+            response = client.post(
+                "/api/plan/templates",
+                json={
+                    **mutation_payload(),
+                    "prescription": {
+                        **mutation_payload()["prescription"],
+                        "target_duration_min": 1.234,
+                    },
+                },
+            )
+            self.assertEqual(response.status_code, 422)
+            response = client.post(
+                "/api/plan/templates",
+                json={
+                    **mutation_payload(),
+                    "segments": [
+                        {
+                            "segment_order": 2,
+                            "segment_name": "Segment",
+                            "repeat_group_key": None,
+                            "repeat_count": 1,
+                            "target_duration_min": 15.0,
+                            "target_metric": "none",
+                            "zone_min": None,
+                            "zone_max": None,
+                            "target_value_min": None,
+                            "target_value_max": None,
+                            "instruction_text": None,
+                        }
+                    ],
+                },
+            )
+            self.assertEqual(response.status_code, 400)
+            create.assert_not_called()
 
     def test_mutation_payload_rejects_forbidden_fields_and_semantic_errors(self):
-        response = _mutation_payload({**mutation_payload(), "plan_template_id": 12})
-        self.assertEqual(response.status_code, 400)
-        response = _mutation_payload(
-            {
-                **mutation_payload(),
-                "segments": [
+        payload = PlanTemplatePayload.model_validate(
+            mutation_payload(
+                segments=[
                     {
-                        "segment_order": 2,
-                        "segment_name": None,
+                        "segment_order": 1,
+                        "segment_name": "Segment",
                         "repeat_group_key": None,
                         "repeat_count": 1,
-                        "target_duration_min": None,
+                        "target_duration_min": 15.0,
                         "target_metric": "none",
                         "zone_min": None,
                         "zone_max": None,
@@ -360,17 +428,27 @@ class PlanMutationRouteTests(unittest.TestCase):
                         "target_value_max": None,
                         "instruction_text": None,
                     }
-                ],
-            }
+                ]
+            )
         )
-        self.assertEqual(response.status_code, 400)
+        payload.segments[0].segment_order = 2
+        with self.assertRaises(HTTPException) as raised:
+            _validate_semantic_payload(payload)
+        self.assertEqual(raised.exception.status_code, 400)
+
+        client = TestClient(training_app)
+        response = client.post(
+            "/api/plan/templates",
+            json={**mutation_payload(), "owner_kind": "template"},
+        )
+        self.assertEqual(response.status_code, 422)
 
     def test_create_route_returns_full_detail_and_201(self):
         detail = SimpleNamespace(row=template_row(), segments=[segment_row(1)])
         with patch("routes.plan.create_template", return_value=detail):
             response = api_plan_template_create(
                 request_with_headers(),
-                mutation_payload(),
+                PlanTemplatePayload.model_validate(mutation_payload()),
             )
         self.assertEqual(response.status_code, 201)
         self.assertEqual(response_json(response)["plan_template_id"], 12)
@@ -379,17 +457,39 @@ class PlanMutationRouteTests(unittest.TestCase):
         with patch("routes.plan.create_template") as create:
             response = api_plan_template_create(
                 request_with_headers([("Origin", "http://evil.example")]),
-                mutation_payload(),
+                PlanTemplatePayload.model_validate(mutation_payload()),
             )
         self.assertEqual(response.status_code, 403)
         create.assert_not_called()
 
     def test_update_and_deactivate_reject_nonpositive_ids(self):
         request = request_with_headers()
-        response = api_plan_template_update(0, request, mutation_payload())
+        response = api_plan_template_update(
+            0,
+            request,
+            PlanTemplatePayload.model_validate(mutation_payload()),
+        )
         self.assertEqual(response.status_code, 400)
         response = api_plan_template_deactivate(0, request)
         self.assertEqual(response.status_code, 400)
+
+    def test_mutation_errors_are_narrow_and_sanitized(self):
+        payload = PlanTemplatePayload.model_validate(mutation_payload())
+        with patch(
+            "routes.plan.create_template",
+            side_effect=PlanOwnershipCorrupt(),
+        ):
+            response = api_plan_template_create(request_with_headers(), payload)
+        self.assertEqual(response.status_code, 409)
+        self.assertNotIn("PlanOwnershipCorrupt", response.body.decode())
+
+        with patch(
+            "routes.plan.create_template",
+            side_effect=RuntimeError("secret database detail"),
+        ):
+            response = api_plan_template_create(request_with_headers(), payload)
+        self.assertEqual(response.status_code, 503)
+        self.assertNotIn("secret database detail", response.body.decode())
 
 
 class PlanServiceTransactionTests(unittest.TestCase):

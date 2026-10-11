@@ -5,7 +5,7 @@ from decimal import Decimal, InvalidOperation
 from typing import Annotated
 from urllib.parse import urlsplit
 
-from fastapi import APIRouter, Body, Request
+from fastapi import APIRouter, HTTPException, Request
 from pydantic import (
     BaseModel,
     ConfigDict,
@@ -14,9 +14,6 @@ from pydantic import (
     StrictInt,
     StrictStr,
     BeforeValidator,
-    ValidationError,
-    field_validator,
-    model_validator,
 )
 from fastapi.responses import JSONResponse
 
@@ -94,46 +91,6 @@ class PlanPrescriptionSegmentPayload(BaseModel):
     )
     instruction_text: OptionalText = Field(max_length=4000)
 
-    @model_validator(mode="after")
-    def validate_targets(self):
-        if self.repeat_group_key is None and self.repeat_count != 1:
-            raise ValueError("repeat_count must be 1 without a repeat group")
-        zones_complete = self.zone_min is not None and self.zone_max is not None
-        values_complete = (
-            self.target_value_min is not None
-            and self.target_value_max is not None
-        )
-        if (self.zone_min is None) != (self.zone_max is None):
-            raise ValueError("zone_min and zone_max must be provided together")
-        if (self.target_value_min is None) != (self.target_value_max is None):
-            raise ValueError(
-                "target_value_min and target_value_max must be provided together"
-            )
-        if zones_complete and self.zone_min > self.zone_max:
-            raise ValueError("zone_min must not exceed zone_max")
-        if values_complete and self.target_value_min > self.target_value_max:
-            raise ValueError("target_value_min must not exceed target_value_max")
-        if zones_complete and values_complete:
-            raise ValueError("zone and value targets are mutually exclusive")
-        if self.target_metric == "none" and (zones_complete or values_complete):
-            raise ValueError("target_metric none cannot have a target")
-        if self.target_metric != "none" and not (zones_complete or values_complete):
-            raise ValueError(
-                "non-none target_metric requires a zone or value target"
-            )
-        if not any(
-            (
-                self.segment_name,
-                self.instruction_text,
-                self.target_duration_min is not None,
-                zones_complete,
-                values_complete,
-            )
-        ):
-            raise ValueError("segment must contain meaningful content")
-        return self
-
-
 class PlanPrescriptionPayload(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -168,15 +125,6 @@ class PlanTemplatePayload(BaseModel):
     prescription: PlanPrescriptionPayload
     segments: list[PlanPrescriptionSegmentPayload] = Field(max_length=200)
 
-    @field_validator("segments")
-    @classmethod
-    def validate_segment_orders(cls, segments):
-        orders = [segment.segment_order for segment in segments]
-        if orders != list(range(1, len(segments) + 1)):
-            raise ValueError("segment_order values must be contiguous from 1")
-        return segments
-
-
 def _request_origin(request: Request):
     port = request.url.port
     if port is None:
@@ -188,7 +136,7 @@ def _header_origin(value):
     parsed = urlsplit(value)
     if parsed.scheme.lower() not in {"http", "https"} or parsed.hostname is None:
         return None
-    if parsed.username or parsed.password or parsed.path not in {"", "/"}:
+    if parsed.username or parsed.password:
         return None
     try:
         port = parsed.port
@@ -289,12 +237,86 @@ def _unavailable(detail):
     return JSONResponse({"detail": detail}, status_code=503)
 
 
-def _mutation_payload(payload):
-    try:
-        return PlanTemplatePayload.model_validate(payload)
-    except ValidationError as exc:
-        detail = exc.errors()[0].get("msg", "Invalid Plan template payload.")
-        return JSONResponse({"detail": detail}, status_code=400)
+def _validate_semantic_payload(payload: PlanTemplatePayload):
+    orders = [segment.segment_order for segment in payload.segments]
+    if orders != list(range(1, len(payload.segments) + 1)):
+        raise HTTPException(
+            status_code=400,
+            detail="segment_order values must be contiguous from 1",
+        )
+
+    for segment in payload.segments:
+        if segment.repeat_group_key is None and segment.repeat_count != 1:
+            raise HTTPException(
+                status_code=400,
+                detail="repeat_count must be 1 without a repeat group",
+            )
+        zones_complete = (
+            segment.zone_min is not None and segment.zone_max is not None
+        )
+        values_complete = (
+            segment.target_value_min is not None
+            and segment.target_value_max is not None
+        )
+        if (segment.zone_min is None) != (segment.zone_max is None):
+            raise HTTPException(
+                status_code=400,
+                detail="zone_min and zone_max must be provided together",
+            )
+        if (segment.target_value_min is None) != (
+            segment.target_value_max is None
+        ):
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    "target_value_min and target_value_max must be provided "
+                    "together"
+                ),
+            )
+        if zones_complete and segment.zone_min > segment.zone_max:
+            raise HTTPException(
+                status_code=400,
+                detail="zone_min must not exceed zone_max",
+            )
+        if values_complete and (
+            segment.target_value_min > segment.target_value_max
+        ):
+            raise HTTPException(
+                status_code=400,
+                detail="target_value_min must not exceed target_value_max",
+            )
+        if zones_complete and values_complete:
+            raise HTTPException(
+                status_code=400,
+                detail="zone and value targets are mutually exclusive",
+            )
+        if segment.target_metric == "none" and (
+            zones_complete or values_complete
+        ):
+            raise HTTPException(
+                status_code=400,
+                detail="target_metric none cannot have a target",
+            )
+        if segment.target_metric != "none" and not (
+            zones_complete or values_complete
+        ):
+            raise HTTPException(
+                status_code=400,
+                detail="non-none target_metric requires a zone or value target",
+            )
+        if not any(
+            (
+                segment.segment_name,
+                segment.instruction_text,
+                segment.target_duration_min is not None,
+                zones_complete,
+                values_complete,
+            )
+        ):
+            raise HTTPException(
+                status_code=400,
+                detail="segment must contain meaningful content",
+            )
 
 
 @router.get("/api/plan/categories")
@@ -443,15 +465,13 @@ def _mutation_error(exc):
 
 
 @router.post("/api/plan/templates", status_code=201)
-def api_plan_template_create(request: Request, payload: dict = Body(...)):
+def api_plan_template_create(request: Request, payload: PlanTemplatePayload):
     guard_response = _mutation_guard(request)
     if guard_response is not None:
         return guard_response
-    parsed = _mutation_payload(payload)
-    if isinstance(parsed, JSONResponse):
-        return parsed
+    _validate_semantic_payload(payload)
     try:
-        detail = create_template(parsed)
+        detail = create_template(payload)
     except Exception as exc:
         return _mutation_error(exc)
     return JSONResponse(_template_detail_payload(detail.row, detail.segments), status_code=201)
@@ -461,7 +481,7 @@ def api_plan_template_create(request: Request, payload: dict = Body(...)):
 def api_plan_template_update(
     plan_template_id: int,
     request: Request,
-    payload: dict = Body(...),
+    payload: PlanTemplatePayload,
 ):
     if plan_template_id <= 0:
         return JSONResponse(
@@ -471,11 +491,9 @@ def api_plan_template_update(
     guard_response = _mutation_guard(request)
     if guard_response is not None:
         return guard_response
-    parsed = _mutation_payload(payload)
-    if isinstance(parsed, JSONResponse):
-        return parsed
+    _validate_semantic_payload(payload)
     try:
-        detail = update_template(plan_template_id, parsed)
+        detail = update_template(plan_template_id, payload)
     except Exception as exc:
         return _mutation_error(exc)
     return JSONResponse(_template_detail_payload(detail.row, detail.segments))
