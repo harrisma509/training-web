@@ -214,24 +214,6 @@
     return [...(state.byDate.get(dateKey) || [])];
   }
 
-  function acceptCreatedItem(item) {
-    if (!item || !isIsoDate(item.planned_date) || item.plan_item_id == null) {
-      return false;
-    }
-    const nextItems = state.items.filter(existing => existing.plan_item_id !== item.plan_item_id);
-    nextItems.push(item);
-    nextItems.sort((left, right) => {
-      const dateOrder = String(left.planned_date).localeCompare(String(right.planned_date));
-      if (dateOrder !== 0) return dateOrder;
-      const sortOrder = Number(left.sort_order || 0) - Number(right.sort_order || 0);
-      if (sortOrder !== 0) return sortOrder;
-      return Number(left.plan_item_id) - Number(right.plan_item_id);
-    });
-    const nextByDate = groupItems(nextItems);
-    setState({ items: nextItems, byDate: nextByDate });
-    return true;
-  }
-
   function reset() {
     state.abortController?.abort();
     state.range = { start: null, end: null };
@@ -251,7 +233,6 @@
     load,
     getState,
     getItemsForDate,
-    acceptCreatedItem,
     renderDaySection,
     reset,
   };

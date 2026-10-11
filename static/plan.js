@@ -886,10 +886,6 @@
     const plannedState = plannedController?.getState?.() || { status: "idle" };
     const plannedItems = plannedController?.getItemsForDate?.(dayKey) || [];
     const plannedHtml = plannedController?.renderDaySection?.(dayKey) || "";
-    const placementHtml = window.PlanPlacementController?.targetMarkup?.(
-      dayKey,
-      formattedDateLabel,
-    ) || "";
 
     let bodyHtml = "";
     if (!hasActualActivity) {
@@ -939,10 +935,10 @@
     } else {
       bodyHtml = '<div class="plan-empty-state">No activity details</div>';
     }
-    bodyHtml = `${plannedHtml}${placementHtml}${bodyHtml}`;
+    bodyHtml = `${plannedHtml}${bodyHtml}`;
 
     return `
-      <div class="plan-day ${isWeekCollapsed ? "is-collapsed" : ""}" data-plan-date="${escapeHtml(dayKey)}">
+      <div class="plan-day ${isWeekCollapsed ? "is-collapsed" : ""}">
         <div class="plan-day-header${isCurrentWeek ? " is-current-week" : ""}${isCurrentDay ? " is-current-day" : ""}"${isCurrentDay ? ' aria-current="date"' : ""}>
           <span class="plan-weekday">${escapeHtml(label.weekday || "")}</span>
           <span class="plan-day-load" aria-label="${escapeHtml(loadLabel)}" title="${escapeHtml(loadLabel)}">${escapeHtml(loadDisplay)}</span>
@@ -1188,7 +1184,6 @@
     }
     setupPlanNavigation();
     window.PlanItemsController?.init?.({ onChange: renderPlanStrip });
-    window.PlanPlacementController?.init?.({ onChange: renderPlanStrip });
     window.PlanTemplateLibraryController?.init?.();
     const dateInput = document.getElementById("planDateJump");
     if (dateInput) dateInput.value = planAnchor;
@@ -1214,7 +1209,6 @@
       refresh: () => loadPlan(true),
       load: () => loadPlan(true),
       render: renderPlanStrip,
-      getRange: () => getPlanRange(),
       canDeactivate: context => window.PlanTemplateLibraryController?.canDeactivate?.(context) ?? true,
       deactivate: context => window.PlanTemplateLibraryController?.deactivate?.(context),
     };

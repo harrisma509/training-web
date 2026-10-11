@@ -167,11 +167,6 @@
     }
     return `
       <article class="plan-template-card">
-        <button type="button" class="plan-template-drag-handle"
-          draggable="true" data-plan-template-action="drag"
-          data-template-id="${row.plan_template_id}"
-          aria-label="Drag ${escapeHtml(row.template_name)} to a future Plan date"
-          title="Drag to a future Plan date">⋮⋮</button>
         <div class="plan-template-card-main">
           <h3>${escapeHtml(row.template_name)}</h3>
           <div class="plan-template-card-meta">
@@ -182,13 +177,8 @@
           ${prescription.description || row.template_description
             ? `<p>${escapeHtml(prescription.description || row.template_description)}</p>` : ""}
         </div>
-        <div class="plan-template-card-actions">
-          <button type="button" class="button-secondary plan-template-place-button"
-            data-plan-template-action="place" data-template-id="${row.plan_template_id}"
-            aria-label="Place ${escapeHtml(row.template_name)}">Place</button>
-          <button type="button" class="button-secondary plan-template-edit-button"
-            data-plan-template-action="edit" data-template-id="${row.plan_template_id}">Edit</button>
-        </div>
+        <button type="button" class="button-secondary plan-template-edit-button"
+          data-plan-template-action="edit" data-template-id="${row.plan_template_id}">Edit</button>
       </article>`;
   }
 
@@ -363,13 +353,6 @@
     trigger?.setAttribute("aria-expanded", open ? "true" : "false");
   }
 
-  function setPlacementMode(active) {
-    if (!root) return;
-    root.classList.toggle("is-plan-placement", active);
-    root.setAttribute("aria-modal", active ? "false" : "true");
-    root.style.pointerEvents = active ? "none" : "";
-  }
-
   function focusSurface() {
     window.setTimeout(() => {
       const target = content?.querySelector("h2, input, select, button");
@@ -406,7 +389,6 @@
 
   function close(reason = "close") {
     if (!state.open) return true;
-    window.PlanPlacementController?.onLibraryClose?.();
     state.generation += 1;
     if (state.surface) return state.surface.close(reason);
     setOpen(false);
@@ -695,14 +677,6 @@
       requestClose("close-button");
     } else if (action === "create") {
       openCreate();
-    } else if (action === "place") {
-      const card = actionElement.closest(".plan-template-card");
-      const name = card?.querySelector("h3")?.textContent?.trim();
-      window.PlanPlacementController?.startSelection?.({
-        planTemplateId: actionElement.dataset.templateId,
-        templateName: name,
-        sourceElement: actionElement,
-      });
     } else if (action === "edit") {
       openEditor(actionElement.dataset.templateId);
     } else if (action === "back") {
@@ -718,26 +692,6 @@
       loadTemplates(state.templates.categoryId);
     } else if (action === "deactivate") {
       deactivateTemplate();
-    }
-  }
-
-  function handleDragStart(event) {
-    const handle = event.target.closest?.('[data-plan-template-action="drag"]');
-    if (!handle || state.view !== "library") return;
-    const card = handle.closest(".plan-template-card");
-    const name = card?.querySelector("h3")?.textContent?.trim();
-    window.PlanPlacementController?.startDrag?.({
-      planTemplateId: handle.dataset.templateId,
-      templateName: name,
-      sourceElement: handle,
-      dataTransfer: event.dataTransfer,
-    });
-  }
-
-  function handleDragEnd() {
-    const placement = window.PlanPlacementController;
-    if (placement?.getState?.().mode === "dragging") {
-      placement.cancel({ restoreFocus: false });
     }
   }
 
@@ -801,8 +755,6 @@
     });
     trigger.addEventListener("click", () => openLibrary(trigger));
     root.addEventListener("click", handleClick);
-    root.addEventListener("dragstart", handleDragStart);
-    root.addEventListener("dragend", handleDragEnd);
     root.addEventListener("change", handleChange);
     root.addEventListener("input", handleInput);
     content.addEventListener("submit", event => {
@@ -822,8 +774,6 @@
     close,
     canDeactivate,
     deactivate,
-    setPlacementMode,
-    refresh: () => loadTemplates(state.templates.categoryId),
     getState: () => state,
   };
 })();
