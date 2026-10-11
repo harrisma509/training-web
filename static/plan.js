@@ -872,11 +872,17 @@
     strip.addEventListener("dragover", event => {
       const day = getDay(event);
       if (!day || !window.PlanPaletteController?.handleCalendarDragOver?.(day.dataset.planDate, event)) return;
+      strip.querySelectorAll(".is-palette-drop-hover").forEach(other => {
+        if (other !== day) other.classList.remove("is-palette-drop-hover");
+      });
       day.classList.add("is-palette-drop-hover");
     });
     strip.addEventListener("dragenter", event => {
       const day = getDay(event);
       if (day && window.PlanPaletteController?.handleCalendarDragState?.(true, day.dataset.planDate)) {
+        strip.querySelectorAll(".is-palette-drop-hover").forEach(other => {
+          if (other !== day) other.classList.remove("is-palette-drop-hover");
+        });
         day.classList.add("is-palette-drop-hover");
       }
     });

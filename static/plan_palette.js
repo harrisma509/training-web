@@ -36,6 +36,7 @@
   let manageButton;
   let placementBanner;
   let workspace;
+  let draggingRow;
 
   function escape(value) {
     return String(value ?? "").replace(/[&<>"']/g, character => ({
@@ -224,6 +225,8 @@
   }
 
   function clearSelection(message = "") {
+    draggingRow?.classList.remove("is-dragging");
+    draggingRow = null;
     state.selectedTemplate = null;
     state.targetDate = null;
     state.mode = "idle";
@@ -233,12 +236,15 @@
     if (message) announce(message);
     render();
     if (typeof onChange === "function") onChange();
+    window.PlanController?.setPaletteDragState?.(false);
   }
 
   function selectTemplate(templateId, { closeMobile = true } = {}) {
     if (state.inFlight) return;
     const template = state.templates.find(row => String(row.plan_template_id) === String(templateId));
     if (!template) return;
+    draggingRow = templateRowElement;
+    draggingRow.classList.add("is-dragging");
     state.selectedTemplate = {
       planTemplateId: Number(template.plan_template_id),
       templateName: String(template.template_name),
@@ -372,6 +378,8 @@
   function handleDragEnd() {
     if (state.inFlight) return;
     state.dragTemplate = null;
+    draggingRow?.classList.remove("is-dragging");
+    draggingRow = null;
     if (state.mode === "dragging") {
       state.mode = state.selectedTemplate ? "selected" : "idle";
       render();

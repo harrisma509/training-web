@@ -8,6 +8,12 @@
     --plan-current-text: #166534;
 }
 
+.plan-palette-row.is-dragging {
+    border-color: var(--blue);
+    background: rgba(96, 165, 250, 0.22);
+    opacity: 0.72;
+}
+
 :root[data-theme="light"] {
     --plan-load-low: #facc15;
     --plan-load-target: #16a34a;
@@ -595,6 +601,11 @@
     gap: 8px;
     padding: 12px 4px;
     text-align: center;
+}
+
+.plan-palette-state[hidden],
+.plan-palette-rows[hidden] {
+    display: none;
 }
 
 .plan-palette-state.is-error {

@@ -29,6 +29,8 @@ assert.match(paletteSource, /state\.mode = "selected"/);
 assert.match(paletteSource, /state\.mode = "saving"/);
 assert.match(paletteSource, /state\.mode = "unknown"/);
 assert.match(paletteSource, /state\.mode = "dragging"/);
+assert.match(paletteSource, /classList\.add\("is-dragging"\)/);
+assert.match(paletteSource, /classList\.remove\("is-dragging"\)/);
 assert.match(paletteSource, /template\.is_favorite === true/);
 assert.match(paletteSource, /quickEmpty\.hidden = state\.templatesStatus !== "success" \|\| quick\.length > 0/);
 assert.match(paletteSource, /aria-describedby="planPaletteDragInstructions"/);
@@ -54,6 +56,7 @@ assert.match(planSource, /PlanPaletteController\?\.targetMarkup/);
 assert.match(planSource, /setupPlanPaletteDragHandlers/);
 assert.match(planSource, /handleCalendarDragOver/);
 assert.match(planSource, /handleCalendarDragState/);
+assert.match(planSource, /is-palette-drop-hover/);
 assert.match(planSource, /is-palette-drop-valid/);
 assert.match(planSource, /setPaletteDragState/);
 assert.match(itemSource, /function acceptCreatedItem\(item\)/);
@@ -66,6 +69,8 @@ assert.match(cssSource, /\.plan-palette-section-toggle/);
 assert.match(cssSource, /\.plan-day\.is-palette-drop-valid/);
 assert.match(cssSource, /\.plan-day\.is-palette-drop-hover/);
 assert.match(cssSource, /Drop here/);
+assert.match(cssSource, /\.plan-palette-state\[hidden\]/);
+assert.match(cssSource, /\.plan-palette-row\.is-dragging/);
 assert.doesNotMatch(templateControllerSource, /planPalette|data-plan-palette|Place here|Add plans/);
 
 async function testApiWrapper() {
