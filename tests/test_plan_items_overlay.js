@@ -28,6 +28,7 @@ assert.match(planSource, /PlanItemsController\?\.load\?\.\(range, \{ force \}\)/
 assert.match(planSource, /renderDaySection\?\.\(dayKey\)/);
 assert.match(planSource, /No activity recorded yet/);
 assert.match(planSource, /plannedState\.status === "success"/);
+assert.match(planSource, /MONTH_NAMES\[dateValue\.getUTCMonth\(\)\]/);
 assert.match(templateSource, /plan_items\.js\?v=\{\{ asset_version \}\}/);
 assert.match(templateSource, /plan_items\.js[\s\S]*plan\.js/);
 assert.match(cssSource, /\.plan-planned-section/);
@@ -174,6 +175,8 @@ async function testController() {
   assert.match(rendered, /90 min/);
   assert.match(rendered, /Structured · 1 segments/);
   assert.match(rendered, /Draft/);
+  assert.equal((rendered.match(/>Planned</g) || []).length, 1);
+  assert.doesNotMatch(rendered, /plan-planned-badge/);
   assert.match(rendered, /&lt;Unsafe item&gt;/);
   assert.doesNotMatch(rendered, /user_note|plan_prescription_id|owner_kind/);
   assert.ok(changeCount >= 3);

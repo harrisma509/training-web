@@ -1,5 +1,6 @@
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
+const vm = require("node:vm");
 
 const planSource = fs.readFileSync("static/plan.js", "utf8");
 const appSource = fs.readFileSync("static/app.js", "utf8");
@@ -10,6 +11,8 @@ const templateSource = fs.readFileSync("templates/partials/panes/plan_pane.html"
 
 assert.match(planSource, /const PLAN_ANCHOR_PARAMETER = "plan_start"/);
 assert.match(planSource, /const PLAN_TIME_ZONE = "America\/Denver"/);
+assert.match(planSource, /const MONTH_NAMES = \["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"\]/);
+assert.match(planSource, /const month = MONTH_NAMES\[dateValue\.getUTCMonth\(\)\]/);
 assert.match(planSource, /const weekOffsets = \[0, 1, 2, 3\]/);
 assert.match(planSource, /setUTCDate\(start\.getUTCDate\(\) \+ index\)/);
 assert.match(planSource, /function getDefaultPlanAnchor\(\)/);
@@ -55,5 +58,34 @@ assert.match(planCss, /--plan-current-week-fill/);
 assert.match(planCss, /--plan-current-day-fill/);
 assert.match(planCss, /box-shadow: inset 0 0 0 2px var\(--plan-current-outline\)/);
 assert.match(planCss, /box-shadow: inset 0 0 0 4px var\(--plan-current-outline\)/);
+
+const formatterStart = planSource.indexOf("function formatPlanDay(");
+const formatterEnd = planSource.indexOf("\n  function formatPlanHeaderLoad", formatterStart);
+assert.ok(formatterStart >= 0 && formatterEnd > formatterStart);
+const formatPlanDay = vm.runInNewContext(
+  `(${planSource.slice(formatterStart, formatterEnd).trim()})`,
+  {
+    DAY_NAMES: ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
+    MONTH_NAMES: ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"],
+  },
+);
+
+for (const [isoDate, expectedMonth, expectedDate] of [
+  ["2026-09-28", "SEP", "28"],
+  ["2026-09-29", "SEP", "29"],
+  ["2026-09-30", "SEP", "30"],
+  ["2026-10-01", "OCT", "1"],
+  ["2026-10-02", "OCT", "2"],
+  ["2026-10-03", "OCT", "3"],
+  ["2026-10-04", "OCT", "4"],
+  ["2026-12-28", "DEC", "28"],
+  ["2026-12-31", "DEC", "31"],
+  ["2027-01-01", "JAN", "1"],
+  ["2027-01-03", "JAN", "3"],
+]) {
+  const [year, month, day] = isoDate.split("-").map(Number);
+  const label = formatPlanDay(new Date(Date.UTC(year, month - 1, day)));
+  assert.equal(`${label.month} ${label.date}`, `${expectedMonth} ${expectedDate}`);
+}
 
 console.log("Plan four-week calendar contract tests passed.");

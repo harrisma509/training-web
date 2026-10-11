@@ -1,5 +1,6 @@
 (function () {
   const DAY_NAMES = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+  const MONTH_NAMES = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"];
   const PLAN_LOAD_REQUESTS = { current: 0 };
   const PLAN_ANCHOR_PARAMETER = "plan_start";
   const PLAN_TIME_ZONE = "America/Denver";
@@ -176,7 +177,7 @@
       return { weekday: "", month: "", date: "" };
     }
     const weekday = DAY_NAMES[(dateValue.getUTCDay() + 6) % 7];
-    const month = new Intl.DateTimeFormat("en-US", { month: "short", timeZone: PLAN_TIME_ZONE }).format(dateValue);
+    const month = MONTH_NAMES[dateValue.getUTCMonth()] || "";
     const date = dateValue.getUTCDate();
     return { weekday, month: month.toUpperCase(), date: String(date) };
   }

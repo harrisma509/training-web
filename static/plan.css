@@ -725,7 +725,6 @@
 }
 
 .plan-planned-heading,
-.plan-planned-badge,
 .plan-planned-state {
     font-size: 10px;
     font-weight: 800;
@@ -764,10 +763,6 @@
     flex-wrap: wrap;
     align-items: baseline;
     gap: 6px;
-}
-
-.plan-planned-badge {
-    color: var(--blue);
 }
 
 .plan-planned-state {

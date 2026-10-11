@@ -105,10 +105,7 @@
     return `
       <li class="${classes}" data-plan-item-id="${escape(item?.plan_item_id)}"
           aria-label="${escape(context.filter(Boolean).join(", "))}">
-        <div class="plan-planned-card-heading">
-          <span class="plan-planned-badge">Planned</span>
-          ${statusLabel ? `<span class="plan-planned-state">${escape(statusLabel)}</span>` : ""}
-        </div>
+        ${statusLabel ? `<div class="plan-planned-card-heading"><span class="plan-planned-state">${escape(statusLabel)}</span></div>` : ""}
         <div class="plan-planned-title">${escape(prescription.title || "Untitled planned item")}</div>
         <div class="plan-planned-meta">${escape([category, sport].filter(Boolean).join(" · "))}</div>
         ${metrics.length ? `<div class="plan-planned-metrics">${escape(metrics.join(" · "))}</div>` : ""}
