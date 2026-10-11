@@ -400,6 +400,54 @@
     background: var(--panel);
 }
 
+.plan-planned-card:not(.is-historical) {
+    cursor: pointer;
+}
+
+.plan-planned-actions {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    margin-top: 4px;
+}
+
+.plan-planned-action,
+.plan-planned-move-handle {
+    min-height: 28px;
+    border: 1px solid var(--line);
+    border-radius: 5px;
+    padding: 3px 7px;
+    background: var(--panel2);
+    color: var(--text);
+    font: inherit;
+    font-size: 10px;
+    cursor: pointer;
+}
+
+.plan-planned-move-handle {
+    cursor: grab;
+}
+
+.plan-planned-move-handle:active {
+    cursor: grabbing;
+}
+
+.plan-planned-action:hover,
+.plan-planned-move-handle:hover {
+    border-color: var(--blue);
+}
+
+.plan-day.is-item-drop-valid {
+    outline: 2px dashed var(--blue);
+    outline-offset: -3px;
+}
+
+.plan-day.is-item-drop-hover {
+    outline: 3px solid var(--blue);
+    outline-offset: -3px;
+    background: rgba(96, 165, 250, 0.12);
+}
+
 .plan-template-form-spacer {
     flex: 1 1 auto;
 }
@@ -427,6 +475,132 @@
     grid-template-columns: minmax(0, 1fr);
     gap: 12px;
     align-items: start;
+}
+
+.plan-item-editor[hidden] {
+    display: none;
+}
+
+.plan-item-editor {
+    width: min(420px, 94vw);
+    max-height: min(820px, calc(100vh - 130px));
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    background: var(--panel);
+    color: var(--text);
+    overflow: hidden;
+    box-shadow: 0 12px 28px rgba(15, 23, 42, 0.14);
+}
+
+.plan-item-editor-header,
+.plan-item-editor-body {
+    padding: 14px;
+}
+
+.plan-item-editor-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 10px;
+    border-bottom: 1px solid var(--line);
+}
+
+.plan-item-editor-header h2 {
+    margin: 0;
+    font-size: 16px;
+}
+
+.plan-item-editor-header p {
+    margin: 4px 0 0;
+    color: var(--muted);
+    font-size: 12px;
+}
+
+.plan-item-editor-body {
+    max-height: calc(min(820px, 100vh - 130px) - 74px);
+    overflow-y: auto;
+}
+
+.plan-item-editor-status {
+    min-height: 18px;
+    margin-bottom: 8px;
+    color: var(--muted);
+    font-size: 12px;
+}
+
+.plan-item-editor-form {
+    display: grid;
+    gap: 9px;
+}
+
+.plan-item-editor-form label {
+    display: grid;
+    gap: 5px;
+    color: var(--muted);
+    font-size: 12px;
+    font-weight: 700;
+}
+
+.plan-item-editor-form input,
+.plan-item-editor-form select,
+.plan-item-editor-form textarea {
+    width: 100%;
+    min-height: 38px;
+    box-sizing: border-box;
+    border: 1px solid var(--input-border, var(--line));
+    border-radius: 7px;
+    padding: 7px 9px;
+    background: var(--input-bg, var(--panel2));
+    color: var(--text);
+    font: inherit;
+}
+
+.plan-item-editor-form textarea {
+    min-height: 70px;
+    resize: vertical;
+}
+
+.plan-item-editor-form input:focus-visible,
+.plan-item-editor-form select:focus-visible,
+.plan-item-editor-form textarea:focus-visible,
+.plan-item-editor button:focus-visible {
+    outline: 2px solid var(--focus-ring, rgba(96, 165, 250, 0.9));
+    outline-offset: 2px;
+}
+
+.plan-item-editor-help,
+.plan-item-editor-form small {
+    color: var(--muted);
+    font-size: 11px;
+    line-height: 1.4;
+}
+
+.plan-item-editor-actions {
+    position: sticky;
+    bottom: 0;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    padding-top: 10px;
+    background: var(--panel);
+}
+
+.plan-item-day-target {
+    width: 100%;
+    min-height: 34px;
+    border: 1px dashed var(--blue);
+    border-radius: 6px;
+    padding: 6px 8px;
+    background: rgba(96, 165, 250, 0.08);
+    color: var(--blue);
+    font: inherit;
+    font-size: 11px;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.plan-item-day-target:hover {
+    background: rgba(96, 165, 250, 0.18);
 }
 
 .plan-calendar-region {
@@ -712,9 +886,28 @@
     .plan-workspace.plan-palette-open {
         grid-template-columns: minmax(0, 1fr) 312px;
     }
+
+    .plan-workspace:has(.plan-item-editor:not([hidden])) {
+        grid-template-columns: minmax(0, 1fr) minmax(320px, 420px);
+    }
 }
 
 @media (max-width: 700px) {
+    .plan-item-editor {
+        position: fixed;
+        z-index: 31;
+        right: 0;
+        bottom: 0;
+        left: 0;
+        width: auto;
+        max-height: min(92vh, 760px);
+        border-radius: 16px 16px 0 0;
+    }
+
+    .plan-item-editor-body {
+        max-height: calc(min(92vh, 760px) - 74px);
+    }
+
     .plan-palette {
         position: fixed;
         z-index: 30;

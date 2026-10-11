@@ -5,7 +5,7 @@ from datetime import date, datetime
 from typing import Annotated
 from zoneinfo import ZoneInfo
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, HTTPException, Path, Request
 from pydantic import BaseModel, ConfigDict, BeforeValidator, Field, StrictInt
 from fastapi.responses import JSONResponse
 
@@ -19,10 +19,14 @@ from routes.plan import (
 from services.plan_service import (
     PlanCategoryNotFound,
     PlanDateNotFuture,
+    PlanItemNotEditable,
+    PlanItemNotFound,
     PlanOwnershipCorrupt,
     PlanTemplateNotFound,
+    cancel_plan_item,
     create_item_from_template,
     create_manual_item,
+    update_plan_item,
 )
 
 router = APIRouter()
@@ -62,6 +66,17 @@ class CreateManualItemPayload(BaseModel):
     segments: list[PlanPrescriptionSegmentPayload] = Field(default_factory=list, max_length=200)
 
 
+class UpdatePlanItemPayload(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    planned_date: date
+    sort_order: StrictInt = Field(default=0, ge=0)
+    category_id: StrictInt = Field(gt=0)
+    user_note: UserNote = Field(default=None, max_length=4000)
+    prescription: PlanPrescriptionPayload
+    segments: list[PlanPrescriptionSegmentPayload] = Field(default_factory=list, max_length=200)
+
+
 def _denver_today() -> date:
     return datetime.now(DENVER).date()
 
@@ -83,6 +98,13 @@ def _item_mutation_error(exc):
         )
     if isinstance(exc, PlanCategoryNotFound):
         return JSONResponse({"detail": "Plan category not found."}, status_code=404)
+    if isinstance(exc, PlanItemNotFound):
+        return JSONResponse({"detail": "Plan item not found."}, status_code=404)
+    if isinstance(exc, PlanItemNotEditable):
+        return JSONResponse(
+            {"detail": "Plan item is not editable in its current lifecycle."},
+            status_code=409,
+        )
     if isinstance(exc, PlanTemplateNotFound):
         return JSONResponse({"detail": "Plan template not found."}, status_code=404)
     if isinstance(exc, PlanOwnershipCorrupt):
@@ -227,6 +249,38 @@ def api_plan_item_manual(
     except Exception as exc:
         return _item_mutation_error(exc)
     return JSONResponse(_item_payload(detail.row, detail.segments), status_code=201)
+
+
+@router.put("/api/plan/items/{plan_item_id}")
+def api_plan_item_update(
+    request: Request,
+    payload: UpdatePlanItemPayload,
+    plan_item_id: int = Path(gt=0),
+):
+    guard_response = _mutation_guard(request)
+    if guard_response is not None:
+        return guard_response
+    date_response = _future_date_response(payload.planned_date)
+    if date_response is not None:
+        return date_response
+    _validate_semantic_payload(payload)
+    try:
+        detail = update_plan_item(plan_item_id, payload)
+    except Exception as exc:
+        return _item_mutation_error(exc)
+    return JSONResponse(_item_payload(detail.row, detail.segments))
+
+
+@router.post("/api/plan/items/{plan_item_id}/cancel")
+def api_plan_item_cancel(request: Request, plan_item_id: int = Path(gt=0)):
+    guard_response = _mutation_guard(request)
+    if guard_response is not None:
+        return guard_response
+    try:
+        detail = cancel_plan_item(plan_item_id)
+    except Exception as exc:
+        return _item_mutation_error(exc)
+    return JSONResponse(_item_payload(detail.row, detail.segments))
 
 
 @router.get("/api/plan/items")

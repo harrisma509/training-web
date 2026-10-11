@@ -90,6 +90,7 @@
     const isDraft = item?.item_state === "draft";
     const isHistorical = dateKey <= getDenverTodayKey();
     const statusLabel = isDraft ? "Draft" : isHistorical ? "Read-only" : "";
+    const isManageable = !isHistorical && item?.item_state === "committed";
     const classes = [
       "plan-planned-card",
       isHistorical ? "is-historical" : "",
@@ -110,6 +111,16 @@
         <div class="plan-planned-meta">${escape([category, sport].filter(Boolean).join(" · "))}</div>
         ${metrics.length ? `<div class="plan-planned-metrics">${escape(metrics.join(" · "))}</div>` : ""}
         ${segmentCount > 0 ? `<div class="plan-planned-structure">Structured · ${segmentCount} segments</div>` : ""}
+        ${isManageable ? `
+          <div class="plan-planned-actions">
+            <button type="button" class="plan-planned-action" data-plan-item-action="edit"
+              data-plan-item-id="${escape(item?.plan_item_id)}">Edit</button>
+            <button type="button" class="plan-planned-action" data-plan-item-action="move"
+              data-plan-item-id="${escape(item?.plan_item_id)}">Move</button>
+            <button type="button" class="plan-planned-move-handle" draggable="true"
+              data-plan-item-action="drag-move" data-plan-item-id="${escape(item?.plan_item_id)}"
+              aria-label="Move ${escape(prescription.title || "planned item")}">↕</button>
+          </div>` : ""}
       </li>
     `;
   }
@@ -231,6 +242,32 @@
     return true;
   }
 
+  function replaceItem(item) {
+    if (!item || item.plan_item_id == null || !isIsoDate(item.planned_date)) {
+      return false;
+    }
+    const nextItems = state.items.filter(existing => existing.plan_item_id !== item.plan_item_id);
+    nextItems.push(item);
+    nextItems.sort((left, right) => {
+      const dateOrder = String(left.planned_date).localeCompare(String(right.planned_date));
+      if (dateOrder !== 0) return dateOrder;
+      const sortOrder = Number(left.sort_order || 0) - Number(right.sort_order || 0);
+      if (sortOrder !== 0) return sortOrder;
+      return Number(left.plan_item_id) - Number(right.plan_item_id);
+    });
+    setState({ items: nextItems, byDate: groupItems(nextItems) });
+    return true;
+  }
+
+  function removeItem(planItemId) {
+    const nextItems = state.items.filter(item => item.plan_item_id !== planItemId);
+    if (nextItems.length === state.items.length) {
+      return false;
+    }
+    setState({ items: nextItems, byDate: groupItems(nextItems) });
+    return true;
+  }
+
   function reset() {
     state.abortController?.abort();
     state.range = { start: null, end: null };
@@ -251,6 +288,8 @@
     getState,
     getItemsForDate,
     acceptCreatedItem,
+    replaceItem,
+    removeItem,
     renderDaySection,
     reset,
   };

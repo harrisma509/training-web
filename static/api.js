@@ -168,6 +168,21 @@
       });
     },
 
+    async updatePlanItem(planItemId, payload) {
+      return fetchJson(`/api/plan/items/${encodeURIComponent(planItemId)}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json", Accept: "application/json" },
+        body: JSON.stringify(payload),
+      });
+    },
+
+    async cancelPlanItem(planItemId) {
+      return fetchJson(`/api/plan/items/${encodeURIComponent(planItemId)}/cancel`, {
+        method: "POST",
+        headers: { Accept: "application/json" },
+      });
+    },
+
     async createPlanTemplate(payload) {
       return fetchJson("/api/plan/templates", {
         method: "POST",

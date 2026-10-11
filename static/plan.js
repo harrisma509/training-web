@@ -901,6 +901,63 @@
     strip.dataset.planPaletteDragBound = "true";
   }
 
+  function setupPlanItemHandlers() {
+    const strip = document.getElementById("planStrip");
+    if (!strip || strip.dataset.planItemBound === "true") return;
+    const getItem = itemId => window.PlanItemsController?.getState?.().items
+      ?.find(item => String(item.plan_item_id) === String(itemId));
+    strip.addEventListener("click", event => {
+      const target = event.target.closest("[data-plan-item-target]");
+      if (target) {
+        event.preventDefault();
+        window.PlanItemEditor?.handleTarget?.(target.dataset.planItemTarget);
+        return;
+      }
+      const action = event.target.closest("[data-plan-item-action]");
+      if (!action) return;
+      event.stopPropagation();
+      const item = getItem(action.dataset.planItemId);
+      if (!item) return;
+      if (action.dataset.planItemAction === "edit") {
+        window.PlanItemEditor?.open?.(item, action, "edit");
+      } else if (action.dataset.planItemAction === "move") {
+        window.PlanItemEditor?.open?.(item, action, "moving");
+      }
+    });
+    strip.addEventListener("dragstart", event => {
+      const handle = event.target.closest('[data-plan-item-action="drag-move"]');
+      if (!handle) return;
+      window.PlanItemEditor?.handleDragStart?.(handle.dataset.planItemId, event);
+      document.querySelectorAll("#planStrip [data-plan-date]").forEach(day => {
+        if (day.dataset.planDate > getDenverTodayKey()) day.classList.add("is-item-drop-valid");
+      });
+    });
+    strip.addEventListener("dragover", event => {
+      const itemId = event.dataTransfer?.types?.includes(window.PlanItemEditor?.itemDragMime);
+      const day = event.target.closest?.("[data-plan-date]");
+      if (!itemId || !day || day.dataset.planDate <= getDenverTodayKey()) return;
+      event.preventDefault();
+      day.classList.add("is-item-drop-hover");
+    });
+    strip.addEventListener("dragleave", event => {
+      const day = event.target.closest?.("[data-plan-date]");
+      if (day && !day.contains(event.relatedTarget)) day.classList.remove("is-item-drop-hover");
+    });
+    strip.addEventListener("drop", event => {
+      const itemId = event.dataTransfer?.types?.includes(window.PlanItemEditor?.itemDragMime);
+      const day = event.target.closest?.("[data-plan-date]");
+      if (!itemId || !day) return;
+      day.classList.remove("is-item-drop-hover");
+      document.querySelectorAll("#planStrip .is-item-drop-valid").forEach(other => other.classList.remove("is-item-drop-valid"));
+      window.PlanItemEditor?.handleDrop?.(day.dataset.planDate, event);
+    });
+    strip.addEventListener("dragend", () => {
+      document.querySelectorAll("#planStrip .is-item-drop-valid, #planStrip .is-item-drop-hover")
+        .forEach(day => day.classList.remove("is-item-drop-valid", "is-item-drop-hover"));
+    });
+    strip.dataset.planItemBound = "true";
+  }
+
   function renderPlanDayCell(date, row, isWeekCollapsed, isCurrentWeek) {
     const label = formatPlanDay(date);
     const dayKey = toLocalDateKey(date);
@@ -923,6 +980,10 @@
     const plannedItems = plannedController?.getItemsForDate?.(dayKey) || [];
     const plannedHtml = plannedController?.renderDaySection?.(dayKey) || "";
     const paletteTargetHtml = window.PlanPaletteController?.targetMarkup?.(
+      dayKey,
+      formattedDateLabel,
+    ) || "";
+    const itemTargetHtml = window.PlanItemEditor?.targetMarkup?.(
       dayKey,
       formattedDateLabel,
     ) || "";
@@ -979,7 +1040,7 @@
     } else {
       bodyHtml = '<div class="plan-empty-state">No activity details</div>';
     }
-    bodyHtml = `${plannedHtml}${paletteTargetHtml}${bodyHtml}`;
+    bodyHtml = `${plannedHtml}${paletteTargetHtml}${itemTargetHtml}${bodyHtml}`;
 
     return `
       <div class="plan-day ${isWeekCollapsed ? "is-collapsed" : ""}${paletteDropClass}" data-plan-date="${escapeHtml(dayKey)}">
@@ -1137,6 +1198,8 @@
     setupPlanToggleHandlers();
     setupPlanCheckinHandlers();
     setupPlanPaletteDragHandlers();
+    setupPlanItemHandlers();
+    window.PlanItemEditor?.bind?.();
   }
 
   function setPaletteDragState(active) {
@@ -1241,6 +1304,7 @@
     setupPlanNavigation();
     window.PlanItemsController?.init?.({ onChange: renderPlanStrip });
     window.PlanPaletteController?.init?.({ onChange: renderPlanStrip });
+    window.PlanItemEditor?.bind?.();
     window.PlanTemplateLibraryController?.init?.();
     const dateInput = document.getElementById("planDateJump");
     if (dateInput) dateInput.value = planAnchor;

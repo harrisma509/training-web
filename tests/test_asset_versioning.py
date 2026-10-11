@@ -52,6 +52,7 @@ EXPECTED_ASSET_ORDER = [
     "plan_palette.js",
     "plan_templates.js",
     "plan_items.js",
+    "plan_item_editor.js",
     "plan.js",
     "goals.js",
     "kpis.js",

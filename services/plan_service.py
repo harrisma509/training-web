@@ -21,6 +21,14 @@ class PlanDateNotFuture(PlanServiceError):
     pass
 
 
+class PlanItemNotFound(PlanServiceError):
+    pass
+
+
+class PlanItemNotEditable(PlanServiceError):
+    pass
+
+
 class PlanOwnershipCorrupt(PlanServiceError):
     pass
 
@@ -684,6 +692,158 @@ def create_manual_item(payload):
                 source_template_id=None,
             )
             detail = _load_item_detail(cur, item_id)
+            if detail is None:
+                raise PlanOwnershipCorrupt()
+            conn.commit()
+            return detail
+
+
+def _lock_item_for_update(cur, plan_item_id):
+    cur.execute(
+        """
+            select
+                plan_item_id,
+                planned_date,
+                item_state,
+                plan_category_id,
+                plan_prescription_id,
+                prescription_owner_kind,
+                plan_batch_id
+            from public.plan_item
+            where plan_item_id = %s
+            for update
+        """,
+        (plan_item_id,),
+    )
+    item = cur.fetchone()
+    if item is None:
+        raise PlanItemNotFound()
+    return item
+
+
+def _require_committed_future_item(cur, item):
+    if item["item_state"] != "committed" or item["plan_batch_id"] is not None:
+        raise PlanItemNotEditable()
+    if item["prescription_owner_kind"] != "item":
+        raise PlanOwnershipCorrupt()
+    _require_future_date(cur, item["planned_date"])
+
+
+def update_plan_item(plan_item_id, payload):
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            item = _lock_item_for_update(cur, plan_item_id)
+            _require_committed_future_item(cur, item)
+            _require_active_category(cur, payload.category_id)
+            _require_future_date(cur, payload.planned_date)
+
+            cur.execute(
+                """
+                    select
+                        plan_prescription_id,
+                        owner_kind
+                    from public.plan_prescription
+                    where plan_prescription_id = %s
+                    for update
+                """,
+                (item["plan_prescription_id"],),
+            )
+            prescription = cur.fetchone()
+            if (
+                prescription is None
+                or prescription["owner_kind"] != "item"
+            ):
+                raise PlanOwnershipCorrupt()
+
+            cur.execute(
+                """
+                    update public.plan_prescription
+                    set
+                        title = %s,
+                        description = %s,
+                        sport_type = %s,
+                        activity_category = %s,
+                        trainer = %s,
+                        target_duration_min = %s,
+                        target_load = %s,
+                        target_load_source = %s,
+                        target_distance_mi = %s,
+                        target_elevation_ft = %s,
+                        instruction_text = %s,
+                        updated_at = now()
+                    where plan_prescription_id = %s
+                """,
+                (
+                    _segment_value(payload.prescription, "title"),
+                    _segment_value(payload.prescription, "description"),
+                    _segment_value(payload.prescription, "sport_type"),
+                    _segment_value(payload.prescription, "activity_category"),
+                    _segment_value(payload.prescription, "trainer"),
+                    _segment_value(payload.prescription, "target_duration_min"),
+                    _segment_value(payload.prescription, "target_load"),
+                    _segment_value(payload.prescription, "target_load_source"),
+                    _segment_value(payload.prescription, "target_distance_mi"),
+                    _segment_value(payload.prescription, "target_elevation_ft"),
+                    _segment_value(payload.prescription, "instruction_text"),
+                    item["plan_prescription_id"],
+                ),
+            )
+            cur.execute(
+                """
+                    delete from public.plan_prescription_segment
+                    where plan_prescription_id = %s
+                """,
+                (item["plan_prescription_id"],),
+            )
+            _insert_segments(cur, item["plan_prescription_id"], payload.segments)
+            cur.execute(
+                """
+                    update public.plan_item
+                    set
+                        planned_date = %s,
+                        plan_category_id = %s,
+                        sort_order = %s,
+                        user_note = %s,
+                        updated_at = now()
+                    where plan_item_id = %s
+                """,
+                (
+                    payload.planned_date,
+                    payload.category_id,
+                    payload.sort_order,
+                    payload.user_note,
+                    plan_item_id,
+                ),
+            )
+            detail = _load_item_detail(cur, plan_item_id)
+            if detail is None:
+                raise PlanOwnershipCorrupt()
+            conn.commit()
+            return detail
+
+
+def cancel_plan_item(plan_item_id):
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            item = _lock_item_for_update(cur, plan_item_id)
+            if item["item_state"] == "cancelled":
+                detail = _load_item_detail(cur, plan_item_id)
+                if detail is None:
+                    raise PlanOwnershipCorrupt()
+                return detail
+            _require_committed_future_item(cur, item)
+            cur.execute(
+                """
+                    update public.plan_item
+                    set
+                        item_state = 'cancelled',
+                        cancelled_at = now(),
+                        updated_at = now()
+                    where plan_item_id = %s
+                """,
+                (plan_item_id,),
+            )
+            detail = _load_item_detail(cur, plan_item_id)
             if detail is None:
                 raise PlanOwnershipCorrupt()
             conn.commit()
