@@ -49,6 +49,7 @@ EXPECTED_ASSET_ORDER = [
     "settings.js",
     "daily.js",
     "search.js",
+    "plan_templates.js",
     "plan.js",
     "goals.js",
     "kpis.js",

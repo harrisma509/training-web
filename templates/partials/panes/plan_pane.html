@@ -9,7 +9,23 @@
             </label>
             <button id="planNextOne" type="button" aria-label="Show the next week">+1 week</button>
             <button id="planNextFour" type="button" aria-label="Show the next four weeks">+4 weeks</button>
+            <button id="planTemplateLibraryOpen" type="button" class="plan-template-library-trigger"
+                aria-controls="planTemplateLibrary" aria-expanded="false">
+                <svg viewBox="0 0 20 20" aria-hidden="true" focusable="false">
+                    <path d="M4 5.5h12M4 10h12M4 14.5h12"></path>
+                </svg>
+                <span>Template Library</span>
+            </button>
         </div>
         <div id="planStrip" class="plan-weeks" aria-live="polite"></div>
     </div>
 </section>
+
+<div id="planTemplateLibrary" class="plan-template-library hidden" role="dialog" aria-modal="true"
+    aria-labelledby="planTemplateLibraryTitle" aria-hidden="true">
+    <div class="plan-template-library-backdrop" data-plan-template-action="backdrop"></div>
+    <section class="plan-template-library-panel" role="document">
+        <h2 id="planTemplateLibraryTitle" class="plan-template-library-a11y-title">Template Library</h2>
+        <div id="planTemplateLibraryContent" class="plan-template-library-content"></div>
+    </section>
+</div>

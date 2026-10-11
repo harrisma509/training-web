@@ -528,6 +528,7 @@ def test_core_pane_partials_are_single_authority_at_original_composition_points(
                 "planDateJump",
                 "planNextOne",
                 "planNextFour",
+                "planTemplateLibraryOpen",
                 "planStrip",
             ],
             [],

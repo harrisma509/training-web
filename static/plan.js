@@ -1172,6 +1172,7 @@
       window.history.replaceState({}, "", initialUrl);
     }
     setupPlanNavigation();
+    window.PlanTemplateLibraryController?.init?.();
     const dateInput = document.getElementById("planDateJump");
     if (dateInput) dateInput.value = planAnchor;
     document.addEventListener("DOMContentLoaded", () => {
@@ -1196,6 +1197,8 @@
       refresh: () => loadPlan(true),
       load: () => loadPlan(true),
       render: renderPlanStrip,
+      canDeactivate: context => window.PlanTemplateLibraryController?.canDeactivate?.(context) ?? true,
+      deactivate: context => window.PlanTemplateLibraryController?.deactivate?.(context),
     };
   }
 

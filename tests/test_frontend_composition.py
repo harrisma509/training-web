@@ -188,6 +188,7 @@ def test_stylesheet_and_synchronous_script_order_is_stable() -> None:
         "/static/settings.js",
         "/static/daily.js",
         "/static/search.js",
+        "/static/plan_templates.js",
         "/static/plan.js",
         "/static/goals.js",
         "/static/kpis.js",

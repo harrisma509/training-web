@@ -17,8 +17,12 @@
     });
 
     if (!response.ok) {
+      const detailPayload = await response.json().catch(() => ({}));
       const error = new Error(`${response.status} ${response.statusText || "Request failed"}`);
       error.status = response.status;
+      error.detail = detailPayload && detailPayload.detail !== undefined
+        ? detailPayload.detail
+        : "";
       throw error;
     }
 
@@ -120,6 +124,45 @@
   const api = {
     fetchJson,
     downloadCsv,
+
+    async fetchPlanCategories() {
+      return fetchJson("/api/plan/categories");
+    },
+
+    async fetchPlanTemplates(categoryId = null, limit = 200) {
+      const params = new URLSearchParams({ limit: String(limit) });
+      if (categoryId !== null && categoryId !== undefined && categoryId !== "") {
+        params.set("category_id", String(categoryId));
+      }
+      return fetchJson(`/api/plan/templates?${params.toString()}`);
+    },
+
+    async fetchPlanTemplate(templateId) {
+      return fetchJson(`/api/plan/templates/${encodeURIComponent(templateId)}`);
+    },
+
+    async createPlanTemplate(payload) {
+      return fetchJson("/api/plan/templates", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Accept: "application/json" },
+        body: JSON.stringify(payload),
+      });
+    },
+
+    async updatePlanTemplate(templateId, payload) {
+      return fetchJson(`/api/plan/templates/${encodeURIComponent(templateId)}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json", Accept: "application/json" },
+        body: JSON.stringify(payload),
+      });
+    },
+
+    async deactivatePlanTemplate(templateId) {
+      return fetchJson(`/api/plan/templates/${encodeURIComponent(templateId)}/deactivate`, {
+        method: "POST",
+        headers: { Accept: "application/json" },
+      });
+    },
 
     async fetchCoachSessions() {
       return fetchJson("/api/coach/sessions");
