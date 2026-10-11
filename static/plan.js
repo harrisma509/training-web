@@ -1134,8 +1134,14 @@
   }
 
   function setPaletteDragState(active) {
-    planPaletteDragging = Boolean(active);
-    renderPlanStrip();
+    const todayKey = getDenverTodayKey();
+    document.querySelectorAll("#planStrip [data-plan-date]").forEach(day => {
+      const valid = Boolean(active) && day.dataset.planDate > todayKey;
+      day.classList.toggle("is-palette-drop-valid", valid);
+      if (!valid) {
+        day.classList.remove("is-palette-drop-hover");
+      }
+    });
   }
 
   async function ensurePlanWeeklyRows() {

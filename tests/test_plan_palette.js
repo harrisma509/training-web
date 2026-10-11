@@ -21,6 +21,8 @@ assert.match(templateSource, /id="planPaletteAllTemplatesToggle"[^>]*aria-expand
 assert.match(templateSource, /id="planPaletteAllTemplates" hidden/);
 assert.match(templateSource, /id="planPaletteQuickEmpty"/);
 assert.match(templateSource, /No Quick Picks yet/);
+assert.equal((templateSource.match(/id="planPaletteManage"/g) || []).length, 1);
+assert.doesNotMatch(templateSource, /data-plan-palette-action="manage"/);
 assert.match(indexSource, /plan_palette\.js[\s\S]*plan_templates\.js[\s\S]*plan\.js/);
 assert.match(paletteSource, /America\/Denver/);
 assert.match(paletteSource, /state\.mode = "selected"/);
@@ -28,6 +30,7 @@ assert.match(paletteSource, /state\.mode = "saving"/);
 assert.match(paletteSource, /state\.mode = "unknown"/);
 assert.match(paletteSource, /state\.mode = "dragging"/);
 assert.match(paletteSource, /template\.is_favorite === true/);
+assert.match(paletteSource, /quickEmpty\.hidden = state\.templatesStatus !== "success" \|\| quick\.length > 0/);
 assert.match(paletteSource, /aria-describedby="planPaletteDragInstructions"/);
 assert.match(paletteSource, /draggable="true"/);
 assert.match(paletteSource, /application\/x-training-plan-template-id/);

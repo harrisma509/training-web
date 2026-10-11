@@ -168,7 +168,7 @@
       const visible = filteredTemplates();
       renderRows(quickRows, quick);
       renderRows(rows, visible);
-      quickEmpty.hidden = quick.length > 0;
+      quickEmpty.hidden = state.templatesStatus !== "success" || quick.length > 0;
       quickRows.hidden = quick.length === 0;
     }
     if (manageButton) manageButton.disabled = state.inFlight;
@@ -352,7 +352,11 @@
     const templateId = templateRowElement.getAttribute("data-plan-palette-template-id");
     const template = state.templates.find(row => String(row.plan_template_id) === String(templateId));
     if (!template) return;
-    selectTemplate(templateId, { closeMobile: false });
+    state.selectedTemplate = {
+      planTemplateId: Number(template.plan_template_id),
+      templateName: String(template.template_name),
+    };
+    state.targetDate = null;
     state.mode = "dragging";
     state.dragTemplate = {
       planTemplateId: state.selectedTemplate.planTemplateId,
@@ -362,7 +366,6 @@
     event.dataTransfer.setData("application/x-training-plan-template-id", String(template.plan_template_id));
     event.dataTransfer.setData("text/plain", String(template.template_name));
     announce(`${template.template_name} ready to place. Drop on a future Plan date.`);
-    render();
     window.PlanController?.setPaletteDragState?.(true);
   }
 
