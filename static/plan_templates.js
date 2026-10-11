@@ -376,7 +376,7 @@
   function close(reason = "close") {
     if (!state.open) return true;
     state.generation += 1;
-    state.surface?.close(reason);
+    if (state.surface) return state.surface.close(reason);
     setOpen(false);
     resetEditor();
     trigger?.focus();
@@ -392,6 +392,11 @@
     if (state.open) close("feature-deactivate");
   }
 
+  function requestClose(reason) {
+    if (!state.open) return Promise.resolve(false);
+    return state.surface?.requestClose(reason) ?? Promise.resolve(close(reason));
+  }
+
   async function loadCategories() {
     const generation = ++state.categoriesGeneration;
     state.categories = { ...state.categories, status: "loading", error: null };
@@ -403,13 +408,11 @@
       if (state.templates.status === "idle") await loadTemplates(state.templates.categoryId);
       else {
         render();
-        focusSurface();
       }
     } catch (error) {
       if (generation !== state.categoriesGeneration || !state.open) return;
       state.categories = { ...state.categories, status: "error", error };
       render();
-      focusSurface();
     }
   }
 
@@ -427,12 +430,10 @@
         error: null,
       };
       render();
-      focusSurface();
     } catch (error) {
       if (generation !== state.templatesGeneration || !state.open) return;
       state.templates = { ...state.templates, status: "error", categoryId, error };
       render();
-      focusSurface();
     }
   }
 
@@ -644,9 +645,9 @@
     if (!actionElement) return;
     const action = actionElement.dataset.planTemplateAction;
     if (action === "backdrop") {
-      if (canDeactivate()) close("backdrop");
+      requestClose("backdrop");
     } else if (action === "close") {
-      if (canDeactivate()) close("close-button");
+      requestClose("close-button");
     } else if (action === "create") {
       openCreate();
     } else if (action === "edit") {
@@ -674,13 +675,10 @@
       loadTemplates(event.target.value ? Number(event.target.value) : null);
       return;
     }
-    updateDraftField(field, event.target.value);
+    const value = event.target.value;
+    updateDraftField(field, value);
     if (field === "sport_type" || field === "activity_category") {
-      if (value === "__custom__") {
-        state.draft.prescription[field] = "__custom__";
-      }
       render();
-      focusSurface();
     }
   }
 
@@ -709,7 +707,7 @@
     if (!state.open) return;
     if (event.key === "Escape") {
       event.preventDefault();
-      if (canDeactivate()) close("escape");
+      requestClose("escape");
       return;
     }
     trapFocus(event);
@@ -726,6 +724,7 @@
       getSurface: () => root,
       canClose: () => canDeactivate(),
       onBeforeClose: () => setOpen(false),
+      onAfterClose: () => resetEditor(),
     });
     trigger.addEventListener("click", () => openLibrary(trigger));
     root.addEventListener("click", handleClick);
