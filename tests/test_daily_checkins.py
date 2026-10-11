@@ -216,7 +216,7 @@ class DailyCheckinSchemaTests(unittest.TestCase):
     def test_schema_artifacts_contain_contract_and_no_activity_foreign_key(self):
         root = Path(__file__).resolve().parents[2]
         schema = (root / "training-etl" / "sql" / "training_postgress_db_schema.sql").read_text()
-        standalone = (root / "training-etl" / "sql" / "daily_checkins_v1.sql").read_text()
+        standalone = (root / "training-etl" / "sql" / "Applied" / "daily_checkins_v1.sql").read_text()
         for artifact in (schema, standalone):
             self.assertIn("CREATE TABLE", artifact)
             self.assertIn("daily_checkin_pkey PRIMARY KEY (checkin_date)", artifact)
