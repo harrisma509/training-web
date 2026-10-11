@@ -414,4 +414,15 @@
       selectedTemplate: state.selectedTemplate ? { ...state.selectedTemplate } : null,
     }),
   };
+
+  if (typeof document !== "undefined") {
+    const initializeWhenReady = () => init({
+      onChange: () => window.PlanController?.render?.(),
+    });
+    if (document.readyState === "loading") {
+      document.addEventListener("DOMContentLoaded", initializeWhenReady, { once: true });
+    } else {
+      initializeWhenReady();
+    }
+  }
 })();
