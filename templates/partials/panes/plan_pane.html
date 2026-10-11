@@ -9,6 +9,10 @@
             </label>
             <button id="planNextOne" type="button" aria-label="Show the next week">+1 week</button>
             <button id="planNextFour" type="button" aria-label="Show the next four weeks">+4 weeks</button>
+            <button id="planPaletteOpen" type="button" class="plan-palette-trigger"
+                aria-controls="planPalette" aria-expanded="false">
+                Add plans
+            </button>
             <button id="planTemplateLibraryOpen" type="button" class="plan-template-library-trigger"
                 aria-controls="planTemplateLibrary" aria-expanded="false">
                 <svg viewBox="0 0 20 20" aria-hidden="true" focusable="false">
@@ -17,7 +21,38 @@
                 <span>Template Library</span>
             </button>
         </div>
-        <div id="planStrip" class="plan-weeks" aria-live="polite"></div>
+        <div class="plan-workspace">
+            <div class="plan-calendar-region">
+                <div id="planPalettePlacement" class="plan-palette-placement" aria-live="polite"></div>
+                <div id="planStrip" class="plan-weeks" aria-live="polite"></div>
+            </div>
+            <aside id="planPalette" class="plan-palette" aria-labelledby="planPaletteTitle" hidden>
+                <div class="plan-palette-header">
+                    <div>
+                        <h2 id="planPaletteTitle">Add plans</h2>
+                        <p>Select a template, then choose a future day.</p>
+                    </div>
+                    <button id="planPaletteClose" type="button" class="drawer-close-button"
+                        aria-label="Close Add plans">×</button>
+                </div>
+                <div class="plan-palette-body">
+                    <div class="plan-palette-controls">
+                        <label for="planPaletteSearch">Search templates</label>
+                        <input id="planPaletteSearch" type="search" placeholder="Search templates"
+                            autocomplete="off">
+                        <label for="planPaletteCategory">Category</label>
+                        <select id="planPaletteCategory">
+                            <option value="">All categories</option>
+                        </select>
+                    </div>
+                    <div id="planPaletteStatus" class="plan-palette-status" role="status" aria-live="polite"></div>
+                    <div id="planPaletteRows" class="plan-palette-rows"></div>
+                    <button id="planPaletteManage" type="button" class="button-secondary plan-palette-manage">
+                        Manage templates
+                    </button>
+                </div>
+            </aside>
+        </div>
     </div>
 </section>
 

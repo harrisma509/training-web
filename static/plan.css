@@ -416,7 +416,204 @@
     cursor: pointer;
 }
 
+.plan-workspace {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 12px;
+    align-items: start;
+}
+
+.plan-calendar-region {
+    min-width: 0;
+}
+
+.plan-palette {
+    width: 312px;
+    max-height: min(720px, calc(100vh - 130px));
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    background: var(--panel);
+    color: var(--text);
+    overflow: hidden;
+    box-shadow: 0 12px 28px rgba(15, 23, 42, 0.14);
+}
+
+.plan-palette[hidden] {
+    display: none;
+}
+
+.plan-palette-header,
+.plan-palette-body {
+    padding: 14px;
+}
+
+.plan-palette-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 10px;
+    border-bottom: 1px solid var(--line);
+}
+
+.plan-palette-header h2 {
+    margin: 0;
+    font-size: 16px;
+}
+
+.plan-palette-header p {
+    margin: 4px 0 0;
+    color: var(--muted);
+    font-size: 12px;
+}
+
+.plan-palette-body {
+    display: grid;
+    gap: 12px;
+    max-height: calc(min(720px, 100vh - 130px) - 74px);
+    overflow-y: auto;
+}
+
+.plan-palette-controls {
+    display: grid;
+    gap: 6px;
+}
+
+.plan-palette-controls label {
+    color: var(--muted);
+    font-size: 11px;
+    font-weight: 700;
+}
+
+.plan-palette-controls input,
+.plan-palette-controls select {
+    min-height: 38px;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 7px 9px;
+    background: var(--panel2);
+    color: var(--text);
+    font: inherit;
+}
+
+.plan-palette-rows {
+    display: grid;
+    gap: 6px;
+}
+
+.plan-palette-row {
+    display: grid;
+    gap: 3px;
+    width: 100%;
+    min-height: 52px;
+    border: 1px solid var(--line);
+    border-radius: 7px;
+    padding: 8px 9px;
+    background: var(--panel2);
+    color: var(--text);
+    text-align: left;
+    cursor: pointer;
+}
+
+.plan-palette-row:hover,
+.plan-palette-row.is-selected {
+    border-color: var(--blue);
+    background: rgba(96, 165, 250, 0.12);
+}
+
+.plan-palette-row span {
+    color: var(--muted);
+    font-size: 11px;
+}
+
+.plan-palette-status,
+.plan-palette-state {
+    color: var(--muted);
+    font-size: 12px;
+}
+
+.plan-palette-state {
+    display: grid;
+    gap: 8px;
+    padding: 12px 4px;
+    text-align: center;
+}
+
+.plan-palette-state.is-error {
+    color: var(--red);
+}
+
+.plan-palette-manage {
+    width: 100%;
+}
+
+.plan-palette-placement {
+    min-height: 0;
+}
+
+.plan-palette-placement-banner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    margin-bottom: 8px;
+    border: 1px solid var(--blue);
+    border-radius: 7px;
+    padding: 8px 10px;
+    background: rgba(96, 165, 250, 0.1);
+    color: var(--text);
+    font-size: 12px;
+}
+
+.plan-palette-day-target {
+    width: 100%;
+    min-height: 34px;
+    border: 1px dashed var(--blue);
+    border-radius: 6px;
+    padding: 6px 8px;
+    background: rgba(96, 165, 250, 0.08);
+    color: var(--blue);
+    font: inherit;
+    font-size: 11px;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.plan-palette-day-target:hover {
+    background: rgba(96, 165, 250, 0.18);
+}
+
+.plan-palette-day-target:disabled {
+    cursor: wait;
+    opacity: 0.65;
+}
+
+@media (min-width: 1200px) {
+    .plan-workspace.plan-palette-open {
+        grid-template-columns: minmax(0, 1fr) 312px;
+    }
+}
+
 @media (max-width: 700px) {
+    .plan-palette {
+        position: fixed;
+        z-index: 30;
+        right: 0;
+        bottom: 0;
+        left: 0;
+        width: auto;
+        max-height: min(76vh, 620px);
+        border-radius: 16px 16px 0 0;
+    }
+
+    .plan-palette-body {
+        max-height: calc(min(76vh, 620px) - 74px);
+    }
+
+    .plan-palette-placement-banner {
+        align-items: stretch;
+        flex-direction: column;
+    }
+
     .plan-template-library {
         align-items: flex-end;
     }
@@ -477,7 +674,10 @@
 }
 
 .plan-toolbar button:focus-visible,
-.plan-date-jump input:focus-visible {
+.plan-date-jump input:focus-visible,
+.plan-palette button:focus-visible,
+.plan-palette input:focus-visible,
+.plan-palette select:focus-visible {
     outline: 2px solid var(--focus-ring, rgba(96, 165, 250, 0.9));
     outline-offset: 2px;
 }

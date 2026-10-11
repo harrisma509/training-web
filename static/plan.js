@@ -886,6 +886,10 @@
     const plannedState = plannedController?.getState?.() || { status: "idle" };
     const plannedItems = plannedController?.getItemsForDate?.(dayKey) || [];
     const plannedHtml = plannedController?.renderDaySection?.(dayKey) || "";
+    const paletteTargetHtml = window.PlanPaletteController?.targetMarkup?.(
+      dayKey,
+      formattedDateLabel,
+    ) || "";
 
     let bodyHtml = "";
     if (!hasActualActivity) {
@@ -935,10 +939,10 @@
     } else {
       bodyHtml = '<div class="plan-empty-state">No activity details</div>';
     }
-    bodyHtml = `${plannedHtml}${bodyHtml}`;
+    bodyHtml = `${plannedHtml}${paletteTargetHtml}${bodyHtml}`;
 
     return `
-      <div class="plan-day ${isWeekCollapsed ? "is-collapsed" : ""}">
+      <div class="plan-day ${isWeekCollapsed ? "is-collapsed" : ""}" data-plan-date="${escapeHtml(dayKey)}">
         <div class="plan-day-header${isCurrentWeek ? " is-current-week" : ""}${isCurrentDay ? " is-current-day" : ""}"${isCurrentDay ? ' aria-current="date"' : ""}>
           <span class="plan-weekday">${escapeHtml(label.weekday || "")}</span>
           <span class="plan-day-load" aria-label="${escapeHtml(loadLabel)}" title="${escapeHtml(loadLabel)}">${escapeHtml(loadDisplay)}</span>
@@ -1184,6 +1188,7 @@
     }
     setupPlanNavigation();
     window.PlanItemsController?.init?.({ onChange: renderPlanStrip });
+    window.PlanPaletteController?.init?.({ onChange: renderPlanStrip });
     window.PlanTemplateLibraryController?.init?.();
     const dateInput = document.getElementById("planDateJump");
     if (dateInput) dateInput.value = planAnchor;
@@ -1209,8 +1214,12 @@
       refresh: () => loadPlan(true),
       load: () => loadPlan(true),
       render: renderPlanStrip,
+      getRange: () => getPlanRange(),
       canDeactivate: context => window.PlanTemplateLibraryController?.canDeactivate?.(context) ?? true,
-      deactivate: context => window.PlanTemplateLibraryController?.deactivate?.(context),
+      deactivate: context => {
+        window.PlanPaletteController?.deactivate?.(context);
+        return window.PlanTemplateLibraryController?.deactivate?.(context);
+      },
     };
   }
 

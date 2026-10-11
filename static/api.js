@@ -137,6 +137,23 @@
       return fetchJson(`/api/plan/templates?${params.toString()}`);
     },
 
+    async createPlanItemFromTemplate(
+      { planTemplateId, plannedDate, sortOrder = 0, userNote = null },
+      options = {},
+    ) {
+      return fetchJson("/api/plan/items/from-template", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Accept: "application/json" },
+        body: JSON.stringify({
+          plan_template_id: planTemplateId,
+          planned_date: plannedDate,
+          sort_order: sortOrder,
+          user_note: userNote,
+        }),
+        signal: options.signal,
+      });
+    },
+
     async fetchPlanTemplate(templateId) {
       return fetchJson(`/api/plan/templates/${encodeURIComponent(templateId)}`);
     },

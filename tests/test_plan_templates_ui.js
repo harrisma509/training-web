@@ -81,7 +81,8 @@ assert.doesNotMatch(moduleSource, /\/api\/(?:plan\/)?(?:items|batches|actual|der
 
 assert.match(planSource, /PlanTemplateLibraryController\?\.init/);
 assert.match(planSource, /canDeactivate: context => window\.PlanTemplateLibraryController/);
-assert.match(planSource, /deactivate: context => window\.PlanTemplateLibraryController/);
+assert.match(planSource, /PlanPaletteController\?\.deactivate/);
+assert.match(planSource, /return window\.PlanTemplateLibraryController\?\.deactivate/);
 
 assert.match(planCss, /\.plan-template-library/);
 assert.match(planCss, /@media \(max-width: 700px\)/);
