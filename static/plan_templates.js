@@ -378,6 +378,7 @@
     state.generation += 1;
     state.surface?.close(reason);
     setOpen(false);
+    resetEditor();
     trigger?.focus();
     return true;
   }
@@ -388,7 +389,7 @@
   }
 
   function deactivate() {
-    if (state.open && !state.dirty) close("feature-deactivate");
+    if (state.open) close("feature-deactivate");
   }
 
   async function loadCategories() {
