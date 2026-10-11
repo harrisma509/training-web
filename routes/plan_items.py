@@ -176,7 +176,7 @@ def _item_payload(row, segments):
             "instruction_text",
         ),
     )
-    prescription["segments"] = segments
+    prescription["segments"] = [_segment_payload(segment) for segment in segments]
 
     return {
         "plan_item_id": json_safe(row["plan_item_id"]),

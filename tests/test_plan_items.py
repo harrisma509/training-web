@@ -279,7 +279,7 @@ class PlanItemRouteTests(unittest.TestCase):
     def test_clone_route_returns_created_item(self):
         detail = SimpleNamespace(
             row=item_row(plan_item_id=102),
-            segments=[],
+            segments=[segment_row()],
         )
         payload = CreateFromTemplatePayload(
             plan_template_id=7,
