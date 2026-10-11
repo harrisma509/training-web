@@ -32,6 +32,16 @@ assert.match(templateSource, /data-plan-template-action="backdrop"/);
 assert.match(moduleSource, /requestClose\("escape"\)/);
 assert.doesNotMatch(moduleSource, /if \(canDeactivate\(\)\) close\("(?:backdrop|close-button|escape)"\)/);
 assert.match(moduleSource, /restoreCategoryFilterFocus\(preserveFilterFocus\)/);
+assert.match(moduleSource, /Template details/);
+assert.doesNotMatch(moduleSource, /<legend>Prescription<\/legend>/);
+assert.doesNotMatch(moduleSource, /Prescription title|Prescription description/);
+assert.match(moduleSource, /template_name: sharedName/);
+assert.match(moduleSource, /title: state\.view === "create" \|\| state\.sharedFieldsChanged\.name/);
+assert.match(moduleSource, /<details class="plan-template-more-options"/);
+assert.match(moduleSource, /Save changes/);
+assert.match(moduleSource, /Duration \(min\)/);
+assert.match(planCss, /width: min\(520px, 94vw\)/);
+assert.match(planCss, /plan-template-more-options/);
 assert.match(moduleSource, /function trapFocus/);
 
 assert.match(moduleSource, /fetchPlanCategories/);
@@ -165,6 +175,50 @@ function createPlanHarness() {
   const api = {
     fetchPlanCategories: () => Promise.resolve({ categories: [] }),
     fetchPlanTemplates: () => new Promise(resolve => { templatesResolve = resolve; }),
+    fetchPlanTemplate: () => Promise.resolve({
+      plan_template_id: 7,
+      template_name: "Existing name",
+      template_description: "Existing description",
+      sort_order: 4,
+      category: { plan_category_id: 1 },
+      prescription: {
+        title: "Legacy prescription title",
+        description: "Legacy prescription description",
+        sport_type: "Ride",
+        activity_category: "Strength",
+        trainer: true,
+        target_duration_min: 60,
+        target_load: 100,
+        target_load_source: "manual",
+        target_distance_mi: 20,
+        target_elevation_ft: 1000,
+        instruction_text: "Stay steady.",
+        segments: [{ segment_name: "Warmup" }],
+      },
+    }),
+  };
+  const mutationPayloads = [];
+  api.createPlanTemplate = payload => {
+    mutationPayloads.push(payload);
+    return Promise.resolve({
+      plan_template_id: 8,
+      template_name: payload.template_name,
+      template_description: payload.template_description,
+      sort_order: payload.sort_order,
+      category: { plan_category_id: payload.category_id },
+      prescription: { ...payload.prescription, segments: payload.segments },
+    });
+  };
+  api.updatePlanTemplate = (_templateId, payload) => {
+    mutationPayloads.push(payload);
+    return Promise.resolve({
+      plan_template_id: 7,
+      template_name: payload.template_name,
+      template_description: payload.template_description,
+      sort_order: payload.sort_order,
+      category: { plan_category_id: payload.category_id },
+      prescription: { ...payload.prescription, segments: payload.segments },
+    });
   };
   const surfaceOptions = {};
   const surface = {
@@ -218,9 +272,10 @@ function createPlanHarness() {
     dispatchKeydown(event) {
       document.listeners.keydown?.(event);
     },
-    dispatchRootAction(action) {
+    dispatchRootAction(action, templateId) {
       const element = new FakeElement();
       element.dataset.planTemplateAction = action;
+      if (templateId) element.dataset.templateId = String(templateId);
       root.dispatch("click", { target: element });
     },
     dispatchChange(field, value) {
@@ -242,6 +297,7 @@ function createPlanHarness() {
       templatesResolve?.(payload);
     },
     state: () => controller.getState(),
+    mutationPayloads,
     trigger,
     surfaceOptions,
   };
@@ -265,6 +321,49 @@ async function runBehavioralTests() {
   assert.equal(state.dirty, true);
   assert.match(harness.content.innerHTML, /sport_type_custom/);
   assert.match(harness.content.innerHTML, /activity_category_custom/);
+  assert.match(harness.content.innerHTML, /Template details/);
+  assert.equal((harness.content.innerHTML.match(/data-plan-template-field="template_name"/g) || []).length, 1);
+  assert.equal((harness.content.innerHTML.match(/data-plan-template-field="template_description"/g) || []).length, 1);
+  assert.doesNotMatch(harness.content.innerHTML, /Prescription|Prescription title|Prescription description/);
+  assert.match(harness.content.innerHTML, /<details class="plan-template-more-options">/);
+
+  const serializerHarness = createPlanHarness();
+  serializerHarness.controller.open();
+  serializerHarness.dispatchRootAction("create");
+  serializerHarness.dispatchChange("template_name", "Shared name");
+  serializerHarness.dispatchChange("category_id", "1");
+  serializerHarness.dispatchChange("template_description", "Shared description");
+  serializerHarness.dispatchChange("target_duration_min", "0");
+  serializerHarness.content.dispatch("submit", { target: { id: "planTemplateForm" }, preventDefault() {} });
+  await flush();
+  assert.equal(serializerHarness.mutationPayloads[0].template_name, "Shared name");
+  assert.equal(serializerHarness.mutationPayloads[0].template_description, "Shared description");
+  assert.equal(serializerHarness.mutationPayloads[0].prescription.title, "Shared name");
+  assert.equal(serializerHarness.mutationPayloads[0].prescription.description, "Shared description");
+  assert.equal(serializerHarness.mutationPayloads[0].prescription.target_duration_min, 0);
+  assert.equal(serializerHarness.mutationPayloads[0].segments.length, 0);
+  assert.equal(serializerHarness.mutationPayloads[0].prescription.target_load_source, null);
+  assert.equal(serializerHarness.mutationPayloads[0].sort_order, 0);
+
+  const editHarness = createPlanHarness();
+  editHarness.controller.open();
+  editHarness.dispatchRootAction("edit", 7);
+  await flush();
+  assert.match(editHarness.content.innerHTML, /<details class="plan-template-more-options" open>/);
+  assert.match(editHarness.content.innerHTML, /Distance \(mi\)/);
+  assert.match(editHarness.content.innerHTML, /Elevation \(ft\)/);
+  editHarness.content.dispatch("submit", { target: { id: "planTemplateForm" }, preventDefault() {} });
+  await flush();
+  const preservedPayload = editHarness.mutationPayloads[0];
+  assert.equal(preservedPayload.prescription.title, "Legacy prescription title");
+  assert.equal(preservedPayload.prescription.description, "Legacy prescription description");
+  editHarness.dispatchChange("template_name", "Unified name");
+  editHarness.dispatchChange("template_description", "Unified description");
+  editHarness.content.dispatch("submit", { target: { id: "planTemplateForm" }, preventDefault() {} });
+  await flush();
+  const unifiedPayload = editHarness.mutationPayloads[1];
+  assert.equal(unifiedPayload.prescription.title, "Unified name");
+  assert.equal(unifiedPayload.prescription.description, "Unified description");
 
   harness.setConfirmResult(false);
   harness.dispatchRootAction("close");

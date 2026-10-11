@@ -60,6 +60,7 @@
     categoriesGeneration: 0,
     templatesGeneration: 0,
     detailGeneration: 0,
+    sharedFieldsChanged: { name: false, description: false },
     surface: null,
     initialized: false,
   };
@@ -198,7 +199,7 @@
         <div class="plan-template-state">
           <h3>${filtered ? "No templates in this category" : "No templates yet"}</h3>
           <p>${filtered ? "Try another category or create a reusable template." : "Create a reusable template to get started."}</p>
-          <button type="button" class="button-primary" data-plan-template-action="create">Create template</button>
+          <button type="button" class="button-secondary" data-plan-template-action="create">${filtered ? "Create template" : "Create first template"}</button>
         </div>`;
     } else {
       body = `<div class="plan-template-card-list" aria-live="polite">${templates.rows.map(cardMarkup).join("")}</div>`;
@@ -222,7 +223,7 @@
             ${state.categories.rows.map(row =>
               `<option value="${row.plan_category_id}" ${Number(state.templates.categoryId) === Number(row.plan_category_id) ? "selected" : ""}>${escapeHtml(row.category_name)}</option>`).join("")}
           </select>
-          <button type="button" class="button-primary" data-plan-template-action="create">Create template</button>
+          <button type="button" class="button-secondary" data-plan-template-action="create">Create template</button>
         </div>
         ${state.categories.status === "loading" ? '<div class="plan-template-state" role="status">Loading categories…</div>' : ""}
         ${state.categories.status === "error" ? `
@@ -234,7 +235,7 @@
       </div>`;
   }
 
-  function inputMarkup({ field, label, value, type = "text", required = false, step, min, textarea = false }) {
+  function inputMarkup({ field, label, value, type = "text", required = false, step, min, textarea = false, rows = 3 }) {
     const attrs = [
       `name="${escapeHtml(field)}"`,
       `id="plan-template-${escapeHtml(field)}"`,
@@ -245,9 +246,9 @@
       min ? `min="${min}"` : "",
     ].join(" ");
     const element = textarea
-      ? `<textarea ${attrs} rows="3">${escapeHtml(display(value))}</textarea>`
+      ? `<textarea ${attrs} rows="${rows}">${escapeHtml(display(value))}</textarea>`
       : `<input ${attrs} type="${type}" value="${escapeHtml(display(value))}">`;
-    return `<div class="plan-template-field">
+    return `<div class="plan-template-field plan-template-field-${escapeHtml(field)}">
       <label for="plan-template-${escapeHtml(field)}">${escapeHtml(label)}${required ? " *" : ""}</label>
       ${element}
       ${fieldError(field)}
@@ -255,7 +256,7 @@
   }
 
   function selectMarkup({ field, label, value, options, required = false }) {
-    return `<div class="plan-template-field">
+    return `<div class="plan-template-field plan-template-field-${escapeHtml(field)}">
       <label for="plan-template-${escapeHtml(field)}">${escapeHtml(label)}${required ? " *" : ""}</label>
       <select id="plan-template-${escapeHtml(field)}" name="${escapeHtml(field)}"
         data-plan-template-field="${escapeHtml(field)}"${required ? " required" : ""}${describedBy(field)}>
@@ -288,9 +289,16 @@
       ? prescription.activity_category
       : "";
     const title = state.view === "create" ? "Create Template" : "Edit Template";
+    const moreOptionsOpen = state.view === "edit" && [
+      prescription.activity_category,
+      prescription.trainer,
+      prescription.target_distance_mi,
+      prescription.target_elevation_ft,
+    ].some(value => value !== null && value !== undefined && value !== "");
     return `
       <div class="plan-template-editor-header">
-        <button type="button" class="button-secondary" data-plan-template-action="back">Back to templates</button>
+        <button type="button" class="button-text plan-template-back" aria-label="Back to templates"
+          data-plan-template-action="back">← Templates</button>
         <div>
           <h2 tabindex="-1">${title}</h2>
           ${state.dirty ? '<span class="plan-template-dirty">Unsaved changes</span>' : ""}
@@ -300,33 +308,33 @@
       </div>
       <form id="planTemplateForm" class="plan-template-form" novalidate>
         ${statusMarkup()}
-        <fieldset>
-          <legend>Template</legend>
-          ${inputMarkup({ field: "template_name", label: "Template name", value: draft.template_name, required: true })}
+        <section class="plan-template-section" aria-labelledby="plan-template-details-heading">
+          <h3 id="plan-template-details-heading">Template details</h3>
+          ${inputMarkup({ field: "template_name", label: "Name", value: draft.template_name, required: true })}
           ${selectMarkup({ field: "category_id", label: "Category", value: draft.category?.plan_category_id || draft.category_id, options: categoryOptions(draft.category?.plan_category_id || draft.category_id), required: true })}
-          ${inputMarkup({ field: "template_description", label: "Description", value: draft.template_description, textarea: true })}
-        </fieldset>
-        <fieldset>
-          <legend>Prescription</legend>
-          ${inputMarkup({ field: "title", label: "Prescription title", value: prescription.title, required: true })}
-          ${inputMarkup({ field: "description", label: "Prescription description", value: prescription.description, textarea: true })}
           ${selectMarkup({ field: "sport_type", label: "Sport", value: sportCustom ? "__custom__" : prescription.sport_type, options: optionMarkup(SPORT_CHOICES, prescription.sport_type) })}
           ${sportCustom ? inputMarkup({ field: "sport_type_custom", label: "Custom sport", value: customSport }) : ""}
-          ${selectMarkup({ field: "activity_category", label: "Activity category", value: activityCustom ? "__custom__" : prescription.activity_category, options: optionMarkup(ACTIVITY_CHOICES, prescription.activity_category) })}
-          ${activityCustom ? inputMarkup({ field: "activity_category_custom", label: "Custom activity category", value: customActivity }) : ""}
-          ${selectMarkup({ field: "trainer", label: "Trainer", value: prescription.trainer === null ? "" : String(prescription.trainer), options: '<option value="">Not specified</option><option value="false">No</option><option value="true">Yes</option>' })}
-          ${inputMarkup({ field: "target_duration_min", label: "Target duration (minutes)", value: prescription.target_duration_min, type: "number", step: "0.01", min: "0" })}
+          ${inputMarkup({ field: "target_duration_min", label: "Duration (min)", value: prescription.target_duration_min, type: "number", step: "0.01", min: "0" })}
           ${inputMarkup({ field: "target_load", label: "Target load", value: prescription.target_load, type: "number", step: "1", min: "0" })}
-          ${inputMarkup({ field: "target_distance_mi", label: "Target distance (miles)", value: prescription.target_distance_mi, type: "number", step: "0.001", min: "0" })}
-          ${inputMarkup({ field: "target_elevation_ft", label: "Target elevation (feet)", value: prescription.target_elevation_ft, type: "number", step: "1", min: "0" })}
-          ${inputMarkup({ field: "instruction_text", label: "Instructions", value: prescription.instruction_text, textarea: true })}
-        </fieldset>
+          ${inputMarkup({ field: "template_description", label: "Description", value: draft.template_description, textarea: true, rows: 2 })}
+          ${inputMarkup({ field: "instruction_text", label: "Instructions", value: prescription.instruction_text, textarea: true, rows: 4 })}
+          <details class="plan-template-more-options"${moreOptionsOpen ? " open" : ""}>
+            <summary>More options</summary>
+            <div class="plan-template-more-options-grid">
+              ${selectMarkup({ field: "activity_category", label: "Activity category", value: activityCustom ? "__custom__" : prescription.activity_category, options: optionMarkup(ACTIVITY_CHOICES, prescription.activity_category) })}
+              ${activityCustom ? inputMarkup({ field: "activity_category_custom", label: "Custom activity category", value: customActivity }) : ""}
+              ${selectMarkup({ field: "trainer", label: "Trainer", value: prescription.trainer === null ? "" : String(prescription.trainer), options: '<option value="">Not specified</option><option value="false">No</option><option value="true">Yes</option>' })}
+              ${inputMarkup({ field: "target_distance_mi", label: "Distance (mi)", value: prescription.target_distance_mi, type: "number", step: "0.001", min: "0" })}
+              ${inputMarkup({ field: "target_elevation_ft", label: "Elevation (ft)", value: prescription.target_elevation_ft, type: "number", step: "1", min: "0" })}
+            </div>
+          </details>
+        </section>
         ${segmentSummary(prescription.segments)}
         <div class="plan-template-form-actions">
           ${state.view === "edit" ? `<button type="button" class="button-danger" data-plan-template-action="deactivate"${state.saving || state.deactivating ? " disabled" : ""}>Deactivate template</button>` : ""}
           <span class="plan-template-form-spacer"></span>
           <button type="button" class="button-secondary" data-plan-template-action="back" ${state.saving ? "disabled" : ""}>Cancel</button>
-          <button type="submit" class="button-primary" ${state.saving || state.deactivating ? "disabled" : ""}>${state.saving ? "Saving…" : "Save template"}</button>
+          <button type="submit" class="button-primary" ${state.saving || state.deactivating ? "disabled" : ""}>${state.saving ? "Saving…" : state.view === "create" ? "Create template" : "Save changes"}</button>
         </div>
       </form>`;
   }
@@ -363,6 +371,7 @@
     state.dirty = false;
     state.formErrors = {};
     state.formMessage = "";
+    state.sharedFieldsChanged = { name: false, description: false };
   }
 
   function openLibrary(opener = trigger) {
@@ -463,6 +472,7 @@
     state.dirty = false;
     state.formErrors = {};
     state.formMessage = "";
+    state.sharedFieldsChanged = { name: false, description: false };
     const generation = ++state.detailGeneration;
     render();
     try {
@@ -489,6 +499,7 @@
     state.dirty = false;
     state.formErrors = {};
     state.formMessage = "";
+    state.sharedFieldsChanged = { name: false, description: false };
     render();
     focusSurface();
   }
@@ -514,6 +525,8 @@
           : value;
     } else {
       state.draft[field] = value;
+      if (field === "template_name") state.sharedFieldsChanged.name = true;
+      if (field === "template_description") state.sharedFieldsChanged.description = true;
     }
     state.dirty = true;
     state.formMessage = "";
@@ -523,14 +536,20 @@
     const draft = state.draft;
     const confirmed = state.detail.confirmed;
     const prescription = draft.prescription;
+    const sharedName = String(draft.template_name || "").trim();
+    const sharedDescription = textValue(draft.template_description);
     return {
-      template_name: String(draft.template_name || "").trim(),
-      template_description: textValue(draft.template_description),
+      template_name: sharedName,
+      template_description: sharedDescription,
       category_id: Number(draft.category_id),
       sort_order: confirmed?.sort_order ?? 0,
       prescription: {
-        title: String(prescription.title || "").trim(),
-        description: textValue(prescription.description),
+        title: state.view === "create" || state.sharedFieldsChanged.name
+          ? sharedName
+          : String(prescription.title || "").trim(),
+        description: state.view === "create" || state.sharedFieldsChanged.description
+          ? sharedDescription
+          : textValue(prescription.description),
           sport_type: textValue(prescription.sport_type === "__custom__" ? null : prescription.sport_type),
           activity_category: textValue(prescription.activity_category === "__custom__" ? null : prescription.activity_category),
         trainer: prescription.trainer === null || prescription.trainer === undefined ? null : Boolean(prescription.trainer),
@@ -553,7 +572,6 @@
     const errors = {};
     if (!String(draft?.template_name || "").trim()) errors.template_name = "Template name is required.";
     if (!draft?.category_id) errors.category_id = "Select a category.";
-    if (!String(prescription.title || "").trim()) errors.title = "Prescription title is required.";
     for (const field of ["target_duration_min", "target_load", "target_distance_mi", "target_elevation_ft"]) {
       if (prescription[field] !== null && prescription[field] !== undefined
         && (!Number.isFinite(Number(prescription[field])) || Number(prescription[field]) < 0)) {
