@@ -243,8 +243,6 @@
     if (state.inFlight) return;
     const template = state.templates.find(row => String(row.plan_template_id) === String(templateId));
     if (!template) return;
-    draggingRow = templateRowElement;
-    draggingRow.classList.add("is-dragging");
     state.selectedTemplate = {
       planTemplateId: Number(template.plan_template_id),
       templateName: String(template.template_name),
@@ -358,6 +356,8 @@
     const templateId = templateRowElement.getAttribute("data-plan-palette-template-id");
     const template = state.templates.find(row => String(row.plan_template_id) === String(templateId));
     if (!template) return;
+    draggingRow = templateRowElement;
+    draggingRow.classList.add("is-dragging");
     state.selectedTemplate = {
       planTemplateId: Number(template.plan_template_id),
       templateName: String(template.template_name),
