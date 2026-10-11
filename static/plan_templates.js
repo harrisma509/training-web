@@ -401,11 +401,15 @@
       if (generation !== state.categoriesGeneration || !state.open) return;
       state.categories = { status: "ready", rows: Array.isArray(payload?.categories) ? payload.categories : [], error: null };
       if (state.templates.status === "idle") await loadTemplates(state.templates.categoryId);
-      else render();
+      else {
+        render();
+        focusSurface();
+      }
     } catch (error) {
       if (generation !== state.categoriesGeneration || !state.open) return;
       state.categories = { ...state.categories, status: "error", error };
       render();
+      focusSurface();
     }
   }
 
@@ -423,10 +427,12 @@
         error: null,
       };
       render();
+      focusSurface();
     } catch (error) {
       if (generation !== state.templatesGeneration || !state.open) return;
       state.templates = { ...state.templates, status: "error", categoryId, error };
       render();
+      focusSurface();
     }
   }
 
