@@ -529,6 +529,7 @@
     margin: 4px 0 0;
     color: var(--muted);
     font-size: 12px;
+    white-space: nowrap;
 }
 
 .plan-palette-body {
@@ -727,6 +728,10 @@
 
     .plan-palette-body {
         max-height: calc(min(76vh, 620px) - 74px);
+    }
+
+    .plan-palette-header p {
+        white-space: normal;
     }
 
     .plan-palette-placement-banner {

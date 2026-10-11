@@ -71,6 +71,8 @@ assert.match(cssSource, /\.plan-day\.is-palette-drop-hover/);
 assert.match(cssSource, /Drop here/);
 assert.match(cssSource, /\.plan-palette-state\[hidden\]/);
 assert.match(cssSource, /\.plan-palette-row\.is-dragging/);
+assert.match(cssSource, /\.plan-palette-header p[\s\S]*white-space: nowrap/);
+assert.match(cssSource, /@media \(max-width: 700px\)[\s\S]*\.plan-palette-header p[\s\S]*white-space: normal/);
 assert.doesNotMatch(templateControllerSource, /planPalette|data-plan-palette|Place here|Add plans/);
 
 async function testApiWrapper() {
