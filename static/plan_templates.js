@@ -352,6 +352,11 @@
     }, 0);
   }
 
+  function restoreCategoryFilterFocus(wasFocused) {
+    if (!wasFocused) return;
+    content?.querySelector('[data-plan-template-field="category-filter"]')?.focus();
+  }
+
   function resetEditor() {
     state.detail = { status: "idle", confirmed: null, error: null };
     state.draft = null;
@@ -418,8 +423,10 @@
 
   async function loadTemplates(categoryId = null) {
     const generation = ++state.templatesGeneration;
+    const preserveFilterFocus = document.activeElement?.dataset?.planTemplateField === "category-filter";
     state.templates = { ...state.templates, status: "loading", categoryId, error: null };
     render();
+    restoreCategoryFilterFocus(preserveFilterFocus);
     try {
       const payload = await window.api.fetchPlanTemplates(categoryId, 200);
       if (generation !== state.templatesGeneration || !state.open) return;
@@ -430,10 +437,12 @@
         error: null,
       };
       render();
+      restoreCategoryFilterFocus(preserveFilterFocus);
     } catch (error) {
       if (generation !== state.templatesGeneration || !state.open) return;
       state.templates = { ...state.templates, status: "error", categoryId, error };
       render();
+      restoreCategoryFilterFocus(preserveFilterFocus);
     }
   }
 

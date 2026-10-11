@@ -31,6 +31,7 @@ assert.match(moduleSource, /window\.confirm\("Discard unsaved template changes\?
 assert.match(templateSource, /data-plan-template-action="backdrop"/);
 assert.match(moduleSource, /requestClose\("escape"\)/);
 assert.doesNotMatch(moduleSource, /if \(canDeactivate\(\)\) close\("(?:backdrop|close-button|escape)"\)/);
+assert.match(moduleSource, /restoreCategoryFilterFocus\(preserveFilterFocus\)/);
 assert.match(moduleSource, /function trapFocus/);
 
 assert.match(moduleSource, /fetchPlanCategories/);
@@ -119,6 +120,7 @@ class FakeElement {
   }
 
   querySelector() {
+    if (arguments[0]?.includes("category-filter") && this.filterTarget) return this.filterTarget;
     return this.focusTarget || null;
   }
 
@@ -152,6 +154,7 @@ function createPlanHarness() {
     element.ownerDocument = document;
   }
   content.focusTarget = focusTarget;
+  content.filterTarget = categoryFilter;
   document.elements.planTemplateLibrary = root;
   document.elements.planTemplateLibraryContent = content;
   document.elements.planTemplateLibraryOpen = trigger;
