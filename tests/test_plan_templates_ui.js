@@ -23,6 +23,7 @@ assert.match(moduleSource, /root\.addEventListener\("click"/);
 assert.match(moduleSource, /document\.addEventListener\("keydown", handleKeydown\)/);
 assert.match(moduleSource, /aria-expanded/);
 assert.match(moduleSource, /focusSurface/);
+assert.match(moduleSource, /<h2 tabindex="-1">Template Library<\/h2>/);
 assert.match(moduleSource, /window\.confirm\("Discard unsaved template changes\?"\)/);
 assert.match(templateSource, /data-plan-template-action="backdrop"/);
 assert.match(moduleSource, /if \(canDeactivate\(\)\) close\("escape"\)/);

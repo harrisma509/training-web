@@ -206,7 +206,7 @@
     return `
       <div class="plan-template-library-header">
         <div>
-          <h2>Template Library</h2>
+          <h2 tabindex="-1">Template Library</h2>
           <p>Reusable planned-workout templates</p>
         </div>
         <button type="button" class="drawer-close-button" aria-label="Close Template Library"
@@ -292,7 +292,7 @@
       <div class="plan-template-editor-header">
         <button type="button" class="button-secondary" data-plan-template-action="back">Back to templates</button>
         <div>
-          <h2>${title}</h2>
+          <h2 tabindex="-1">${title}</h2>
           ${state.dirty ? '<span class="plan-template-dirty">Unsaved changes</span>' : ""}
         </div>
         <button type="button" class="drawer-close-button" aria-label="Close Template Editor"
