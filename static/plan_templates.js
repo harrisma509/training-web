@@ -323,7 +323,7 @@
         </fieldset>
         ${segmentSummary(prescription.segments)}
         <div class="plan-template-form-actions">
-          ${state.view === "edit" ? '<button type="button" class="button-danger" data-plan-template-action="deactivate" disabled="' + (state.saving || state.deactivating ? "disabled" : "") + '">Deactivate template</button>' : ""}
+          ${state.view === "edit" ? `<button type="button" class="button-danger" data-plan-template-action="deactivate"${state.saving || state.deactivating ? " disabled" : ""}>Deactivate template</button>` : ""}
           <span class="plan-template-form-spacer"></span>
           <button type="button" class="button-secondary" data-plan-template-action="back" ${state.saving ? "disabled" : ""}>Cancel</button>
           <button type="submit" class="button-primary" ${state.saving || state.deactivating ? "disabled" : ""}>${state.saving ? "Saving…" : "Save template"}</button>
