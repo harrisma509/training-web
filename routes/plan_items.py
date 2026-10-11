@@ -1,0 +1,253 @@
+"""Bounded read-only Plan item range API."""
+
+import logging
+from datetime import date
+
+from fastapi import APIRouter, HTTPException
+from fastapi.responses import JSONResponse
+
+from db import db_conn, json_safe
+
+router = APIRouter()
+logger = logging.getLogger(__name__)
+
+
+def _unavailable():
+    logger.exception("Plan item persistence read failed.")
+    return JSONResponse(
+        {"detail": "Plan items are unavailable."},
+        status_code=503,
+    )
+
+
+def _safe_row(row, fields):
+    return {field: json_safe(row[field]) for field in fields}
+
+
+def _segment_payload(row):
+    return _safe_row(
+        row,
+        (
+            "plan_prescription_segment_id",
+            "segment_order",
+            "segment_name",
+            "repeat_group_key",
+            "repeat_count",
+            "target_duration_min",
+            "target_metric",
+            "zone_min",
+            "zone_max",
+            "target_value_min",
+            "target_value_max",
+            "instruction_text",
+        ),
+    )
+
+
+def _item_payload(row, segments):
+    category = _safe_row(
+        row,
+        (
+            "plan_category_id",
+            "category_key",
+            "category_name",
+            "color_key",
+            "icon_key",
+        ),
+    )
+    source_template = None
+    if row["source_template_id"] is not None:
+        source_template = _safe_row(
+            row,
+            ("source_template_id", "template_name", "template_is_active"),
+        )
+        source_template = {
+            "plan_template_id": source_template["source_template_id"],
+            "template_name": source_template["template_name"],
+            "is_active": source_template["template_is_active"],
+        }
+
+    batch = None
+    if row["plan_batch_id"] is not None:
+        batch = _safe_row(
+            row,
+            ("plan_batch_id", "batch_status", "batch_type", "batch_name"),
+        )
+
+    prescription = _safe_row(
+        row,
+        (
+            "plan_prescription_id",
+            "title",
+            "description",
+            "sport_type",
+            "activity_category",
+            "trainer",
+            "target_duration_min",
+            "target_load",
+            "target_load_source",
+            "target_distance_mi",
+            "target_elevation_ft",
+            "instruction_text",
+        ),
+    )
+    prescription["segments"] = segments
+
+    return {
+        "plan_item_id": json_safe(row["plan_item_id"]),
+        "planned_date": json_safe(row["planned_date"]),
+        "sort_order": json_safe(row["sort_order"]),
+        "item_state": json_safe(row["item_state"]),
+        "item_source": json_safe(row["item_source"]),
+        "user_note": json_safe(row["user_note"]),
+        "category": category,
+        "source_template": source_template,
+        "batch": batch,
+        "prescription": prescription,
+    }
+
+
+@router.get("/api/plan/items")
+def api_plan_items(start_date: date, end_date: date):
+    if start_date >= end_date:
+        raise HTTPException(
+            status_code=422,
+            detail="start_date must be before end_date",
+        )
+    if (end_date - start_date).days > 31:
+        raise HTTPException(
+            status_code=422,
+            detail="date range must not exceed 31 days",
+        )
+
+    try:
+        with db_conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                        select
+                            pi.plan_item_id,
+                            pi.planned_date,
+                            pi.sort_order,
+                            pi.item_state,
+                            pi.item_source,
+                            pi.user_note,
+                            pc.plan_category_id,
+                            pc.category_key,
+                            pc.category_name,
+                            pc.color_key,
+                            pc.icon_key,
+                            pt.plan_template_id as source_template_id,
+                            pt.template_name,
+                            pt.is_active as template_is_active,
+                            pb.plan_batch_id,
+                            pb.batch_status,
+                            pb.batch_type,
+                            pb.batch_name,
+                            pp.plan_prescription_id,
+                            pp.title,
+                            pp.description,
+                            pp.sport_type,
+                            pp.activity_category,
+                            pp.trainer,
+                            pp.target_duration_min,
+                            pp.target_load,
+                            pp.target_load_source,
+                            pp.target_distance_mi,
+                            pp.target_elevation_ft,
+                            pp.instruction_text
+                        from public.plan_item pi
+                        join public.plan_category pc
+                            on pc.plan_category_id = pi.plan_category_id
+                        join public.plan_prescription pp
+                            on pp.plan_prescription_id = pi.plan_prescription_id
+                           and pp.owner_kind = 'item'
+                        left join public.plan_template pt
+                            on pt.plan_template_id = pi.source_template_id
+                        left join public.plan_batch pb
+                            on pb.plan_batch_id = pi.plan_batch_id
+                        where pi.prescription_owner_kind = 'item'
+                          and pi.planned_date >= %s
+                          and pi.planned_date < %s
+                          and (
+                              pi.item_state = 'committed'
+                              or (
+                                  pi.item_state = 'draft'
+                                  and pb.batch_status = 'open'
+                              )
+                          )
+                        order by
+                            pi.planned_date asc,
+                            pi.sort_order asc,
+                            pi.plan_item_id asc
+                    """,
+                    (start_date, end_date),
+                )
+                item_rows = cur.fetchall()
+                if not item_rows:
+                    return JSONResponse(
+                        {
+                            "start_date": start_date.isoformat(),
+                            "end_date": end_date.isoformat(),
+                            "items": [],
+                        }
+                    )
+
+                prescription_ids = [
+                    row["plan_prescription_id"] for row in item_rows
+                ]
+                cur.execute(
+                    """
+                        select
+                            plan_prescription_segment_id,
+                            plan_prescription_id,
+                            segment_order,
+                            segment_name,
+                            repeat_group_key,
+                            repeat_count,
+                            target_duration_min,
+                            target_metric,
+                            zone_min,
+                            zone_max,
+                            target_value_min,
+                            target_value_max,
+                            instruction_text
+                        from public.plan_prescription_segment
+                        where plan_prescription_id = any(%s)
+                        order by
+                            plan_prescription_id asc,
+                            segment_order asc,
+                            plan_prescription_segment_id asc
+                    """,
+                    (prescription_ids,),
+                )
+                segment_rows = cur.fetchall()
+    except Exception:
+        return _unavailable()
+
+    segments_by_prescription = {prescription_id: [] for prescription_id in prescription_ids}
+    for row in segment_rows:
+        segments_by_prescription[row["plan_prescription_id"]].append(
+            _segment_payload(row)
+        )
+    for segments in segments_by_prescription.values():
+        segments.sort(
+            key=lambda segment: (
+                segment["segment_order"],
+                segment["plan_prescription_segment_id"],
+            )
+        )
+
+    return JSONResponse(
+        {
+            "start_date": start_date.isoformat(),
+            "end_date": end_date.isoformat(),
+            "items": [
+                _item_payload(
+                    row,
+                    segments_by_prescription[row["plan_prescription_id"]],
+                )
+                for row in item_rows
+            ],
+        }
+    )
