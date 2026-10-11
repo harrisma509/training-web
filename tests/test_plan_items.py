@@ -2,12 +2,25 @@ import json
 import unittest
 from datetime import date
 from decimal import Decimal
+from types import SimpleNamespace
 from unittest.mock import patch
 
 from fastapi.testclient import TestClient
+from starlette.requests import Request
 
 from app import app as training_app
-from routes.plan_items import api_plan_items
+from routes.plan_items import (
+    CreateFromTemplatePayload,
+    CreateManualItemPayload,
+    api_plan_item_from_template,
+    api_plan_item_manual,
+    api_plan_items,
+)
+from services.plan_service import (
+    PlanDateNotFuture,
+    create_item_from_template,
+    create_manual_item,
+)
 
 
 def item_row(**overrides):
@@ -67,6 +80,51 @@ def segment_row(order=1, **overrides):
     return row
 
 
+def prescription_row(**overrides):
+    row = {
+        "plan_prescription_id": 42,
+        "owner_kind": "template",
+        "title": "Z2 Endurance Ride",
+        "description": "Steady aerobic endurance ride.",
+        "sport_type": "Ride",
+        "activity_category": "endurance",
+        "trainer": False,
+        "target_duration_min": Decimal("90.00"),
+        "target_load": 0,
+        "target_load_source": None,
+        "target_distance_mi": Decimal("0.000"),
+        "target_elevation_ft": None,
+        "instruction_text": "Stay conversational.",
+    }
+    row.update(overrides)
+    return row
+
+
+def manual_payload(**overrides):
+    payload = {
+        "planned_date": "2026-10-12",
+        "category_id": 1,
+        "sort_order": 0,
+        "user_note": None,
+        "prescription": {
+            "title": "Manual Endurance Ride",
+            "description": None,
+            "sport_type": "Ride",
+            "activity_category": "endurance",
+            "trainer": False,
+            "target_duration_min": 45.0,
+            "target_load": 0,
+            "target_load_source": None,
+            "target_distance_mi": None,
+            "target_elevation_ft": None,
+            "instruction_text": "Keep this conversational.",
+        },
+        "segments": [],
+    }
+    payload.update(overrides)
+    return payload
+
+
 class FakeCursor:
     def __init__(self, *, results=None, error_on=None):
         self.results = list(results or [])
@@ -102,11 +160,253 @@ class FakeConnection:
         return False
 
 
+class TransactionCursor:
+    def __init__(self, *, one=None, many=None, error_on=None):
+        self.one = list(one or [])
+        self.many = list(many or [])
+        self.error_on = error_on
+        self.executed = []
+
+    def execute(self, sql, params=()):
+        self.executed.append((sql, params))
+        if self.error_on and self.error_on in sql.lower():
+            raise RuntimeError("raw database failure")
+
+    def fetchone(self):
+        return self.one.pop(0)
+
+    def fetchall(self):
+        return self.many.pop(0)
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *args):
+        return False
+
+
+class TransactionConnection:
+    def __init__(self, cursor):
+        self.cursor_value = cursor
+        self.commit_count = 0
+        self.rollback_count = 0
+
+    def cursor(self):
+        return self.cursor_value
+
+    def commit(self):
+        self.commit_count += 1
+
+    def rollback(self):
+        self.rollback_count += 1
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, *_):
+        if exc_type is not None:
+            self.rollback()
+        return False
+
+
+def request_with_headers(headers=()):
+    return Request(
+        {
+            "type": "http",
+            "method": "POST",
+            "path": "/api/plan/items/manual",
+            "headers": [
+                (key.lower().encode("ascii"), value.encode("ascii"))
+                for key, value in headers
+            ],
+            "scheme": "http",
+            "server": ("192.168.1.100", 8088),
+            "client": ("192.168.1.20", 50000),
+        }
+    )
+
+
 def response_json(response):
     return json.loads(response.body.decode("utf-8"))
 
 
 class PlanItemRouteTests(unittest.TestCase):
+    def test_manual_route_rejects_today_before_service(self):
+        payload = manual_payload(planned_date="2026-10-11")
+        with (
+            patch("routes.plan_items._denver_today", return_value=date(2026, 10, 11)),
+            patch("routes.plan_items.create_manual_item") as create,
+        ):
+            response = api_plan_item_manual(
+                request_with_headers(),
+                CreateManualItemPayload.model_validate(payload),
+            )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response_json(response)["detail"], "planned_date must be after today.")
+        create.assert_not_called()
+
+    def test_manual_route_rejects_cross_origin_before_service(self):
+        payload = CreateManualItemPayload.model_validate(manual_payload())
+        with patch("routes.plan_items.create_manual_item") as create:
+            response = api_plan_item_manual(
+                request_with_headers(
+                    (("origin", "https://evil.example"),),
+                ),
+                payload,
+            )
+
+        self.assertEqual(response.status_code, 403)
+        create.assert_not_called()
+
+    def test_manual_route_returns_full_item_shape(self):
+        detail = SimpleNamespace(
+            row=item_row(plan_item_id=101, item_source="manual"),
+            segments=[],
+        )
+        payload = CreateManualItemPayload.model_validate(manual_payload())
+        with patch(
+            "routes.plan_items.create_manual_item",
+            return_value=detail,
+        ) as create:
+            response = api_plan_item_manual(request_with_headers(), payload)
+
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(response_json(response)["plan_item_id"], 101)
+        self.assertEqual(response_json(response)["item_source"], "manual")
+        create.assert_called_once_with(payload)
+
+    def test_clone_route_returns_created_item(self):
+        detail = SimpleNamespace(
+            row=item_row(plan_item_id=102),
+            segments=[],
+        )
+        payload = CreateFromTemplatePayload(
+            plan_template_id=7,
+            planned_date=date(2026, 10, 12),
+            sort_order=0,
+            user_note="Clone",
+        )
+        with patch(
+            "routes.plan_items.create_item_from_template",
+            return_value=detail,
+        ) as create:
+            response = api_plan_item_from_template(
+                request_with_headers(),
+                payload,
+            )
+
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(response_json(response)["plan_item_id"], 102)
+        create.assert_called_once_with(payload)
+
+    def test_clone_service_locks_template_then_prescription_and_commits_once(self):
+        detail = item_row(plan_item_id=101, plan_prescription_id=201)
+        cursor = TransactionCursor(
+            one=[
+                {
+                    "plan_template_id": 7,
+                    "plan_category_id": 1,
+                    "plan_prescription_id": 42,
+                    "prescription_owner_kind": "template",
+                    "is_active": True,
+                },
+                {"plan_category_id": 1, "is_active": True},
+                prescription_row(),
+                {"is_future": True},
+                {"plan_prescription_id": 201},
+                {"plan_item_id": 101},
+                detail,
+            ],
+            many=[[segment_row()], []],
+        )
+        conn = TransactionConnection(cursor)
+        payload = CreateFromTemplatePayload(
+            plan_template_id=7,
+            planned_date=date(2026, 10, 12),
+            sort_order=0,
+            user_note="Clone",
+        )
+
+        with patch("services.plan_service.db_conn", return_value=conn):
+            result = create_item_from_template(payload)
+
+        self.assertEqual(result.row["plan_item_id"], 101)
+        self.assertEqual(conn.commit_count, 1)
+        self.assertEqual(conn.rollback_count, 0)
+        sql = [statement.lower() for statement, _ in cursor.executed]
+        self.assertIn("from public.plan_template", sql[0])
+        self.assertIn("for update", sql[0])
+        self.assertIn("from public.plan_prescription", sql[2])
+        self.assertIn("for update", sql[2])
+        future_index = next(
+            index
+            for index, statement in enumerate(sql)
+            if "current_timestamp at time zone" in statement
+        )
+        first_insert = next(
+            index for index, statement in enumerate(sql) if "insert into" in statement
+        )
+        self.assertLess(future_index, first_insert)
+
+    def test_clone_service_rejects_nonfuture_date_before_any_insert(self):
+        cursor = TransactionCursor(
+            one=[
+                {
+                    "plan_template_id": 7,
+                    "plan_category_id": 1,
+                    "plan_prescription_id": 42,
+                    "prescription_owner_kind": "template",
+                    "is_active": True,
+                },
+                {"plan_category_id": 1, "is_active": True},
+                prescription_row(),
+                {"is_future": False},
+            ],
+            many=[[segment_row()]],
+        )
+        conn = TransactionConnection(cursor)
+        payload = CreateFromTemplatePayload(
+            plan_template_id=7,
+            planned_date=date(2026, 10, 11),
+            sort_order=0,
+        )
+
+        with patch("services.plan_service.db_conn", return_value=conn):
+            with self.assertRaises(PlanDateNotFuture):
+                create_item_from_template(payload)
+
+        self.assertEqual(conn.commit_count, 0)
+        self.assertEqual(conn.rollback_count, 1)
+        self.assertFalse(
+            any("insert into" in statement.lower() for statement, _ in cursor.executed)
+        )
+
+    def test_manual_service_inserts_item_owned_prescription_and_segments(self):
+        detail = item_row(plan_item_id=103, plan_prescription_id=203, item_source="manual")
+        cursor = TransactionCursor(
+            one=[
+                {"plan_category_id": 1, "is_active": True},
+                {"is_future": True},
+                {"plan_prescription_id": 203},
+                {"plan_item_id": 103},
+                detail,
+            ],
+            many=[[]],
+        )
+        conn = TransactionConnection(cursor)
+        payload = CreateManualItemPayload.model_validate(manual_payload())
+
+        with patch("services.plan_service.db_conn", return_value=conn):
+            result = create_manual_item(payload)
+
+        self.assertEqual(result.row["item_source"], "manual")
+        self.assertEqual(conn.commit_count, 1)
+        insert_sql = "\n".join(statement.lower() for statement, _ in cursor.executed)
+        self.assertIn("values ('item'", insert_sql)
+        self.assertIn("values (", insert_sql)
+        self.assertIn("'committed'", insert_sql)
+
     def test_required_and_invalid_ranges_return_422(self):
         client = TestClient(training_app)
 

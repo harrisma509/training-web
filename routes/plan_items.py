@@ -1,15 +1,100 @@
 """Bounded read-only Plan item range API."""
 
 import logging
-from datetime import date
+from datetime import date, datetime
+from typing import Annotated
+from zoneinfo import ZoneInfo
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
+from pydantic import BaseModel, ConfigDict, BeforeValidator, Field, StrictInt
 from fastapi.responses import JSONResponse
 
 from db import db_conn, json_safe
+from routes.plan import (
+    PlanPrescriptionPayload,
+    PlanPrescriptionSegmentPayload,
+    _mutation_guard,
+    _validate_semantic_payload,
+)
+from services.plan_service import (
+    PlanCategoryNotFound,
+    PlanDateNotFuture,
+    PlanOwnershipCorrupt,
+    PlanTemplateNotFound,
+    create_item_from_template,
+    create_manual_item,
+)
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
+DENVER = ZoneInfo("America/Denver")
+
+
+def _optional_user_note(value):
+    if value is None:
+        return None
+    if not isinstance(value, str):
+        raise ValueError("must be a string or null")
+    value = value.strip()
+    return value or None
+
+
+UserNote = Annotated[str | None, BeforeValidator(_optional_user_note)]
+
+
+class CreateFromTemplatePayload(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    plan_template_id: StrictInt = Field(gt=0)
+    planned_date: date
+    sort_order: StrictInt = Field(default=0, ge=0)
+    user_note: UserNote = Field(default=None, max_length=4000)
+
+
+class CreateManualItemPayload(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    planned_date: date
+    category_id: StrictInt = Field(gt=0)
+    sort_order: StrictInt = Field(default=0, ge=0)
+    user_note: UserNote = Field(default=None, max_length=4000)
+    prescription: PlanPrescriptionPayload
+    segments: list[PlanPrescriptionSegmentPayload] = Field(default_factory=list, max_length=200)
+
+
+def _denver_today() -> date:
+    return datetime.now(DENVER).date()
+
+
+def _future_date_response(planned_date):
+    if planned_date <= _denver_today():
+        return JSONResponse(
+            {"detail": "planned_date must be after today."},
+            status_code=400,
+        )
+    return None
+
+
+def _item_mutation_error(exc):
+    if isinstance(exc, PlanDateNotFuture):
+        return JSONResponse(
+            {"detail": "planned_date must be after today."},
+            status_code=400,
+        )
+    if isinstance(exc, PlanCategoryNotFound):
+        return JSONResponse({"detail": "Plan category not found."}, status_code=404)
+    if isinstance(exc, PlanTemplateNotFound):
+        return JSONResponse({"detail": "Plan template not found."}, status_code=404)
+    if isinstance(exc, PlanOwnershipCorrupt):
+        return JSONResponse(
+            {"detail": "Plan item ownership is invalid."},
+            status_code=409,
+        )
+    logger.exception("Plan item mutation failed.")
+    return JSONResponse(
+        {"detail": "Plan item persistence is unavailable."},
+        status_code=503,
+    )
 
 
 def _unavailable():
@@ -105,6 +190,43 @@ def _item_payload(row, segments):
         "batch": batch,
         "prescription": prescription,
     }
+
+
+@router.post("/api/plan/items/from-template", status_code=201)
+def api_plan_item_from_template(
+    request: Request,
+    payload: CreateFromTemplatePayload,
+):
+    guard_response = _mutation_guard(request)
+    if guard_response is not None:
+        return guard_response
+    date_response = _future_date_response(payload.planned_date)
+    if date_response is not None:
+        return date_response
+    try:
+        detail = create_item_from_template(payload)
+    except Exception as exc:
+        return _item_mutation_error(exc)
+    return JSONResponse(_item_payload(detail.row, detail.segments), status_code=201)
+
+
+@router.post("/api/plan/items/manual", status_code=201)
+def api_plan_item_manual(
+    request: Request,
+    payload: CreateManualItemPayload,
+):
+    guard_response = _mutation_guard(request)
+    if guard_response is not None:
+        return guard_response
+    date_response = _future_date_response(payload.planned_date)
+    if date_response is not None:
+        return date_response
+    _validate_semantic_payload(payload)
+    try:
+        detail = create_manual_item(payload)
+    except Exception as exc:
+        return _item_mutation_error(exc)
+    return JSONResponse(_item_payload(detail.row, detail.segments), status_code=201)
 
 
 @router.get("/api/plan/items")
