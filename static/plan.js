@@ -865,6 +865,36 @@
     strip.dataset.planCheckinBound = "true";
   }
 
+  function setupPlanPaletteDragHandlers() {
+    const strip = document.getElementById("planStrip");
+    if (!strip || strip.dataset.planPaletteDragBound === "true") return;
+    const getDay = event => event.target.closest?.("[data-plan-date]");
+    strip.addEventListener("dragover", event => {
+      const day = getDay(event);
+      if (!day || !window.PlanPaletteController?.handleCalendarDragOver?.(day.dataset.planDate, event)) return;
+      day.classList.add("is-palette-drop-hover");
+    });
+    strip.addEventListener("dragenter", event => {
+      const day = getDay(event);
+      if (day && window.PlanPaletteController?.handleCalendarDragState?.(true, day.dataset.planDate)) {
+        day.classList.add("is-palette-drop-hover");
+      }
+    });
+    strip.addEventListener("dragleave", event => {
+      const day = getDay(event);
+      if (day && !day.contains(event.relatedTarget)) {
+        day.classList.remove("is-palette-drop-hover");
+      }
+    });
+    strip.addEventListener("drop", event => {
+      const day = getDay(event);
+      if (!day) return;
+      day.classList.remove("is-palette-drop-hover");
+      window.PlanPaletteController?.handleCalendarDrop?.(day.dataset.planDate, event);
+    });
+    strip.dataset.planPaletteDragBound = "true";
+  }
+
   function renderPlanDayCell(date, row, isWeekCollapsed, isCurrentWeek) {
     const label = formatPlanDay(date);
     const dayKey = toLocalDateKey(date);
@@ -890,6 +920,10 @@
       dayKey,
       formattedDateLabel,
     ) || "";
+    const paletteState = window.PlanPaletteController?.getState?.() || {};
+    const paletteDropClass = paletteState.mode === "dragging" && dayKey > getDenverTodayKey()
+      ? " is-palette-drop-valid"
+      : "";
 
     let bodyHtml = "";
     if (!hasActualActivity) {
@@ -942,7 +976,7 @@
     bodyHtml = `${plannedHtml}${paletteTargetHtml}${bodyHtml}`;
 
     return `
-      <div class="plan-day ${isWeekCollapsed ? "is-collapsed" : ""}" data-plan-date="${escapeHtml(dayKey)}">
+      <div class="plan-day ${isWeekCollapsed ? "is-collapsed" : ""}${paletteDropClass}" data-plan-date="${escapeHtml(dayKey)}">
         <div class="plan-day-header${isCurrentWeek ? " is-current-week" : ""}${isCurrentDay ? " is-current-day" : ""}"${isCurrentDay ? ' aria-current="date"' : ""}>
           <span class="plan-weekday">${escapeHtml(label.weekday || "")}</span>
           <span class="plan-day-load" aria-label="${escapeHtml(loadLabel)}" title="${escapeHtml(loadLabel)}">${escapeHtml(loadDisplay)}</span>
@@ -1096,6 +1130,12 @@
     strip.innerHTML = html;
     setupPlanToggleHandlers();
     setupPlanCheckinHandlers();
+    setupPlanPaletteDragHandlers();
+  }
+
+  function setPaletteDragState(active) {
+    planPaletteDragging = Boolean(active);
+    renderPlanStrip();
   }
 
   async function ensurePlanWeeklyRows() {
@@ -1215,6 +1255,7 @@
       load: () => loadPlan(true),
       render: renderPlanStrip,
       getRange: () => getPlanRange(),
+      setPaletteDragState,
       canDeactivate: context => window.PlanTemplateLibraryController?.canDeactivate?.(context) ?? true,
       deactivate: context => {
         window.PlanPaletteController?.deactivate?.(context);

@@ -36,7 +36,28 @@
                         aria-label="Close Add plans">×</button>
                 </div>
                 <div class="plan-palette-body">
-                    <div class="plan-palette-controls">
+                    <section class="plan-palette-section" aria-labelledby="planPaletteQuickPicksTitle">
+                        <h3 id="planPaletteQuickPicksTitle">Quick Picks</h3>
+                        <div id="planPaletteQuickRows" class="plan-palette-rows" role="list"></div>
+                        <div id="planPaletteQuickEmpty" class="plan-palette-state" hidden>
+                            <span>No Quick Picks yet.<br>Use Manage Templates to add one.</span>
+                            <button type="button" class="button-secondary" data-plan-palette-action="manage">
+                                Manage Templates
+                            </button>
+                        </div>
+                    </section>
+                    <p id="planPaletteDragInstructions" class="sr-only">
+                        Select a template with Enter or Space, or drag a row to a future Plan date.
+                    </p>
+                    <section class="plan-palette-section" aria-labelledby="planPaletteAllTemplatesToggle">
+                        <button id="planPaletteAllTemplatesToggle" type="button"
+                            class="plan-palette-section-toggle" aria-expanded="false"
+                            aria-controls="planPaletteAllTemplates">
+                            <span>All Templates</span>
+                            <span aria-hidden="true">+</span>
+                        </button>
+                        <div id="planPaletteAllTemplates" hidden>
+                            <div class="plan-palette-controls">
                         <label for="planPaletteSearch">Search templates</label>
                         <input id="planPaletteSearch" type="search" placeholder="Search templates"
                             autocomplete="off">
@@ -44,9 +65,11 @@
                         <select id="planPaletteCategory">
                             <option value="">All categories</option>
                         </select>
-                    </div>
+                            </div>
+                            <div id="planPaletteRows" class="plan-palette-rows" role="list"></div>
+                        </div>
+                    </section>
                     <div id="planPaletteStatus" class="plan-palette-status" role="status" aria-live="polite"></div>
-                    <div id="planPaletteRows" class="plan-palette-rows"></div>
                     <button id="planPaletteManage" type="button" class="button-secondary plan-palette-manage">
                         Manage templates
                     </button>

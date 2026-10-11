@@ -7,7 +7,9 @@
     categories: [],
     searchText: "",
     categoryId: "",
+    allTemplatesExpanded: false,
     selectedTemplate: null,
+    dragTemplate: null,
     targetDate: null,
     mode: "idle",
     inFlight: false,
@@ -27,6 +29,10 @@
   let categorySelect;
   let status;
   let rows;
+  let quickRows;
+  let allTemplates;
+  let allTemplatesToggle;
+  let quickEmpty;
   let manageButton;
   let placementBanner;
   let workspace;
@@ -39,6 +45,11 @@
       '"': "&quot;",
       "'": "&#039;",
     }[character]));
+  }
+
+  function setAllTemplatesExpanded(expanded) {
+    state.allTemplatesExpanded = Boolean(expanded);
+    render();
   }
 
   function getDenverTodayKey() {
@@ -101,11 +112,19 @@
     const selected = state.selectedTemplate?.planTemplateId === template.plan_template_id;
     return `
       <button type="button" class="plan-palette-row${selected ? " is-selected" : ""}"
+        role="listitem" draggable="true" aria-describedby="planPaletteDragInstructions"
         data-plan-palette-template-id="${escape(template.plan_template_id)}"
         aria-pressed="${selected ? "true" : "false"}">
         <strong>${escape(template.template_name)}</strong>
         <span>${escape(details.join(" · "))}</span>
       </button>`;
+  }
+
+  function renderRows(container, templates) {
+    if (!container) return;
+    container.innerHTML = templates.length
+      ? templates.map(templateRow).join("")
+      : '<div class="plan-palette-state">No matching templates.</div>';
   }
 
   function render() {
@@ -115,6 +134,13 @@
     trigger?.setAttribute("aria-expanded", state.paletteOpen ? "true" : "false");
     if (searchInput && searchInput.value !== state.searchText) searchInput.value = state.searchText;
     if (categorySelect && categorySelect.value !== state.categoryId) categorySelect.value = state.categoryId;
+    if (allTemplates) allTemplates.hidden = !state.allTemplatesExpanded;
+    if (allTemplatesToggle) {
+      allTemplatesToggle.setAttribute("aria-expanded", state.allTemplatesExpanded ? "true" : "false");
+      allTemplatesToggle.querySelector("span:last-child")?.replaceChildren(
+        document.createTextNode(state.allTemplatesExpanded ? "−" : "+"),
+      );
+    }
     if (status) status.textContent = state.statusMessage;
     if (categorySelect) {
       categorySelect.innerHTML = [
@@ -124,20 +150,26 @@
       ].join("");
       categorySelect.value = state.categoryId;
     }
-    if (!rows) return;
+    if (!rows || !quickRows) return;
     if (state.templatesStatus === "loading") {
-      rows.innerHTML = '<div class="plan-palette-state" role="status">Loading templates…</div>';
+      quickRows.innerHTML = '<div class="plan-palette-state" role="status">Loading templates…</div>';
+      rows.innerHTML = "";
+      quickEmpty.hidden = true;
     } else if (state.templatesStatus === "error") {
-      rows.innerHTML = `
+      quickRows.innerHTML = `
         <div class="plan-palette-state is-error" role="alert">
           Templates are temporarily unavailable.
           <button type="button" class="button-secondary" data-plan-palette-action="retry">Retry</button>
         </div>`;
+      rows.innerHTML = "";
+      quickEmpty.hidden = true;
     } else {
+      const quick = state.templates.filter(template => template.is_favorite === true);
       const visible = filteredTemplates();
-      rows.innerHTML = visible.length
-        ? visible.map(templateRow).join("")
-        : '<div class="plan-palette-state">No matching templates.</div>';
+      renderRows(quickRows, quick);
+      renderRows(rows, visible);
+      quickEmpty.hidden = quick.length > 0;
+      quickRows.hidden = quick.length === 0;
     }
     if (manageButton) manageButton.disabled = state.inFlight;
     if (closeButton) closeButton.disabled = state.inFlight;
@@ -203,7 +235,7 @@
     if (typeof onChange === "function") onChange();
   }
 
-  function selectTemplate(templateId) {
+  function selectTemplate(templateId, { closeMobile = true } = {}) {
     if (state.inFlight) return;
     const template = state.templates.find(row => String(row.plan_template_id) === String(templateId));
     if (!template) return;
@@ -214,7 +246,7 @@
     state.targetDate = null;
     state.mode = "selected";
     announce(`${state.selectedTemplate.templateName} selected. Choose a future Plan date.`);
-    if (isMobile()) setOpen(false, { focus: false });
+    if (isMobile() && closeMobile) setOpen(false, { focus: false });
     render();
     if (typeof onChange === "function") onChange();
   }
@@ -303,15 +335,64 @@
   }
 
   function targetMarkup(dateKey, dateLabel) {
-    if (!state.selectedTemplate || !isValidTarget(dateKey)) return "";
+    if (!state.selectedTemplate || !["selected", "saving"].includes(state.mode) || !isValidTarget(dateKey)) return "";
     const saving = state.mode === "saving" && state.targetDate === dateKey;
     return `
       <button type="button" class="plan-palette-day-target"
         data-plan-palette-target="${escape(dateKey)}"
         aria-label="${escape(`Add ${state.selectedTemplate.templateName} on ${dateLabel}`)}"
         ${saving ? "disabled" : ""}>
-        ${saving ? "Saving planned item…" : `Add ${escape(state.selectedTemplate.templateName)}`}
+        ${saving ? "Saving planned item…" : "+ Add here"}
       </button>`;
+  }
+
+  function handleDragStart(event) {
+    const templateRowElement = event.target.closest?.("[data-plan-palette-template-id]");
+    if (!templateRowElement || state.inFlight) return;
+    const templateId = templateRowElement.getAttribute("data-plan-palette-template-id");
+    const template = state.templates.find(row => String(row.plan_template_id) === String(templateId));
+    if (!template) return;
+    selectTemplate(templateId, { closeMobile: false });
+    state.mode = "dragging";
+    state.dragTemplate = {
+      planTemplateId: state.selectedTemplate.planTemplateId,
+      templateName: state.selectedTemplate.templateName,
+    };
+    event.dataTransfer.effectAllowed = "copy";
+    event.dataTransfer.setData("application/x-training-plan-template-id", String(template.plan_template_id));
+    event.dataTransfer.setData("text/plain", String(template.template_name));
+    announce(`${template.template_name} ready to place. Drop on a future Plan date.`);
+    render();
+    window.PlanController?.setPaletteDragState?.(true);
+  }
+
+  function handleDragEnd() {
+    if (state.inFlight) return;
+    state.dragTemplate = null;
+    if (state.mode === "dragging") {
+      state.mode = state.selectedTemplate ? "selected" : "idle";
+      render();
+    }
+    window.PlanController?.setPaletteDragState?.(false);
+  }
+
+  function handleCalendarDrop(dateKey, event) {
+    if (state.mode !== "dragging" || state.inFlight || !isValidTarget(dateKey)) return false;
+    event.preventDefault();
+    submit(dateKey);
+    return true;
+  }
+
+  function handleCalendarDragOver(dateKey, event) {
+    if (state.mode !== "dragging" || state.inFlight || !isValidTarget(dateKey)) return false;
+    event.preventDefault();
+    event.dataTransfer.dropEffect = "copy";
+    return true;
+  }
+
+  function handleCalendarDragState(mode, dateKey) {
+    if (state.mode !== "dragging") return false;
+    return isValidTarget(dateKey) && mode;
   }
 
   function handleClick(event) {
@@ -334,6 +415,8 @@
       clearSelection("Placement cancelled.");
     } else if (actionName === "retry") {
       loadTemplates(true);
+    } else if (actionName === "manage") {
+      manageTemplates();
     }
   }
 
@@ -367,10 +450,15 @@
     categorySelect = document.getElementById("planPaletteCategory");
     status = document.getElementById("planPaletteStatus");
     rows = document.getElementById("planPaletteRows");
+    quickRows = document.getElementById("planPaletteQuickRows");
+    allTemplates = document.getElementById("planPaletteAllTemplates");
+    allTemplatesToggle = document.getElementById("planPaletteAllTemplatesToggle");
+    quickEmpty = document.getElementById("planPaletteQuickEmpty");
     manageButton = document.getElementById("planPaletteManage");
     placementBanner = document.getElementById("planPalettePlacement");
     workspace = root?.closest(".plan-workspace");
-    if (!root || !trigger || !closeButton || !searchInput || !categorySelect || !status || !rows || !manageButton || !workspace) {
+    if (!root || !trigger || !closeButton || !searchInput || !categorySelect || !status || !rows
+      || !quickRows || !allTemplates || !allTemplatesToggle || !quickEmpty || !manageButton || !workspace) {
       return false;
     }
     initialized = true;
@@ -380,7 +468,10 @@
       setOpen(false);
     });
     manageButton.addEventListener("click", manageTemplates);
+    allTemplatesToggle.addEventListener("click", () => setAllTemplatesExpanded(!state.allTemplatesExpanded));
     root.addEventListener("click", handleClick);
+    root.addEventListener("dragstart", handleDragStart);
+    root.addEventListener("dragend", handleDragEnd);
     searchInput.addEventListener("input", event => {
       state.searchText = event.target.value;
       render();
@@ -408,6 +499,10 @@
       setOpen(false, { focus: false });
     },
     targetMarkup,
+    handleCalendarDrop,
+    handleCalendarDragOver,
+    handleCalendarDragState,
+    setAllTemplatesExpanded,
     getState: () => ({
       ...state,
       templates: [...state.templates],

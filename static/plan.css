@@ -438,6 +438,18 @@
     box-shadow: 0 12px 28px rgba(15, 23, 42, 0.14);
 }
 
+.sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+}
+
 .plan-palette[hidden] {
     display: none;
 }
@@ -445,6 +457,53 @@
 .plan-palette-header,
 .plan-palette-body {
     padding: 14px;
+}
+
+.plan-palette-section {
+    display: grid;
+    gap: 8px;
+}
+
+.plan-palette-section h3 {
+    margin: 0;
+    color: var(--muted);
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.plan-palette-section-toggle {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    min-height: 38px;
+    border: 1px solid var(--line);
+    border-radius: 7px;
+    padding: 7px 9px;
+    background: var(--panel2);
+    color: var(--text);
+    font: inherit;
+    font-weight: 700;
+    text-align: left;
+    cursor: pointer;
+}
+
+.plan-palette-section-toggle:hover {
+    border-color: var(--blue);
+}
+
+.plan-palette-row {
+    cursor: grab;
+}
+
+.plan-palette-row:active {
+    cursor: grabbing;
+}
+
+.plan-palette-row[aria-pressed="true"] {
+    border-color: var(--blue);
+    background: rgba(96, 165, 250, 0.18);
 }
 
 .plan-palette-header {
@@ -580,6 +639,34 @@
 
 .plan-palette-day-target:hover {
     background: rgba(96, 165, 250, 0.18);
+}
+
+.plan-day.is-palette-drop-valid {
+    outline: 2px dashed var(--blue);
+    outline-offset: -3px;
+}
+
+.plan-day.is-palette-drop-hover {
+    outline: 3px solid var(--blue);
+    outline-offset: -3px;
+    background: rgba(96, 165, 250, 0.12);
+}
+
+.plan-day.is-palette-drop-hover::after {
+    content: "Drop here";
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    border-radius: 4px;
+    padding: 3px 6px;
+    background: var(--blue);
+    color: var(--panel);
+    font-size: 10px;
+    font-weight: 700;
+}
+
+.plan-day {
+    position: relative;
 }
 
 .plan-palette-day-target:disabled {
