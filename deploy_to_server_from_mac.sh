@@ -69,6 +69,7 @@ tar -czf "$LOCAL_ARCHIVE" \
   --exclude="venv" \
   --exclude="env" \
   --exclude="__pycache__" \
+  --exclude=".pytest_cache" \
   --exclude="*.pyc" \
   --exclude=".DS_Store" \
   --exclude="*.db" \

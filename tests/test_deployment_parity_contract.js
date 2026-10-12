@@ -47,6 +47,7 @@ const webExcludes = [
     "venv",
     "env",
     "__pycache__",
+    ".pytest_cache",
     "*.pyc",
     ".DS_Store",
     "*.db",
