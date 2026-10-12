@@ -21,6 +21,13 @@ assert.match(itemSource, /Planned items unavailable/);
 assert.match(itemSource, /target_load/);
 assert.match(itemSource, /item_state === "draft"/);
 assert.match(itemSource, /structured workout with/);
+assert.match(itemSource, /role="listitem" tabindex="0" draggable="true"/);
+assert.match(itemSource, /data-plan-item-action="manage"/);
+assert.match(itemSource, /Manage \$\{escape\(title\)\} planned for/);
+assert.match(itemSource, /draggable="false"[\s\S]*data-plan-item-action="manage"/);
+assert.doesNotMatch(itemSource, /data-plan-item-action="(?:edit|move|drag-move)"/);
+assert.doesNotMatch(itemSource, /plan-planned-actions|plan-planned-move-handle/);
+assert.doesNotMatch(itemSource, /fetch(?:Daily|Weekly|Load)|update(?:Daily|Weekly|Load)/);
 assert.doesNotMatch(itemSource, /fetch\([^)]*method:\s*["'](?:POST|PUT|PATCH|DELETE)/);
 assert.doesNotMatch(itemSource, /user_note/);
 assert.match(planSource, /PlanItemsController\?\.init\?\.\(\{ onChange: renderPlanStrip \}\)/);
@@ -33,6 +40,8 @@ assert.match(templateSource, /plan_items\.js\?v=\{\{ asset_version \}\}/);
 assert.match(templateSource, /plan_items\.js[\s\S]*plan\.js/);
 assert.match(cssSource, /\.plan-planned-section/);
 assert.match(cssSource, /\.plan-planned-card\.is-historical/);
+assert.match(cssSource, /\.plan-planned-card\[data-plan-item-manageable="true"\]:focus-visible/);
+assert.match(cssSource, /\.plan-planned-manage:focus-visible/);
 assert.match(cssSource, /var\(--panel2\)/);
 assert.match(cssSource, /var\(--blue\)/);
 assert.match(cssSource, /overflow-wrap: anywhere/);
@@ -74,6 +83,18 @@ function deferred() {
   return { promise, resolve, reject };
 }
 
+function denverDateOffset(offset) {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/Denver",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(new Date());
+  const values = Object.fromEntries(parts.map(part => [part.type, Number(part.value)]));
+  const date = new Date(Date.UTC(values.year, values.month - 1, values.day + offset, 12));
+  return date.toISOString().slice(0, 10);
+}
+
 async function testController() {
   const requests = [];
   let changeCount = 0;
@@ -102,6 +123,9 @@ async function testController() {
   };
   vm.runInNewContext(itemSource, context);
   const controller = context.window.PlanItemsController;
+  const today = denverDateOffset(0);
+  const future = denverDateOffset(7);
+  const past = denverDateOffset(-1);
   assert.equal(controller.init({ onChange: () => { changeCount += 1; } }), true);
   assert.equal(controller.init({ onChange: () => { changeCount += 1; } }), true);
 
@@ -121,7 +145,7 @@ async function testController() {
     items: [
       {
         plan_item_id: 2,
-        planned_date: "2026-10-18",
+        planned_date: future,
         item_state: "committed",
         category: { category_name: "Endurance" },
         prescription: {
@@ -134,7 +158,7 @@ async function testController() {
       },
       {
         plan_item_id: 1,
-        planned_date: "2026-10-18",
+        planned_date: future,
         item_state: "draft",
         category: { category_name: "Endurance" },
         prescription: {
@@ -144,6 +168,18 @@ async function testController() {
           target_load: null,
           segments: [{ segment_order: 1 }],
         },
+      },
+      {
+        plan_item_id: 3,
+        planned_date: today,
+        item_state: "committed",
+        prescription: { title: "Today item" },
+      },
+      {
+        plan_item_id: 4,
+        planned_date: past,
+        item_state: "committed",
+        prescription: { title: "Past item" },
       },
       { plan_item_id: 99, planned_date: "not-a-date" },
     ],
@@ -162,12 +198,12 @@ async function testController() {
   assert.equal(state.status, "success");
   assert.equal(state.range.start, "2026-10-12");
   assert.equal(state.range.end, "2026-11-09");
-  assert.equal(state.items.map(item => item.plan_item_id).join(","), "2,1");
+  assert.equal(state.items.map(item => item.plan_item_id).join(","), "2,1,3,4");
   assert.equal(
-    controller.getItemsForDate("2026-10-18").map(item => item.plan_item_id).join(","),
+    controller.getItemsForDate(future).map(item => item.plan_item_id).join(","),
     "2,1",
   );
-  const rendered = controller.renderDaySection("2026-10-18");
+  const rendered = controller.renderDaySection(future);
   assert.match(rendered, /Planned activities/);
   assert.match(rendered, /data-plan-item-id="2"/);
   assert.match(rendered, /data-plan-item-id="1"/);
@@ -178,6 +214,24 @@ async function testController() {
   assert.equal((rendered.match(/>Planned</g) || []).length, 1);
   assert.doesNotMatch(rendered, /plan-planned-badge/);
   assert.match(rendered, /&lt;Unsafe item&gt;/);
+  assert.equal((rendered.match(/data-plan-item-action="manage"/g) || []).length, 1);
+  const fullDate = new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/Denver",
+    weekday: "long",
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+  }).format(new Date(`${future}T12:00:00Z`));
+  assert.ok(rendered.includes(`aria-label="Manage Second item planned for ${fullDate}"`));
+  assert.match(rendered, /draggable="false"/);
+  assert.match(rendered, /draggable="true"/);
+  assert.match(rendered, /Drag is optional; activate to edit/);
+  assert.doesNotMatch(rendered, />Edit<|>Move<|drag-move|plan-planned-actions/);
+  for (const historicalDate of [today, past]) {
+    const historical = controller.renderDaySection(historicalDate);
+    assert.match(historical, /Read-only/);
+    assert.doesNotMatch(historical, /data-plan-item-action="manage"|draggable="true"|tabindex="0"/);
+  }
   assert.doesNotMatch(rendered, /user_note|plan_prescription_id|owner_kind/);
   assert.ok(changeCount >= 3);
 
@@ -194,7 +248,201 @@ async function testController() {
   );
 }
 
-Promise.all([testApiWrapper(), testController()]).then(() => {
+function eventTarget({ card = null, manageButton = null, button = false, day = null } = {}) {
+  return {
+    closest(selector) {
+      if (selector === ".plan-planned-card[data-plan-item-id]") return card;
+      if (selector === '[data-plan-item-action="manage"]') return manageButton;
+      if (selector === "button, input, select, textarea, a") return button ? manageButton : null;
+      if (selector === "[data-plan-item-target]") return null;
+      if (selector === "[data-plan-date]") return day;
+      return null;
+    },
+  };
+}
+
+function createClassList() {
+  const values = new Set();
+  return {
+    add: (...names) => names.forEach(name => values.add(name)),
+    remove: (...names) => names.forEach(name => values.delete(name)),
+    contains: name => values.has(name),
+  };
+}
+
+function makeEvent(target, extra = {}) {
+  return {
+    target,
+    defaultPrevented: false,
+    propagationStopped: false,
+    preventDefault() { this.defaultPrevented = true; },
+    stopPropagation() { this.propagationStopped = true; },
+    ...extra,
+  };
+}
+
+async function testCardInteractionAndDragContracts() {
+  const listeners = new Map();
+  const today = denverDateOffset(0);
+  const yesterday = denverDateOffset(-1);
+  const tomorrow = denverDateOffset(1);
+  const sourceCard = {
+    dataset: { planItemId: "41", planItemManageable: "true" },
+    classList: createClassList(),
+  };
+  const manageButton = {
+    dataset: { planItemId: "41" },
+    classList: createClassList(),
+  };
+  const oldCard = {
+    dataset: { planItemId: "42", planItemManageable: "false" },
+    classList: createClassList(),
+  };
+  const days = [yesterday, today, tomorrow].map(planDate => ({
+    dataset: { planDate },
+    classList: createClassList(),
+    contains: () => false,
+  }));
+  const strip = {
+    dataset: {},
+    addEventListener(type, listener) {
+      const registrations = listeners.get(type) || [];
+      registrations.push(listener);
+      listeners.set(type, registrations);
+    },
+    querySelectorAll() {
+      return [...days, sourceCard, oldCard];
+    },
+  };
+  const editorCalls = { open: [], dragStart: [], drop: [] };
+  const context = {
+    window: {
+      escapeHtml: value => String(value ?? ""),
+      api: { fetchPlanItems: async () => ({ items: [] }) },
+      PlanItemEditor: {
+        itemDragMime: "application/x-training-plan-item-id",
+        open: (...args) => editorCalls.open.push(args),
+        handleDragStart: (itemId, event) => {
+          editorCalls.dragStart.push(itemId);
+          event.dataTransfer.setData("application/x-training-plan-item-id", String(itemId));
+          return true;
+        },
+        handleDrop: (...args) => editorCalls.drop.push(args),
+      },
+    },
+    document: {
+      getElementById: id => id === "planStrip" ? strip : null,
+      querySelectorAll: () => [...days, sourceCard, oldCard],
+    },
+  };
+  vm.runInNewContext(itemSource, context);
+  const controller = context.window.PlanItemsController;
+  let changes = 0;
+  controller.init({ onChange: () => { changes += 1; } });
+  const listenerCount = Array.from(listeners.values()).reduce((sum, rows) => sum + rows.length, 0);
+  controller.init({ onChange: () => { changes += 1; } });
+  assert.equal(
+    Array.from(listeners.values()).reduce((sum, rows) => sum + rows.length, 0),
+    listenerCount,
+    "repeated initialization must not duplicate delegated listeners",
+  );
+  controller.acceptCreatedItem({
+    plan_item_id: 41,
+    planned_date: tomorrow,
+    item_state: "committed",
+    prescription: { title: "Future ride" },
+  });
+  controller.acceptCreatedItem({
+    plan_item_id: 42,
+    planned_date: today,
+    item_state: "committed",
+    prescription: { title: "Today ride" },
+  });
+  const dispatch = (type, event) => {
+    for (const listener of listeners.get(type) || []) listener(event);
+  };
+
+  const normalClick = makeEvent(eventTarget({ card: sourceCard }));
+  dispatch("click", normalClick);
+  assert.equal(editorCalls.open.length, 1);
+  assert.equal(editorCalls.open[0][0].plan_item_id, 41);
+  assert.equal(editorCalls.open[0][2], "edit");
+
+  const ellipsisClick = makeEvent(eventTarget({ card: sourceCard, manageButton, button: true }));
+  dispatch("click", ellipsisClick);
+  assert.equal(editorCalls.open.length, 2);
+  assert.equal(editorCalls.open[1][1], manageButton);
+  assert.equal(ellipsisClick.propagationStopped, true);
+
+  for (const key of ["Enter", " "]) {
+    const keyEvent = makeEvent(eventTarget({ card: sourceCard }), { key });
+    dispatch("keydown", keyEvent);
+    assert.equal(keyEvent.defaultPrevented, true);
+  }
+  assert.equal(editorCalls.open.length, 4, "keyboard activation opens exactly once per key");
+  dispatch("click", makeEvent(eventTarget({ card: oldCard })));
+  assert.equal(editorCalls.open.length, 4, "read-only cards do not open the editor");
+
+  let transferred = [];
+  const dataTransfer = {
+    types: ["application/x-training-plan-item-id"],
+    setData(type, value) { transferred.push([type, value]); },
+    getData() { return "41"; },
+  };
+  const changesBeforeDrag = changes;
+  dispatch("dragstart", makeEvent(eventTarget({ card: sourceCard }), { dataTransfer }));
+  assert.deepEqual(transferred, [["application/x-training-plan-item-id", "41"]]);
+  assert.deepEqual(editorCalls.dragStart, ["41"]);
+  assert.equal(changes, changesBeforeDrag, "dragstart does not rerender the source card");
+  assert.equal(sourceCard.classList.contains("is-dragging"), true);
+  assert.equal(days.find(day => day.dataset.planDate === tomorrow).classList.contains("is-item-drop-valid"), true);
+  assert.equal(days.find(day => day.dataset.planDate === today).classList.contains("is-item-drop-valid"), false);
+  assert.equal(days.find(day => day.dataset.planDate === yesterday).classList.contains("is-item-drop-valid"), false);
+
+  const blockedDay = days.find(day => day.dataset.planDate === today);
+  const blockedDragOver = makeEvent(eventTarget({ day: blockedDay }), { dataTransfer });
+  dispatch("dragover", blockedDragOver);
+  assert.equal(blockedDragOver.defaultPrevented, false);
+  const dropDay = days.find(day => day.dataset.planDate === tomorrow);
+  const allowedDragOver = makeEvent(eventTarget({ day: dropDay }), { dataTransfer });
+  dispatch("dragover", allowedDragOver);
+  assert.equal(allowedDragOver.defaultPrevented, true);
+  assert.equal(dropDay.classList.contains("is-item-drop-hover"), true);
+  const dropEvent = makeEvent(eventTarget({ day: dropDay }), { dataTransfer });
+  dispatch("drop", dropEvent);
+  assert.equal(editorCalls.drop.length, 1);
+  assert.equal(dropEvent.defaultPrevented, true);
+
+  dispatch("dragend", makeEvent(eventTarget({ card: sourceCard })));
+  assert.equal(editorCalls.drop.length, 1, "dragend never submits a mutation");
+  const postDragClick = makeEvent(eventTarget({ card: sourceCard }));
+  dispatch("click", postDragClick);
+  assert.equal(postDragClick.defaultPrevented, true);
+  assert.equal(editorCalls.open.length, 4, "post-drag click is suppressed");
+  dispatch("pointerdown", makeEvent(eventTarget({ card: sourceCard })));
+  dispatch("click", makeEvent(eventTarget({ card: sourceCard })));
+  assert.equal(editorCalls.open.length, 5, "a normal click works after the drag guard resets");
+
+  let preventedMenuDrag = false;
+  dispatch("dragstart", makeEvent(
+    eventTarget({ card: sourceCard, manageButton, button: true }),
+    { dataTransfer, preventDefault() { preventedMenuDrag = true; } },
+  ));
+  assert.equal(preventedMenuDrag, true);
+  assert.equal(editorCalls.dragStart.length, 1, "ellipsis is not a drag source");
+
+  const canceledTransfer = {
+    types: ["application/x-training-plan-item-id"],
+    setData() {},
+    getData() { return "41"; },
+  };
+  dispatch("dragstart", makeEvent(eventTarget({ card: sourceCard }), { dataTransfer: canceledTransfer }));
+  dispatch("dragend", makeEvent(eventTarget({ card: sourceCard })));
+  dispatch("click", makeEvent(eventTarget({ card: sourceCard })));
+  assert.equal(editorCalls.open.length, 5, "cancelled drag does not open the editor");
+}
+
+Promise.all([testApiWrapper(), testController(), testCardInteractionAndDragContracts()]).then(() => {
   console.log("Plan planned-items overlay contract tests passed.");
 }).catch(error => {
   console.error(error);

@@ -41,6 +41,16 @@
     return `${values.year}-${values.month}-${values.day}`;
   }
 
+  function formatFullDate(dateKey) {
+    return new Intl.DateTimeFormat("en-US", {
+      timeZone: PLAN_TIME_ZONE,
+      weekday: "long",
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+    }).format(new Date(`${dateKey}T12:00:00Z`));
+  }
+
   function setState(nextState) {
     Object.assign(state, nextState);
     if (typeof onChange === "function") {
@@ -96,31 +106,33 @@
       isHistorical ? "is-historical" : "",
       isDraft ? "is-draft" : "",
     ].filter(Boolean).join(" ");
-    const context = ["Planned", prescription.title, category, sport, ...metrics];
+    const title = prescription.title || "Untitled planned item";
+    const fullDate = formatFullDate(dateKey);
+    const context = ["Planned", title, `planned for ${fullDate}`, category, sport, ...metrics];
     if (segmentCount > 0) {
       context.push(`structured workout with ${segmentCount} segments`);
     }
     if (statusLabel) {
       context.push(statusLabel);
     }
+    if (isManageable) {
+      context.push("Drag is optional; activate to edit. The Manage button also opens the editor.");
+    }
     return `
       <li class="${classes}" data-plan-item-id="${escape(item?.plan_item_id)}"
+          data-plan-item-manageable="${isManageable ? "true" : "false"}"
+          ${isManageable ? 'role="listitem" tabindex="0" draggable="true"' : ""}
           aria-label="${escape(context.filter(Boolean).join(", "))}">
         ${statusLabel ? `<div class="plan-planned-card-heading"><span class="plan-planned-state">${escape(statusLabel)}</span></div>` : ""}
-        <div class="plan-planned-title">${escape(prescription.title || "Untitled planned item")}</div>
+        <div class="plan-planned-title-row">
+          <span class="plan-planned-title">${escape(title)}</span>
+          ${isManageable ? `<button type="button" class="plan-planned-manage" draggable="false"
+            data-plan-item-action="manage" data-plan-item-id="${escape(item?.plan_item_id)}"
+            aria-label="Manage ${escape(title)} planned for ${escape(fullDate)}">⋮</button>` : ""}
+        </div>
         <div class="plan-planned-meta">${escape([category, sport].filter(Boolean).join(" · "))}</div>
         ${metrics.length ? `<div class="plan-planned-metrics">${escape(metrics.join(" · "))}</div>` : ""}
         ${segmentCount > 0 ? `<div class="plan-planned-structure">Structured · ${segmentCount} segments</div>` : ""}
-        ${isManageable ? `
-          <div class="plan-planned-actions">
-            <button type="button" class="plan-planned-action" data-plan-item-action="edit"
-              data-plan-item-id="${escape(item?.plan_item_id)}">Edit</button>
-            <button type="button" class="plan-planned-action" data-plan-item-action="move"
-              data-plan-item-id="${escape(item?.plan_item_id)}">Move</button>
-            <button type="button" class="plan-planned-move-handle" draggable="true"
-              data-plan-item-action="drag-move" data-plan-item-id="${escape(item?.plan_item_id)}"
-              aria-label="Move ${escape(prescription.title || "planned item")}">↕</button>
-          </div>` : ""}
       </li>
     `;
   }
@@ -208,8 +220,162 @@
     if (typeof options.onChange === "function") {
       onChange = options.onChange;
     }
+    bindCardInteractions();
     initialized = true;
     return initialized;
+  }
+
+  let activeDragItemId = null;
+  let suppressClickForItemId = null;
+
+  function bindCardInteractions() {
+    if (typeof document === "undefined") {
+      return;
+    }
+    const strip = document.getElementById("planStrip");
+    if (!strip || strip.dataset.planItemBound === "true") {
+      return;
+    }
+    const getCard = target => target?.closest?.(".plan-planned-card[data-plan-item-id]");
+    const getItem = itemId => state.items.find(item =>
+      String(item.plan_item_id) === String(itemId));
+    const clearItemDropState = () => {
+      strip.querySelectorAll(
+        ".is-item-drop-valid, .is-item-drop-hover, .is-dragging",
+      ).forEach(element => element.classList.remove(
+        "is-item-drop-valid",
+        "is-item-drop-hover",
+        "is-dragging",
+      ));
+    };
+
+    strip.addEventListener("pointerdown", () => {
+      suppressClickForItemId = null;
+    });
+    strip.addEventListener("click", event => {
+      const moveTarget = event.target.closest?.("[data-plan-item-target]");
+      if (moveTarget) {
+        event.preventDefault();
+        window.PlanItemEditor?.handleTarget?.(moveTarget.dataset.planItemTarget);
+        return;
+      }
+      const card = getCard(event.target);
+      if (!card) {
+        return;
+      }
+      const itemId = card.dataset.planItemId;
+      if (suppressClickForItemId !== null) {
+        const shouldSuppress = String(suppressClickForItemId) === String(itemId);
+        suppressClickForItemId = null;
+        if (shouldSuppress) {
+          event.preventDefault();
+          event.stopPropagation();
+          return;
+        }
+      }
+      const manageButton = event.target.closest?.('[data-plan-item-action="manage"]');
+      if (manageButton) {
+        event.preventDefault();
+        event.stopPropagation();
+        const item = getItem(manageButton.dataset.planItemId);
+        if (item && card.dataset.planItemManageable === "true") {
+          window.PlanItemEditor?.open?.(item, manageButton, "edit", false);
+        }
+        return;
+      }
+      if (card.dataset.planItemManageable !== "true") {
+        return;
+      }
+      const item = getItem(itemId);
+      if (item) {
+        window.PlanItemEditor?.open?.(item, card, "edit", false);
+      }
+    });
+    strip.addEventListener("keydown", event => {
+      const card = getCard(event.target);
+      if (!card || event.target.closest?.("button, input, select, textarea, a")) {
+        return;
+      }
+      if (event.key !== "Enter" && event.key !== " " && event.key !== "Spacebar") {
+        return;
+      }
+      suppressClickForItemId = null;
+      if (card.dataset.planItemManageable !== "true") {
+        return;
+      }
+      const item = getItem(card.dataset.planItemId);
+      if (!item) {
+        return;
+      }
+      event.preventDefault();
+      window.PlanItemEditor?.open?.(item, card, "edit", false);
+    });
+    strip.addEventListener("dragstart", event => {
+      const card = getCard(event.target);
+      const manageButton = event.target.closest?.('[data-plan-item-action="manage"]');
+      if (manageButton) {
+        event.preventDefault();
+        return;
+      }
+      if (!card || card.dataset.planItemManageable !== "true") {
+        return;
+      }
+      const itemId = card.dataset.planItemId;
+      if (!window.PlanItemEditor?.handleDragStart?.(itemId, event)) {
+        event.preventDefault();
+        return;
+      }
+      activeDragItemId = String(itemId);
+      card.classList.add("is-dragging");
+      strip.querySelectorAll("[data-plan-date]").forEach(day => {
+        if (day.dataset.planDate > getDenverTodayKey()) {
+          day.classList.add("is-item-drop-valid");
+        }
+      });
+    });
+    strip.addEventListener("dragover", event => {
+      const hasItemMime = event.dataTransfer?.types?.includes(
+        window.PlanItemEditor?.itemDragMime,
+      );
+      const day = event.target.closest?.("[data-plan-date]");
+      if (!activeDragItemId || !hasItemMime || !day
+          || day.dataset.planDate <= getDenverTodayKey()) {
+        return;
+      }
+      event.preventDefault();
+      day.classList.add("is-item-drop-hover");
+    });
+    strip.addEventListener("dragleave", event => {
+      const day = event.target.closest?.("[data-plan-date]");
+      if (day && !day.contains(event.relatedTarget)) {
+        day.classList.remove("is-item-drop-hover");
+      }
+    });
+    strip.addEventListener("drop", event => {
+      const hasItemMime = event.dataTransfer?.types?.includes(
+        window.PlanItemEditor?.itemDragMime,
+      );
+      const transferredItemId = event.dataTransfer?.getData(
+        window.PlanItemEditor?.itemDragMime,
+      );
+      const day = event.target.closest?.("[data-plan-date]");
+      if (!activeDragItemId || String(transferredItemId) !== activeDragItemId
+          || !hasItemMime || !day
+          || day.dataset.planDate <= getDenverTodayKey()) {
+        return;
+      }
+      event.preventDefault();
+      clearItemDropState();
+      window.PlanItemEditor?.handleDrop?.(day.dataset.planDate, event);
+    });
+    strip.addEventListener("dragend", () => {
+      if (activeDragItemId !== null) {
+        suppressClickForItemId = activeDragItemId;
+        activeDragItemId = null;
+      }
+      clearItemDropState();
+    });
+    strip.dataset.planItemBound = "true";
   }
 
   function getState() {

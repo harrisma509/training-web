@@ -400,41 +400,52 @@
     background: var(--panel);
 }
 
-.plan-planned-card:not(.is-historical) {
-    cursor: pointer;
-}
-
-.plan-planned-actions {
-    display: flex;
-    align-items: center;
-    gap: 5px;
-    margin-top: 4px;
-}
-
-.plan-planned-action,
-.plan-planned-move-handle {
-    min-height: 28px;
-    border: 1px solid var(--line);
-    border-radius: 5px;
-    padding: 3px 7px;
-    background: var(--panel2);
-    color: var(--text);
-    font: inherit;
-    font-size: 10px;
-    cursor: pointer;
-}
-
-.plan-planned-move-handle {
+.plan-planned-card[data-plan-item-manageable="true"] {
     cursor: grab;
 }
 
-.plan-planned-move-handle:active {
-    cursor: grabbing;
+.plan-planned-card[data-plan-item-manageable="true"]:focus-visible {
+    outline: 2px solid var(--focus-ring, var(--blue));
+    outline-offset: 2px;
 }
 
-.plan-planned-action:hover,
-.plan-planned-move-handle:hover {
+.plan-planned-card.is-dragging {
+    cursor: grabbing;
+    opacity: 0.72;
+}
+
+.plan-planned-title-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 4px;
+}
+
+.plan-planned-manage {
+    flex: 0 0 26px;
+    width: 26px;
+    min-height: 26px;
+    border: 1px solid transparent;
+    border-radius: 5px;
+    padding: 0;
+    background: transparent;
+    color: var(--muted);
+    font: inherit;
+    font-size: 18px;
+    line-height: 1;
+    cursor: pointer;
+}
+
+.plan-planned-manage:hover,
+.plan-planned-manage:focus-visible {
+    background: var(--panel2);
     border-color: var(--blue);
+    color: var(--text);
+}
+
+.plan-planned-manage:focus-visible {
+    outline: 2px solid var(--focus-ring, var(--blue));
+    outline-offset: 1px;
 }
 
 .plan-day.is-item-drop-valid {
@@ -579,10 +590,22 @@
     position: sticky;
     bottom: 0;
     display: flex;
+    align-items: center;
+    justify-content: space-between;
     flex-wrap: wrap;
     gap: 8px;
     padding-top: 10px;
     background: var(--panel);
+}
+
+.plan-item-editor-primary-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.plan-item-editor-delete {
+    margin-left: auto;
 }
 
 .plan-item-day-target {
