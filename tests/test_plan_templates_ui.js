@@ -1,6 +1,7 @@
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const vm = require("node:vm");
+const activityPresentation = require("../static/activity-presentation.js");
 
 const templateSource = fs.readFileSync("templates/partials/panes/plan_pane.html", "utf8");
 const indexSource = fs.readFileSync("templates/index.html", "utf8");
@@ -15,6 +16,8 @@ assert.match(templateSource, /id="planTemplateLibrary"[^>]*role="dialog"[^>]*ari
 assert.match(templateSource, /aria-labelledby="planTemplateLibraryTitle"/);
 assert.match(indexSource, /static\/plan_templates\.js\?v=\{\{ asset_version \}\}/);
 assert.match(indexSource, /plan_templates\.js[\s\S]*plan\.js/);
+assert.match(indexSource, /activity-presentation\.js[\s\S]*plan_templates\.js/);
+assert.equal(activityPresentation.getActivityTypeLabel("PhysicalTherapy"), "Physical Therapy");
 
 assert.match(moduleSource, /window\.PlanTemplateLibraryController/);
 assert.match(moduleSource, /function init\(\)/);
@@ -254,6 +257,7 @@ function createPlanHarness() {
   };
   const window = {
     api,
+    ActivityPresentation: activityPresentation,
     confirm: () => {
       confirmCalls += 1;
       return true;
@@ -321,6 +325,18 @@ async function runBehavioralTests() {
   const harness = createPlanHarness();
   harness.controller.open();
   harness.dispatchRootAction("create");
+  assert.equal(
+    (harness.content.innerHTML.match(/<option value="PhysicalTherapy"[^>]*>Physical Therapy<\/option>/g) || []).length,
+    1,
+  );
+  for (const [value, label] of [
+    ["Strength", "Strength"],
+    ["Workout", "Workout"],
+    ["Mobility", "Mobility"],
+    ["Recovery", "Recovery"],
+  ]) {
+    assert.match(harness.content.innerHTML, new RegExp(`<option value="${value}"[^>]*>${label}</option>`));
+  }
   harness.dispatchChange("sport_type", "Ride");
   harness.dispatchChange("sport_type", "__custom__");
   harness.dispatchChange("activity_category", "Strength");
@@ -338,6 +354,11 @@ async function runBehavioralTests() {
   const serializerHarness = createPlanHarness();
   serializerHarness.controller.open();
   serializerHarness.dispatchRootAction("create");
+  assert.equal(
+    (serializerHarness.content.innerHTML.match(/<option value="PhysicalTherapy"[^>]*>Physical Therapy<\/option>/g) || []).length,
+    1,
+  );
+  serializerHarness.dispatchChange("sport_type", "PhysicalTherapy");
   serializerHarness.dispatchChange("template_name", "Shared name");
   serializerHarness.dispatchChange("category_id", "1");
   serializerHarness.dispatchChange("template_description", "Shared description");
@@ -349,15 +370,25 @@ async function runBehavioralTests() {
   assert.equal(serializerHarness.mutationPayloads[0].prescription.title, "Shared name");
   assert.equal(serializerHarness.mutationPayloads[0].prescription.description, "Shared description");
   assert.equal(serializerHarness.mutationPayloads[0].prescription.target_duration_min, 0);
+  assert.equal(serializerHarness.mutationPayloads[0].prescription.sport_type, "PhysicalTherapy");
   assert.equal(serializerHarness.mutationPayloads[0].segments.length, 0);
   assert.equal(serializerHarness.mutationPayloads[0].prescription.target_load_source, null);
   assert.equal(serializerHarness.mutationPayloads[0].sort_order, 0);
   assert.equal(serializerHarness.mutationPayloads[0].is_favorite, false);
 
   const editHarness = createPlanHarness();
+  const fetchExistingTemplate = editHarness.api.fetchPlanTemplate;
+  editHarness.api.fetchPlanTemplate = async templateId => {
+    const detail = await fetchExistingTemplate(templateId);
+    return {
+      ...detail,
+      prescription: { ...detail.prescription, sport_type: "PhysicalTherapy" },
+    };
+  };
   editHarness.controller.open();
   editHarness.dispatchRootAction("edit", 7);
   await flush();
+  assert.match(editHarness.content.innerHTML, /<option value="PhysicalTherapy" selected>Physical Therapy<\/option>/);
   assert.match(editHarness.content.innerHTML, /<details class="plan-template-more-options" open>/);
   assert.match(editHarness.content.innerHTML, /id="plan-template-is-favorite"[^>]*checked/);
   assert.match(editHarness.content.innerHTML, /Distance \(mi\)/);
@@ -367,6 +398,7 @@ async function runBehavioralTests() {
   const preservedPayload = editHarness.mutationPayloads[0];
   assert.equal(preservedPayload.prescription.title, "Legacy prescription title");
   assert.equal(preservedPayload.prescription.description, "Legacy prescription description");
+  assert.equal(preservedPayload.prescription.sport_type, "PhysicalTherapy");
   assert.equal(preservedPayload.is_favorite, true);
   editHarness.dispatchChange("template_name", "Unified name");
   editHarness.dispatchChange("template_description", "Unified description");
@@ -375,6 +407,38 @@ async function runBehavioralTests() {
   const unifiedPayload = editHarness.mutationPayloads[1];
   assert.equal(unifiedPayload.prescription.title, "Unified name");
   assert.equal(unifiedPayload.prescription.description, "Unified description");
+
+  const presentationHarness = createPlanHarness();
+  presentationHarness.controller.open();
+  await flush();
+  presentationHarness.resolveTemplates({
+    templates: [
+      {
+        plan_template_id: 18,
+        template_name: "PT template",
+        template_description: null,
+        sort_order: 0,
+        is_favorite: true,
+        category: { plan_category_id: 3, category_name: "Rehabilitation" },
+        prescription: { sport_type: "PhysicalTherapy", segment_count: 0 },
+      },
+      {
+        plan_template_id: 19,
+        template_name: "Prehab",
+        template_description: null,
+        sort_order: 1,
+        is_favorite: true,
+        category: { plan_category_id: 4, category_name: "Prehab" },
+        prescription: { sport_type: "Workout", activity_category: "Rehabilitation", segment_count: 0 },
+      },
+    ],
+  });
+  await flush();
+  assert.match(presentationHarness.content.innerHTML, /Rehabilitation/);
+  assert.match(presentationHarness.content.innerHTML, /Physical Therapy/);
+  assert.match(presentationHarness.content.innerHTML, /Prehab/);
+  assert.match(presentationHarness.content.innerHTML, /Workout/);
+  assert.doesNotMatch(presentationHarness.content.innerHTML, /PhysicalTherapy/);
 
   harness.setConfirmResult(false);
   harness.dispatchRootAction("close");

@@ -55,6 +55,12 @@
   function itemPayload(plannedDate = value("planned_date")) {
     const item = state.item;
     const prescription = item.prescription || {};
+    const sportTypeField = form?.elements?.namedItem("sport_type");
+    const enteredSportType = value("sport_type", prescription.sport_type || "").trim();
+    const sportType = sportTypeField?.dataset?.canonicalValue
+      && enteredSportType === sportTypeField.dataset.presentationLabel
+      ? sportTypeField.dataset.canonicalValue
+      : enteredSportType || null;
     let segments;
     try {
       segments = JSON.parse(value("segments", "[]"));
@@ -72,7 +78,7 @@
       prescription: {
         title: value("title", prescription.title).trim(),
         description: value("description", prescription.description || "").trim() || null,
-        sport_type: value("sport_type", prescription.sport_type || "").trim() || null,
+        sport_type: sportType,
         activity_category: value("activity_category", prescription.activity_category || "").trim() || null,
         trainer: value("trainer", prescription.trainer == null ? "" : String(prescription.trainer)) === ""
           ? null : value("trainer") === "true",
@@ -94,6 +100,12 @@
     if (state.mode === "idle") return;
     const item = state.item;
     const prescription = item.prescription || {};
+    const rawSportType = prescription.sport_type || "";
+    const sportLabel = window.ActivityPresentation?.getActivityTypeLabel(rawSportType);
+    const displayedSportType = sportLabel || rawSportType;
+    const sportPresentationAttributes = sportLabel && sportLabel !== rawSportType
+      ? `data-canonical-value="${escape(rawSportType)}" data-presentation-label="${escape(sportLabel)}"`
+      : "";
     const categoryRows = state.categories.length ? state.categories : (item.category ? [item.category] : []);
     const categories = categoryRows.map(category =>
       `<option value="${escape(category.plan_category_id)}" ${String(category.plan_category_id) === String(item.category?.plan_category_id) ? "selected" : ""}>${escape(category.category_name)}</option>`).join("");
@@ -112,7 +124,7 @@
           <label>Sort order<input name="sort_order" type="number" min="0" step="1" value="${escape(item.sort_order ?? 0)}"></label>
           <label>Title<input name="title" maxlength="200" required value="${escape(prescription.title)}"></label>
           <label>Description<textarea name="description" maxlength="2000">${escape(prescription.description || "")}</textarea></label>
-          <label>Sport type<input name="sport_type" maxlength="100" value="${escape(prescription.sport_type || "")}"></label>
+          <label>Sport type<input name="sport_type" maxlength="100" value="${escape(displayedSportType)}" ${sportPresentationAttributes}></label>
           <label>Activity category<input name="activity_category" maxlength="100" value="${escape(prescription.activity_category || "")}"></label>
           <label>Trainer<select name="trainer"><option value="">Not specified</option><option value="true" ${prescription.trainer === true ? "selected" : ""}>Yes</option><option value="false" ${prescription.trainer === false ? "selected" : ""}>No</option></select></label>
           <label>Duration (min)<input name="target_duration_min" type="number" min="0" step="0.01" value="${escape(prescription.target_duration_min ?? "")}"></label>

@@ -97,9 +97,11 @@
 
   function templateRow(template) {
     const prescription = template.prescription || {};
+    const sportType = prescription.sport_type || prescription.activity_category || "";
+    const sportLabel = window.ActivityPresentation?.getActivityTypeLabel(sportType) || sportType;
     const details = [
       template.category?.category_name || "Uncategorized",
-      prescription.sport_type || prescription.activity_category || "",
+      sportLabel,
     ].filter(Boolean);
     if (prescription.target_duration_min !== null && prescription.target_duration_min !== undefined) {
       details.push(`${prescription.target_duration_min} min`);

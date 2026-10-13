@@ -287,7 +287,12 @@ class PlanItemRouteTests(unittest.TestCase):
     def test_clone_route_returns_created_item(self):
         planned_date = future_planned_date()
         detail = SimpleNamespace(
-            row=item_row(plan_item_id=102, planned_date=planned_date),
+            row=item_row(
+                plan_item_id=102,
+                planned_date=planned_date,
+                sport_type="PhysicalTherapy",
+                activity_category="physical_therapy",
+            ),
             segments=[segment_row()],
         )
         payload = CreateFromTemplatePayload(
@@ -307,10 +312,23 @@ class PlanItemRouteTests(unittest.TestCase):
 
         self.assertEqual(response.status_code, 201)
         self.assertEqual(response_json(response)["plan_item_id"], 102)
+        self.assertEqual(
+            response_json(response)["prescription"]["sport_type"],
+            "PhysicalTherapy",
+        )
+        self.assertEqual(
+            response_json(response)["prescription"]["activity_category"],
+            "physical_therapy",
+        )
         create.assert_called_once_with(payload)
 
     def test_clone_service_locks_template_then_prescription_and_commits_once(self):
-        detail = item_row(plan_item_id=101, plan_prescription_id=201)
+        detail = item_row(
+            plan_item_id=101,
+            plan_prescription_id=201,
+            sport_type="PhysicalTherapy",
+            activity_category="physical_therapy",
+        )
         cursor = TransactionCursor(
             one=[
                 {
@@ -321,7 +339,10 @@ class PlanItemRouteTests(unittest.TestCase):
                     "is_active": True,
                 },
                 {"plan_category_id": 1, "is_active": True},
-                prescription_row(),
+                prescription_row(
+                    sport_type="PhysicalTherapy",
+                    activity_category="physical_therapy",
+                ),
                 {"is_future": True},
                 {"plan_prescription_id": 201},
                 {"plan_item_id": 101},
@@ -341,8 +362,19 @@ class PlanItemRouteTests(unittest.TestCase):
             result = create_item_from_template(payload)
 
         self.assertEqual(result.row["plan_item_id"], 101)
+        self.assertEqual(result.row["sport_type"], "PhysicalTherapy")
+        self.assertEqual(result.row["activity_category"], "physical_therapy")
         self.assertEqual(conn.commit_count, 1)
         self.assertEqual(conn.rollback_count, 0)
+        item_prescription_params = next(
+            params
+            for statement, params in cursor.executed
+            if "insert into public.plan_prescription" in statement.lower()
+        )
+        self.assertEqual(
+            item_prescription_params[2:4],
+            ("PhysicalTherapy", "physical_therapy"),
+        )
         sql = [statement.lower() for statement, _ in cursor.executed]
         self.assertIn("from public.plan_template", sql[0])
         self.assertIn("for update", sql[0])

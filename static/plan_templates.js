@@ -10,6 +10,7 @@
     ["Hike", "Hike"],
     ["Strength", "Strength"],
     ["Workout", "Workout"],
+    ["Physical Therapy", "PhysicalTherapy"],
     ["Mobility", "Mobility"],
     ["Recovery", "Recovery"],
   ];
@@ -156,7 +157,9 @@
   function cardMarkup(row) {
     const prescription = row.prescription || {};
     const details = [];
-    if (prescription.sport_type) details.push(escapeHtml(prescription.sport_type));
+    const sportType = prescription.sport_type || "";
+    const sportLabel = window.ActivityPresentation?.getActivityTypeLabel(sportType) || sportType;
+    if (sportLabel) details.push(escapeHtml(sportLabel));
     if (prescription.target_duration_min !== null && prescription.target_duration_min !== undefined) {
       details.push(`${escapeHtml(prescription.target_duration_min)} min`);
     }

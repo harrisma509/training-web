@@ -112,6 +112,13 @@ def mutation_payload(**overrides):
     return payload
 
 
+def physical_therapy_payload():
+    payload = mutation_payload()
+    payload["prescription"]["sport_type"] = "PhysicalTherapy"
+    payload["prescription"]["activity_category"] = "physical_therapy"
+    return payload
+
+
 def request_with_headers(headers=()):
     return Request(
         {
@@ -266,6 +273,33 @@ class PlanRouteTests(unittest.TestCase):
         self.assertEqual(params, [3, 200])
         self.assertNotIn("daily_training", sql)
         self.assertNotIn("strava_activities", sql)
+
+    def test_physical_therapy_identity_round_trips_in_template_list_and_detail(self):
+        row = template_row(
+            sport_type="PhysicalTherapy",
+            activity_category="physical_therapy",
+        )
+        with patch(
+            "routes.plan.db_conn",
+            return_value=FakeConnection(FakeCursor(rows=[row])),
+        ):
+            list_response = api_plan_templates()
+
+        listed = response_json(list_response)["templates"][0]["prescription"]
+        self.assertEqual(listed["sport_type"], "PhysicalTherapy")
+        self.assertEqual(listed["activity_category"], "physical_therapy")
+
+        with patch(
+            "routes.plan.db_conn",
+            return_value=FakeConnection(
+                FakeCursor(one=row, rows=[segment_row(1)])
+            ),
+        ):
+            detail_response = api_plan_template_detail(12)
+
+        detailed = response_json(detail_response)["prescription"]
+        self.assertEqual(detailed["sport_type"], "PhysicalTherapy")
+        self.assertEqual(detailed["activity_category"], "physical_therapy")
 
     def test_template_collection_defaults_and_rejects_invalid_bounds_before_db(self):
         cursor = FakeCursor()
@@ -474,6 +508,31 @@ class PlanMutationRouteTests(unittest.TestCase):
         self.assertEqual(response_json(response)["plan_template_id"], 12)
         self.assertFalse(response_json(response)["is_favorite"])
 
+    def test_create_and_update_routes_round_trip_physical_therapy_identity(self):
+        payload = PlanTemplatePayload.model_validate(physical_therapy_payload())
+        detail = SimpleNamespace(
+            row=template_row(
+                sport_type="PhysicalTherapy",
+                activity_category="physical_therapy",
+            ),
+            segments=[],
+        )
+        with patch("routes.plan.create_template", return_value=detail) as create:
+            created = api_plan_template_create(request_with_headers(), payload)
+        self.assertEqual(created.status_code, 201)
+        created_prescription = response_json(created)["prescription"]
+        self.assertEqual(created_prescription["sport_type"], "PhysicalTherapy")
+        self.assertEqual(created_prescription["activity_category"], "physical_therapy")
+        create.assert_called_once_with(payload)
+
+        with patch("routes.plan.update_template", return_value=detail) as update:
+            updated = api_plan_template_update(12, request_with_headers(), payload)
+        self.assertEqual(updated.status_code, 200)
+        updated_prescription = response_json(updated)["prescription"]
+        self.assertEqual(updated_prescription["sport_type"], "PhysicalTherapy")
+        self.assertEqual(updated_prescription["activity_category"], "physical_therapy")
+        update.assert_called_once_with(12, payload)
+
     def test_cross_origin_create_is_rejected_without_service_call(self):
         with patch("routes.plan.create_template") as create:
             response = api_plan_template_create(
@@ -535,6 +594,34 @@ class PlanServiceTransactionTests(unittest.TestCase):
         sql = "\n".join(statement for statement, _ in cursor.executed).lower()
         self.assertNotIn("plan_item", sql)
         self.assertNotIn("plan_batch", sql)
+
+    def test_create_persists_physical_therapy_sport_and_activity_category(self):
+        cursor = TransactionCursor(
+            [
+                {"plan_category_id": 1},
+                {"plan_prescription_id": 42},
+                {"plan_template_id": 12},
+                template_row(
+                    sport_type="PhysicalTherapy",
+                    activity_category="physical_therapy",
+                ),
+                [],
+            ]
+        )
+        conn = TransactionConnection(cursor)
+        payload = PlanTemplatePayload.model_validate(physical_therapy_payload())
+        with patch("services.plan_service.db_conn", return_value=conn):
+            detail = create_template(payload)
+
+        insert_params = next(
+            params
+            for statement, params in cursor.executed
+            if "insert into public.plan_prescription" in statement.lower()
+        )
+        self.assertEqual(insert_params[2:4], ("PhysicalTherapy", "physical_therapy"))
+        self.assertEqual(detail.row["sport_type"], "PhysicalTherapy")
+        self.assertEqual(detail.row["activity_category"], "physical_therapy")
+        self.assertEqual(conn.commit_count, 1)
 
     def test_create_failure_rolls_back_without_commit(self):
         cursor = TransactionCursor(
@@ -599,6 +686,39 @@ class PlanServiceTransactionTests(unittest.TestCase):
             statements[5],
         )
         self.assertNotIn("plan_item", "\n".join(statements))
+
+    def test_update_persists_physical_therapy_sport_and_activity_category(self):
+        cursor = TransactionCursor(
+            [
+                {
+                    "plan_template_id": 12,
+                    "plan_prescription_id": 42,
+                    "prescription_owner_kind": "template",
+                    "is_active": True,
+                },
+                {"plan_prescription_id": 42, "owner_kind": "template"},
+                {"plan_category_id": 1},
+                template_row(
+                    sport_type="PhysicalTherapy",
+                    activity_category="physical_therapy",
+                ),
+                [],
+            ]
+        )
+        conn = TransactionConnection(cursor)
+        payload = PlanTemplatePayload.model_validate(physical_therapy_payload())
+        with patch("services.plan_service.db_conn", return_value=conn):
+            detail = update_template(12, payload)
+
+        update_params = next(
+            params
+            for statement, params in cursor.executed
+            if "update public.plan_prescription" in statement.lower()
+        )
+        self.assertEqual(update_params[2:4], ("PhysicalTherapy", "physical_therapy"))
+        self.assertEqual(detail.row["sport_type"], "PhysicalTherapy")
+        self.assertEqual(detail.row["activity_category"], "physical_therapy")
+        self.assertEqual(conn.commit_count, 1)
 
     def test_update_omitting_favorite_preserves_existing_value(self):
         cursor = TransactionCursor(

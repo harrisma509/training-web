@@ -1,6 +1,7 @@
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const vm = require("node:vm");
+const activityPresentation = require("../static/activity-presentation.js");
 
 const apiSource = fs.readFileSync("static/api.js", "utf8");
 const editorSource = fs.readFileSync("static/plan_item_editor.js", "utf8");
@@ -77,7 +78,12 @@ function createHarness() {
   };
   const form = {
     elements: {
-      namedItem: name => ({ value: formValues[name] ?? "" }),
+      namedItem: name => ({
+        value: formValues[name] ?? "",
+        dataset: name === "sport_type" && formValues[name] === "Physical Therapy"
+          ? { canonicalValue: "PhysicalTherapy", presentationLabel: "Physical Therapy" }
+          : {},
+      }),
     },
   };
   const status = {};
@@ -152,6 +158,7 @@ function createHarness() {
   const context = {
     document,
     window: {
+      ActivityPresentation: activityPresentation,
       confirm: message => {
         calls.confirms.push(message);
         return calls.confirmResult === true;
@@ -295,9 +302,29 @@ async function testDeleteFromPlanConfirmationAndReadOnlyDates() {
   );
 }
 
+async function testPhysicalTherapyEditorLabelPreservesCanonicalToken() {
+  const harness = createHarness();
+  harness.item.prescription.sport_type = "PhysicalTherapy";
+  harness.formValues.sport_type = "Physical Therapy";
+  const editor = harness.context.window.PlanItemEditor;
+  assert.equal(editor.open(harness.item, harness.opener, "edit", false), true);
+  assert.match(harness.panel.innerHTML, /value="Physical Therapy"/);
+  assert.match(
+    harness.panel.innerHTML,
+    /data-canonical-value="PhysicalTherapy" data-presentation-label="Physical Therapy"/,
+  );
+  assert.doesNotMatch(harness.panel.innerHTML, /name="sport_type"[^>]*\svalue="PhysicalTherapy"/);
+
+  harness.listeners.get("submit")({ preventDefault() {} });
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(harness.calls.updates.length, 1);
+  assert.equal(harness.calls.updates[0].payload.prescription.sport_type, "PhysicalTherapy");
+}
+
 Promise.all([
   testFullCardDragUsesOneAuthoritativePut(),
   testDeleteFromPlanConfirmationAndReadOnlyDates(),
+  testPhysicalTherapyEditorLabelPreservesCanonicalToken(),
 ]).then(() => {
   console.log("Plan item editor contract tests passed.");
 }).catch(error => {

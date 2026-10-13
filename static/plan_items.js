@@ -87,7 +87,8 @@
   function renderItemCard(item, dateKey) {
     const prescription = item?.prescription || {};
     const category = item?.category?.category_name || "";
-    const sport = prescription.sport_type || prescription.activity_category || "";
+    const sportType = prescription.sport_type || prescription.activity_category || "";
+    const sport = window.ActivityPresentation?.getActivityTypeLabel(sportType) || sportType;
     const duration = formatMetric(prescription.target_duration_min, " min");
     const targetLoad = formatMetric(prescription.target_load);
     const metrics = [

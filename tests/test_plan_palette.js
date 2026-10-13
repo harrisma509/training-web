@@ -1,6 +1,7 @@
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const vm = require("node:vm");
+const activityPresentation = require("../static/activity-presentation.js");
 
 const paletteSource = fs.readFileSync("static/plan_palette.js", "utf8");
 const apiSource = fs.readFileSync("static/api.js", "utf8");
@@ -32,6 +33,8 @@ assert.match(paletteSource, /state\.mode = "dragging"/);
 assert.match(paletteSource, /classList\.add\("is-dragging"\)/);
 assert.match(paletteSource, /classList\.remove\("is-dragging"\)/);
 assert.match(paletteSource, /template\.is_favorite === true/);
+assert.match(paletteSource, /window\.ActivityPresentation\?\.getActivityTypeLabel\(sportType\) \|\| sportType/);
+assert.match(indexSource, /activity-presentation\.js[\s\S]*plan_palette\.js/);
 assert.match(paletteSource, /quickEmpty\.hidden = state\.templatesStatus !== "success" \|\| quick\.length > 0/);
 assert.match(paletteSource, /aria-describedby="planPaletteDragInstructions"/);
 assert.match(paletteSource, /draggable="true"/);
@@ -111,7 +114,7 @@ async function testApiWrapper() {
 
 function testPaletteModuleLoadsWithoutPlacementMutation() {
   const context = {
-    window: {},
+    window: { ActivityPresentation: activityPresentation },
     Intl,
     Object,
     Promise,
@@ -124,9 +127,105 @@ function testPaletteModuleLoadsWithoutPlacementMutation() {
   assert.equal(context.window.PlanPaletteController.getState().selectedTemplate, null);
 }
 
+async function testQuickPicksUseSharedPhysicalTherapyPresentation() {
+  const elements = new Map();
+  const workspace = { classList: { toggle() {} } };
+  const listeners = new Map();
+  const createElement = id => {
+    const element = {
+      id,
+      hidden: false,
+      innerHTML: "",
+      value: "",
+      disabled: false,
+      attributes: {},
+      listeners: new Map(),
+      classList: { toggle() {}, add() {}, remove() {} },
+      addEventListener(type, listener) {
+        this.listeners.set(type, listener);
+      },
+      setAttribute(name, value) {
+        this.attributes[name] = String(value);
+      },
+      closest(selector) {
+        return selector === ".plan-workspace" ? workspace : null;
+      },
+      focus() {},
+      querySelector() {
+        return { replaceChildren() {} };
+      },
+    };
+    elements.set(id, element);
+    return element;
+  };
+  const root = createElement("planPalette");
+  root.closest = () => workspace;
+  const trigger = createElement("planPaletteOpen");
+  const closeButton = createElement("planPaletteClose");
+  const searchInput = createElement("planPaletteSearch");
+  const categorySelect = createElement("planPaletteCategory");
+  const status = createElement("planPaletteStatus");
+  const rows = createElement("planPaletteRows");
+  const quickRows = createElement("planPaletteQuickRows");
+  const allTemplates = createElement("planPaletteAllTemplates");
+  const allTemplatesToggle = createElement("planPaletteAllTemplatesToggle");
+  const quickEmpty = createElement("planPaletteQuickEmpty");
+  const manageButton = createElement("planPaletteManage");
+  const placementBanner = createElement("planPalettePlacement");
+  const document = {
+    readyState: "loading",
+    getElementById: id => elements.get(id) || null,
+    addEventListener(type, listener) {
+      listeners.set(type, listener);
+    },
+    createTextNode: value => ({ textContent: value }),
+  };
+  const context = {
+    window: {
+      ActivityPresentation: activityPresentation,
+      innerWidth: 1280,
+      setTimeout: callback => callback(),
+      api: {
+        fetchPlanCategories: async () => ({ categories: [] }),
+        fetchPlanTemplates: async () => ({
+          templates: [{
+            plan_template_id: 23,
+            template_name: "PT Quick Pick",
+            is_favorite: true,
+            category: { category_name: "Rehabilitation" },
+            prescription: { sport_type: "PhysicalTherapy", target_duration_min: 30 },
+          }],
+        }),
+      },
+    },
+    document,
+    Intl,
+    AbortController,
+    setTimeout,
+  };
+  vm.runInNewContext(paletteSource, context);
+  listeners.get("DOMContentLoaded")();
+  trigger.listeners.get("click")();
+  await new Promise(resolve => setImmediate(resolve));
+
+  assert.match(quickRows.innerHTML, /Rehabilitation · Physical Therapy · 30 min/);
+  assert.doesNotMatch(quickRows.innerHTML, /PhysicalTherapy/);
+  assert.match(rows.innerHTML, /Physical Therapy/);
+  assert.equal(context.window.PlanPaletteController.getState().templates[0].is_favorite, true);
+  assert.equal(allTemplates.hidden, true);
+  assert.equal(closeButton.disabled, false);
+  assert.equal(searchInput.value, "");
+  assert.equal(categorySelect.value, "");
+  assert.equal(status.textContent, "");
+  assert.equal(quickEmpty.hidden, true);
+  assert.equal(manageButton.disabled, false);
+  assert.equal(placementBanner.innerHTML, "");
+}
+
 Promise.all([
   testApiWrapper(),
   testPaletteModuleLoadsWithoutPlacementMutation(),
+  testQuickPicksUseSharedPhysicalTherapyPresentation(),
 ]).then(() => {
   console.log("Plan Palette contract tests passed.");
 }).catch(error => {

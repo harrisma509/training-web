@@ -1,6 +1,7 @@
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const vm = require("node:vm");
+const activityPresentation = require("../static/activity-presentation.js");
 
 const apiSource = fs.readFileSync("static/api.js", "utf8");
 const planSource = fs.readFileSync("static/plan.js", "utf8");
@@ -100,6 +101,7 @@ async function testController() {
   let changeCount = 0;
   const context = {
     window: {
+      ActivityPresentation: activityPresentation,
       escapeHtml: value => String(value ?? "").replace(/[&<>"']/g, character => ({
         "&": "&amp;",
         "<": "&lt;",
@@ -150,7 +152,7 @@ async function testController() {
         category: { category_name: "Endurance" },
         prescription: {
           title: "Second item",
-          sport_type: "Ride",
+          sport_type: "PhysicalTherapy",
           target_duration_min: null,
           target_load: 0,
           segments: [],
@@ -210,6 +212,8 @@ async function testController() {
   assert.match(rendered, /Target load 0/);
   assert.match(rendered, /90 min/);
   assert.match(rendered, /Structured · 1 segments/);
+  assert.match(rendered, /Physical Therapy/);
+  assert.doesNotMatch(rendered, /PhysicalTherapy/);
   assert.match(rendered, /Draft/);
   assert.equal((rendered.match(/>Planned</g) || []).length, 1);
   assert.doesNotMatch(rendered, /plan-planned-badge/);
