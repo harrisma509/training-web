@@ -1,6 +1,6 @@
 (function (root) {
   const PRESENTATION_BY_TOKEN = new Map([
-    ["physicaltherapy", Object.freeze({ label: "Physical Therapy", icon: "🩺" })],
+    ["physicaltherapy", Object.freeze({ label: "Physical Therapy", icon: "🏥" })],
   ]);
 
   function normalizeActivityToken(value) {

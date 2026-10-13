@@ -23,7 +23,7 @@ assert.equal(
 );
 assert.equal(
   presentationWindow.ActivityPresentation.getCategoryPresentation("physical_therapy").icon,
-  "🩺",
+  "🏥",
 );
 assert.equal(presentationWindow.ActivityPresentation.getActivityTypeLabel("PhysicalTherapy"), "Physical Therapy");
 assert.equal(ActivityPresentation.getCategoryPresentation("strength"), null);
@@ -68,10 +68,10 @@ const planRenderers = vm.runInNewContext(
   `(() => { ${planSource.slice(planStart, planEnd)}; return { resolveActivityIcon, renderActivityWithIcon }; })()`,
   { window: { ActivityPresentation }, escapeHtml },
 );
-assert.equal(planRenderers.resolveActivityIcon("Test", "Workout", "physical_therapy"), "🩺");
+assert.equal(planRenderers.resolveActivityIcon("Test", "Workout", "physical_therapy"), "🏥");
 assert.equal(
   planRenderers.renderActivityWithIcon("Test", "Workout", "physical_therapy"),
-  '<span role="img" aria-label="Physical Therapy">🩺</span> Test',
+  '<span role="img" aria-label="Physical Therapy">🏥</span> Test',
 );
 assert.equal(planRenderers.resolveActivityIcon("Strength session", "Workout", "strength"), "💪");
 assert.equal(planRenderers.renderActivityWithIcon("Prehab", "Workout", "prehab"), "🧘 Prehab");
