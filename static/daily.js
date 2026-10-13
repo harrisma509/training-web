@@ -604,7 +604,8 @@
       const rawName = item.name == null ? "" : String(item.name).trim();
       const rawCategory = item.activity_category == null ? "" : String(item.activity_category).trim();
       const escapedName = escapeHtml(rawName);
-      const categoryLabel = rawCategory || "other";
+      const categoryPresentation = window.ActivityPresentation?.getCategoryPresentation(rawCategory);
+      const categoryLabel = categoryPresentation?.label || rawCategory || "other";
 
       if (!rawName) {
         continue;

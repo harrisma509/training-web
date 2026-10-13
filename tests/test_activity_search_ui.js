@@ -1,6 +1,7 @@
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const vm = require("node:vm");
+const ActivityPresentation = require("../static/activity-presentation.js");
 const { formatActivityLocalDate, formatActivityLocalTime } = require("../static/search.js");
 
 class FakeElement {
@@ -121,8 +122,9 @@ function createSearchHarness(initialHref = "http://localhost/?tab=search") {
     };
     const window = {
         AppState: { activeTab: "search", gearRows: [{ gear_id: 3, gear_name: "Trail Bike" }] },
+        ActivityPresentation,
         api: {
-            fetchActivitySearchTypes: async () => ({ sport_types: ["Ride", "MountainBikeRide", "FutureSport"] }),
+            fetchActivitySearchTypes: async () => ({ sport_types: ["Ride", "MountainBikeRide", "PhysicalTherapy", "FutureSport"] }),
             searchActivities: async query => {
                 requests.push(structuredClone(query));
                 return respond(query);
@@ -257,6 +259,7 @@ async function main() {
             activity_id: index + 12,
             name: index === 0 ? "Local ride" : `Ride ${index}`,
             date_local: "2024-04-03",
+            sport_type: index === 0 ? "PhysicalTherapy" : "Ride",
         })),
         total_count: 126,
     }));
@@ -273,10 +276,14 @@ async function main() {
     assert.equal(harness.elements.searchPageStatus.textContent, "Showing 1–50 of 126 activities");
     assert.ok(harness.elements.searchSportType.children.some(option => option.value === "MountainBikeRide"
         && option.textContent === "Mountain Bike Ride"));
+    assert.ok(harness.elements.searchSportType.children.some(option => option.value === "PhysicalTherapy"
+        && option.textContent === "Physical Therapy"));
     assert.ok(harness.elements.searchSportType.children.some(option => option.value === "FutureSport"
         && option.textContent === "Future Sport"));
     assert.equal(harness.elements.searchNext.disabled, false);
     assert.match(descendantText(harness.elements.searchResults), /Local ride/);
+    assert.match(descendantText(harness.elements.searchResults), /Physical Therapy/);
+    assert.doesNotMatch(descendantText(harness.elements.searchResults), /PhysicalTherapy/);
     assert.equal(harness.getUrl().searchParams.get("search_sort_by"), "date");
     assert.equal(harness.getUrl().searchParams.get("search_sort_direction"), "desc");
     assert.equal(harness.getUrl().searchParams.has("sort"), false);

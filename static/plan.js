@@ -97,6 +97,11 @@
       return "🧘";
     }
 
+    const categoryPresentation = window.ActivityPresentation?.getCategoryPresentation(category);
+    if (categoryPresentation?.icon) {
+      return categoryPresentation.icon;
+    }
+
     const normalizedSport = normalizeActivityToken(sportType);
     if (ACTIVITY_ICON_MAP[normalizedSport]) {
       return ACTIVITY_ICON_MAP[normalizedSport];
@@ -116,7 +121,11 @@
       return "";
     }
     const icon = resolveActivityIcon(safeName, sportType, category);
-    return `${icon} ${escapeHtml(safeName)}`;
+    const categoryPresentation = window.ActivityPresentation?.getCategoryPresentation(category);
+    const iconMarkup = categoryPresentation?.icon === icon
+      ? `<span role="img" aria-label="${escapeHtml(categoryPresentation.label)}">${icon}</span>`
+      : icon;
+    return `${iconMarkup} ${escapeHtml(safeName)}`;
   }
 
   function getWeekStart(date) {

@@ -1,9 +1,10 @@
 import json
 import unittest
-from datetime import date
+from datetime import date, datetime, timedelta
 from decimal import Decimal
 from types import SimpleNamespace
 from unittest.mock import patch
+from zoneinfo import ZoneInfo
 
 from fastapi.testclient import TestClient
 from starlette.requests import Request
@@ -21,6 +22,10 @@ from services.plan_service import (
     create_item_from_template,
     create_manual_item,
 )
+
+
+def future_planned_date():
+    return datetime.now(ZoneInfo("America/Denver")).date() + timedelta(days=1)
 
 
 def item_row(**overrides):
@@ -260,11 +265,14 @@ class PlanItemRouteTests(unittest.TestCase):
         create.assert_not_called()
 
     def test_manual_route_returns_full_item_shape(self):
+        planned_date = future_planned_date()
         detail = SimpleNamespace(
-            row=item_row(plan_item_id=101, item_source="manual"),
+            row=item_row(plan_item_id=101, planned_date=planned_date, item_source="manual"),
             segments=[],
         )
-        payload = CreateManualItemPayload.model_validate(manual_payload())
+        payload = CreateManualItemPayload.model_validate(
+            manual_payload(planned_date=planned_date.isoformat()),
+        )
         with patch(
             "routes.plan_items.create_manual_item",
             return_value=detail,
@@ -277,13 +285,14 @@ class PlanItemRouteTests(unittest.TestCase):
         create.assert_called_once_with(payload)
 
     def test_clone_route_returns_created_item(self):
+        planned_date = future_planned_date()
         detail = SimpleNamespace(
-            row=item_row(plan_item_id=102),
+            row=item_row(plan_item_id=102, planned_date=planned_date),
             segments=[segment_row()],
         )
         payload = CreateFromTemplatePayload(
             plan_template_id=7,
-            planned_date=date(2026, 10, 12),
+            planned_date=planned_date,
             sort_order=0,
             user_note="Clone",
         )

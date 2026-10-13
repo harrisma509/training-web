@@ -35,6 +35,7 @@ EXPECTED_ASSET_ORDER = [
     "constants.js",
     "app-state.js",
     "utils.js",
+    "activity-presentation.js",
     "transient-surface.js",
     "api.js",
     "weekly.js",

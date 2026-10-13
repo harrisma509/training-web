@@ -164,6 +164,8 @@ if (typeof module !== "undefined" && module.exports) {
     function friendlyActivityType(value) {
         const raw = String(value || "").trim();
         if (!raw) return "";
+        const presentationLabel = window.ActivityPresentation?.getActivityTypeLabel(raw);
+        if (presentationLabel) return presentationLabel;
         if (ACTIVITY_TYPE_LABELS[raw]) return ACTIVITY_TYPE_LABELS[raw];
         return raw
             .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
@@ -177,6 +179,7 @@ if (typeof module !== "undefined" && module.exports) {
         const value = row[key];
         if (key === "date_local") return formatActivityLocalDate(value);
         if (key === "start_at_local") return formatActivityLocalTime(value);
+        if (key === "sport_type") return friendlyActivityType(value);
         if (key === "distance_mi") {
             const result = formatNumber(value, 1);
             return result ? `${result} mi` : "";
