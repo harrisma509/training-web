@@ -99,9 +99,13 @@ function denverDateOffset(offset) {
 async function testController() {
   const requests = [];
   let changeCount = 0;
+  let hidePastPlanned = false;
   const context = {
     window: {
       ActivityPresentation: activityPresentation,
+      PlanOptionsController: {
+        getHidePastPlanned: () => hidePastPlanned,
+      },
       escapeHtml: value => String(value ?? "").replace(/[&<>"']/g, character => ({
         "&": "&amp;",
         "<": "&lt;",
@@ -236,6 +240,12 @@ async function testController() {
     assert.match(historical, /Read-only/);
     assert.doesNotMatch(historical, /data-plan-item-action="manage"|draggable="true"|tabindex="0"/);
   }
+  hidePastPlanned = true;
+  assert.equal(controller.getItemsForDate(past).length, 1, "the full Plan collection retains past items");
+  assert.equal(controller.getVisibleItemsForDate(past).length, 0);
+  assert.equal(controller.renderDaySection(past), "");
+  assert.match(controller.renderDaySection(today), /Today item/);
+  assert.match(controller.renderDaySection(future), /Second item/);
   assert.doesNotMatch(rendered, /user_note|plan_prescription_id|owner_kind/);
   assert.ok(changeCount >= 3);
 

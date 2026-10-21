@@ -929,7 +929,9 @@
     const supportVisibleLimit = Math.max(0, PLAN_VISIBLE_ACTIVITY_LIMIT - 1);
     const plannedController = window.PlanItemsController;
     const plannedState = plannedController?.getState?.() || { status: "idle" };
-    const plannedItems = plannedController?.getItemsForDate?.(dayKey) || [];
+    const plannedItems = plannedController?.getVisibleItemsForDate?.(dayKey)
+      || plannedController?.getItemsForDate?.(dayKey)
+      || [];
     const plannedHtml = plannedController?.renderDaySection?.(dayKey) || "";
     const paletteTargetHtml = window.PlanPaletteController?.targetMarkup?.(
       dayKey,
@@ -1253,6 +1255,7 @@
       window.history.replaceState({}, "", initialUrl);
     }
     setupPlanNavigation();
+    window.PlanOptionsController?.init?.({ onChange: renderPlanStrip });
     window.PlanItemsController?.init?.({ onChange: renderPlanStrip });
     window.PlanPaletteController?.init?.({ onChange: renderPlanStrip });
     window.PlanItemEditor?.bind?.();

@@ -84,6 +84,14 @@ persistence contract:
 - The calendar owns date/range display and item-placement interaction.
 - Settings may link to shared management components but must not fork them.
 
+Plan view preferences are presentation state, not Plan-item lifecycle state.
+The Plan Options controller owns the strict browser preference contract and
+the active view setting; the Plan item controller retains the complete
+authoritative item collection and filters only when rendering day sections.
+Durable single-user preference values use the generic `app_preference`
+namespace owned by `training-etl` schema, with namespace-specific allowlists
+enforced by `training-web`. Hiding a past item must never mutate its record.
+
 Use the shared application lifecycle and API conventions documented in
 `docs/FRONTEND_ARCHITECTURE.md`. Do not extract modules merely for file-count
 symmetry; extract when a product responsibility is stable and testable.

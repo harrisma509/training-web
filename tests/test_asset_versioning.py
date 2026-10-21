@@ -52,6 +52,7 @@ EXPECTED_ASSET_ORDER = [
     "search.js",
     "plan_palette.js",
     "plan_templates.js",
+    "plan_options.js",
     "plan_items.js",
     "plan_item_editor.js",
     "plan.js",

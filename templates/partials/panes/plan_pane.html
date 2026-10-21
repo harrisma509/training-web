@@ -9,6 +9,32 @@
             </label>
             <button id="planNextOne" type="button" aria-label="Show the next week">+1 week</button>
             <button id="planNextFour" type="button" aria-label="Show the next four weeks">+4 weeks</button>
+            <div class="plan-options-container">
+                <button id="planOptionsOpen" type="button" class="plan-options-trigger"
+                    aria-controls="planOptionsPopover" aria-expanded="false" aria-haspopup="dialog">
+                    Plan Options
+                </button>
+                <div id="planOptionsPopover" class="plan-options-popover" role="dialog"
+                    aria-labelledby="planOptionsTitle" aria-modal="false" hidden>
+                    <h2 id="planOptionsTitle">Plan Options</h2>
+                    <fieldset class="plan-options-visibility">
+                        <legend>Visibility</legend>
+                        <label for="planHidePastPlanned">
+                            <span>Hide past planned</span>
+                            <span class="plan-options-switch">
+                                <input id="planHidePastPlanned" type="checkbox" role="switch"
+                                    aria-label="Hide past planned" aria-checked="true" checked>
+                                <span aria-hidden="true"></span>
+                            </span>
+                        </label>
+                    </fieldset>
+                    <button id="planOptionsReset" type="button" class="plan-options-reset">
+                        Reset view defaults
+                    </button>
+                    <div id="planOptionsStatus" class="plan-options-status" role="status"
+                        aria-live="polite" aria-atomic="true"></div>
+                </div>
+            </div>
             <button id="planPaletteOpen" type="button" class="plan-palette-trigger"
                 aria-controls="planPalette" aria-expanded="false">
                 Add plans

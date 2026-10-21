@@ -129,6 +129,21 @@
       return fetchJson("/api/plan/categories");
     },
 
+    async fetchPlanPreferences() {
+      return fetchJson("/api/plan/preferences");
+    },
+
+    async updatePlanPreferences(payload) {
+      return fetchJson("/api/plan/preferences", {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json",
+        },
+        body: JSON.stringify(payload),
+      });
+    },
+
     async fetchPlanTemplates(categoryId = null, limit = 200) {
       const params = new URLSearchParams({ limit: String(limit) });
       if (categoryId !== null && categoryId !== undefined && categoryId !== "") {

@@ -14,6 +14,7 @@ from pydantic import (
     StrictInt,
     StrictStr,
     BeforeValidator,
+    ValidationError,
 )
 from fastapi.responses import JSONResponse
 
@@ -26,6 +27,10 @@ from services.plan_service import (
     deactivate_template,
     load_template_detail,
     update_template,
+)
+from services.plan_preferences_service import (
+    get_plan_view_preferences,
+    update_plan_view_preferences,
 )
 
 router = APIRouter()
@@ -126,6 +131,13 @@ class PlanTemplatePayload(BaseModel):
     prescription: PlanPrescriptionPayload
     segments: list[PlanPrescriptionSegmentPayload] = Field(max_length=200)
 
+
+class PlanViewPreferencesPayload(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    hide_past_planned: StrictBool
+
+
 def _request_origin(request: Request):
     port = request.url.port
     if port is None:
@@ -161,6 +173,44 @@ def _mutation_guard(request: Request):
                 status_code=403,
             )
     return None
+
+
+@router.get("/api/plan/preferences")
+def api_plan_preferences_get():
+    try:
+        return get_plan_view_preferences()
+    except Exception:
+        logger.exception("Unable to read Plan view preferences")
+        return JSONResponse(
+            {"detail": "Plan preferences are temporarily unavailable."},
+            status_code=503,
+        )
+
+
+@router.put("/api/plan/preferences")
+async def api_plan_preferences_update(request: Request):
+    guard_response = _mutation_guard(request)
+    if guard_response is not None:
+        return guard_response
+
+    try:
+        body = await request.json()
+    except ValueError:
+        return JSONResponse({"detail": "Invalid Plan preference payload."}, status_code=400)
+
+    try:
+        payload = PlanViewPreferencesPayload.model_validate(body)
+    except ValidationError:
+        return JSONResponse({"detail": "Invalid Plan preference payload."}, status_code=400)
+
+    try:
+        return update_plan_view_preferences(payload.hide_past_planned)
+    except Exception:
+        logger.exception("Unable to update Plan view preferences")
+        return JSONResponse(
+            {"detail": "Plan preferences are temporarily unavailable."},
+            status_code=503,
+        )
 
 
 def _json_value(value):

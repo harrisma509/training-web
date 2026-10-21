@@ -148,7 +148,7 @@
     if (state.status !== "success") {
       return "";
     }
-    const items = state.byDate.get(dateKey) || [];
+    const items = getVisibleItemsForDate(dateKey);
     if (!items.length) {
       return "";
     }
@@ -392,6 +392,14 @@
     return [...(state.byDate.get(dateKey) || [])];
   }
 
+  function getVisibleItemsForDate(dateKey) {
+    const hidePastPlanned = window.PlanOptionsController?.getHidePastPlanned?.() !== false;
+    if (hidePastPlanned && isIsoDate(dateKey) && dateKey < getDenverTodayKey()) {
+      return [];
+    }
+    return getItemsForDate(dateKey);
+  }
+
   function acceptCreatedItem(item) {
     if (!item || item.plan_item_id == null || !isIsoDate(item.planned_date)) {
       return false;
@@ -454,6 +462,7 @@
     load,
     getState,
     getItemsForDate,
+    getVisibleItemsForDate,
     acceptCreatedItem,
     replaceItem,
     removeItem,
