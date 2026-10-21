@@ -88,9 +88,10 @@ Plan view preferences are presentation state, not Plan-item lifecycle state.
 The Plan Options controller owns the strict browser preference contract and
 the active view setting; the Plan item controller retains the complete
 authoritative item collection and filters only when rendering day sections.
-Durable single-user preference values use the generic `app_preference`
-namespace owned by `training-etl` schema, with namespace-specific allowlists
-enforced by `training-web`. Hiding a past item must never mutate its record.
+The Plan view option is stored in the `hide_past_planned` key of the existing
+`public.app_settings.plan_settings` object. `training-web` owns this key's
+strict API contract and updates it without replacing other settings. Hiding a
+past item must never mutate its record.
 
 Use the shared application lifecycle and API conventions documented in
 `docs/FRONTEND_ARCHITECTURE.md`. Do not extract modules merely for file-count

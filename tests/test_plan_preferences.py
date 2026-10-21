@@ -26,6 +26,10 @@ class FakeCursor:
         self.queries.append((query, params))
         if self.execute_error:
             raise self.execute_error
+        if "UPDATE public.app_settings" in query and self.row is not None:
+            plan_settings = dict(self.row["plan_settings"])
+            plan_settings["hide_past_planned"] = params[0]
+            self.row = {"plan_settings": plan_settings}
 
     def fetchone(self):
         return self.row
@@ -57,10 +61,10 @@ class PlanPreferencesTests(unittest.TestCase):
     def setUp(self):
         self.client = TestClient(training_app)
 
-    def test_get_returns_stored_boolean_and_defaults_when_namespace_is_missing(self):
+    def test_get_returns_stored_boolean_and_defaults_when_key_is_missing(self):
         for value in (True, False):
             with self.subTest(value=value):
-                connection = FakeConnection(FakeCursor({"preference_value": {
+                connection = FakeConnection(FakeCursor({"plan_settings": {
                     "hide_past_planned": value,
                     "server_owned_future_key": "preserved",
                 }}))
@@ -73,12 +77,16 @@ class PlanPreferencesTests(unittest.TestCase):
                         {"hide_past_planned": value},
                     )
                 query, params = connection.fake_cursor.queries[0]
-                self.assertIn("FROM public.app_preference", query)
-                self.assertEqual(params, ("plan_view",))
+                self.assertIn("FROM public.app_settings", query)
+                self.assertIn("WHERE settings_id = 1", query)
+                self.assertNotIn("public.app_preference", query)
+                self.assertIsNone(params)
                 self.assertEqual(connection.commits, 0)
                 self.assertEqual(connection.rollbacks, 0)
 
-        connection = FakeConnection(FakeCursor(None))
+        connection = FakeConnection(FakeCursor({"plan_settings": {
+            "server_owned_future_key": "preserved",
+        }}))
         with patch(
             "services.plan_preferences_service.db_conn",
             return_value=connection,
@@ -88,8 +96,16 @@ class PlanPreferencesTests(unittest.TestCase):
                 {"hide_past_planned": True},
             )
 
+        connection = FakeConnection(FakeCursor(None))
+        with patch(
+            "services.plan_preferences_service.db_conn",
+            return_value=connection,
+        ):
+            with self.assertRaisesRegex(RuntimeError, "singleton row is missing"):
+                get_plan_view_preferences()
+
     def test_get_rejects_corrupt_stored_preference_type(self):
-        connection = FakeConnection(FakeCursor({"preference_value": {
+        connection = FakeConnection(FakeCursor({"plan_settings": {
             "hide_past_planned": "false",
         }}))
         with patch(
@@ -99,9 +115,9 @@ class PlanPreferencesTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 get_plan_view_preferences()
 
-    def test_put_upserts_only_plan_namespace_and_commits_once(self):
-        connection = FakeConnection(FakeCursor({"preference_value": {
-            "hide_past_planned": False,
+    def test_put_updates_only_plan_key_and_commits_once(self):
+        connection = FakeConnection(FakeCursor({"plan_settings": {
+            "hide_past_planned": True,
             "server_owned_future_key": "preserved",
         }}))
         with patch(
@@ -114,15 +130,43 @@ class PlanPreferencesTests(unittest.TestCase):
             )
 
         query, params = connection.fake_cursor.queries[0]
-        self.assertIn("INSERT INTO public.app_preference", query)
-        self.assertIn("ON CONFLICT (preference_namespace)", query)
-        self.assertIn("public.app_preference.preference_value", query)
-        self.assertIn("|| EXCLUDED.preference_value", query)
-        self.assertEqual(params, ("plan_view", '{"hide_past_planned": false}'))
+        normalized_query = " ".join(query.split())
+        self.assertIn("UPDATE public.app_settings", normalized_query)
+        self.assertIn("SET plan_settings = jsonb_set( plan_settings,", normalized_query)
+        self.assertIn("'{hide_past_planned}'", normalized_query)
+        self.assertIn("updated_at = now()", normalized_query)
+        self.assertIn("WHERE settings_id = 1", normalized_query)
+        self.assertNotIn("public.app_preference", normalized_query)
+        self.assertNotIn("||", normalized_query)
+        self.assertEqual(params, (False,))
+        self.assertFalse(
+            connection.fake_cursor.row["plan_settings"]["hide_past_planned"]
+        )
+        self.assertEqual(
+            connection.fake_cursor.row["plan_settings"]["server_owned_future_key"],
+            "preserved",
+        )
         self.assertEqual(connection.commits, 1)
         self.assertEqual(connection.rollbacks, 0)
-        self.assertNotIn("plan_item", query)
-        self.assertNotIn("plan_template", query)
+        self.assertRegex(normalized_query, r"^UPDATE public\.app_settings\b")
+        for table_name in (
+            "plan_item",
+            "plan_template",
+            "strava_activities",
+            "daily_training",
+            "weekly_training",
+            "load",
+        ):
+            self.assertNotIn(table_name, normalized_query)
+
+    def test_put_rejects_non_boolean_before_database_access(self):
+        for value in ("false", 0, None):
+            with self.subTest(value=value), patch(
+                "services.plan_preferences_service.db_conn"
+            ) as db_conn:
+                with self.assertRaisesRegex(ValueError, "must be a boolean"):
+                    update_plan_view_preferences(value)
+                db_conn.assert_not_called()
 
     def test_put_rolls_back_when_persistence_fails(self):
         connection = FakeConnection(FakeCursor(execute_error=RuntimeError("db failure")))
