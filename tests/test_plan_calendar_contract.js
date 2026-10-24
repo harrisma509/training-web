@@ -116,7 +116,8 @@ assert.match(appSource, /if \(tab !== "plan"\) url\.searchParams\.delete\("plan_
 assert.match(appSource, /window\.TrainingApp\.navigatePlan = function navigatePlan/);
 
 const planCss = fs.readFileSync("static/plan.css", "utf8");
-assert.match(planCss, /\.plan-calendar-scroll\s*\{[^}]*max-height:[^}]*overflow-y:\s*auto/s);
+assert.match(planCss, /\.plan-calendar-scroll\s*\{[^}]*max-height:\s*calc\(100vh - 120px\)[^}]*overflow-y:\s*auto/s);
+assert.doesNotMatch(planCss, /\.plan-calendar-scroll\s*\{[^}]*max-height:\s*min\(72vh/);
 assert.match(planCss, /@media \(max-width: 980px\)\s*\{\s*\.plan-strip\s*\{\s*grid-template-columns: repeat\(2, minmax\(0, 1fr\)\)/);
 assert.match(planCss, /--plan-current-outline/);
 assert.match(planCss, /\.plan-day-header\.is-current-week/);
