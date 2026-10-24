@@ -44,6 +44,7 @@ const webExcludes = [
     ".env",
     ".env.*",
     ".venv",
+    ".venv-python39-backup",
     "venv",
     "env",
     "__pycache__",

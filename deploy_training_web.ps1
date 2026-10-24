@@ -71,6 +71,7 @@ try {
             --exclude=".env" `
             --exclude=".env.*" `
             --exclude=".venv" `
+            --exclude=".venv-python39-backup" `
             --exclude="venv" `
             --exclude="env" `
             --exclude="__pycache__" `
