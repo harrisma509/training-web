@@ -235,11 +235,16 @@ async function testController() {
   assert.match(rendered, /draggable="true"/);
   assert.match(rendered, /Drag is optional; activate to edit/);
   assert.doesNotMatch(rendered, />Edit<|>Move<|drag-move|plan-planned-actions/);
-  for (const historicalDate of [today, past]) {
+  for (const historicalDate of [past]) {
     const historical = controller.renderDaySection(historicalDate);
     assert.match(historical, /Read-only/);
     assert.doesNotMatch(historical, /data-plan-item-action="manage"|draggable="true"|tabindex="0"/);
   }
+  const todayRendered = controller.renderDaySection(today);
+  assert.match(todayRendered, /Today item/);
+  assert.match(todayRendered, /data-plan-item-manageable="true"/);
+  assert.match(todayRendered, /data-plan-item-action="manage"/);
+  assert.doesNotMatch(todayRendered, /Read-only/);
   hidePastPlanned = true;
   assert.equal(controller.getItemsForDate(past).length, 1, "the full Plan collection retains past items");
   assert.equal(controller.getVisibleItemsForDate(past).length, 0);
@@ -309,7 +314,11 @@ async function testCardInteractionAndDragContracts() {
     classList: createClassList(),
   };
   const oldCard = {
-    dataset: { planItemId: "42", planItemManageable: "false" },
+    dataset: { planItemId: "43", planItemManageable: "false" },
+    classList: createClassList(),
+  };
+  const todayCard = {
+    dataset: { planItemId: "42", planItemManageable: "true" },
     classList: createClassList(),
   };
   const days = [yesterday, today, tomorrow].map(planDate => ({
@@ -325,7 +334,7 @@ async function testCardInteractionAndDragContracts() {
       listeners.set(type, registrations);
     },
     querySelectorAll() {
-      return [...days, sourceCard, oldCard];
+      return [...days, sourceCard, todayCard, oldCard];
     },
   };
   const editorCalls = { open: [], dragStart: [], drop: [] };
@@ -346,7 +355,7 @@ async function testCardInteractionAndDragContracts() {
     },
     document: {
       getElementById: id => id === "planStrip" ? strip : null,
-      querySelectorAll: () => [...days, sourceCard, oldCard],
+      querySelectorAll: () => [...days, sourceCard, todayCard, oldCard],
     },
   };
   vm.runInNewContext(itemSource, context);
@@ -395,7 +404,10 @@ async function testCardInteractionAndDragContracts() {
   }
   assert.equal(editorCalls.open.length, 4, "keyboard activation opens exactly once per key");
   dispatch("click", makeEvent(eventTarget({ card: oldCard })));
-  assert.equal(editorCalls.open.length, 4, "read-only cards do not open the editor");
+  assert.equal(editorCalls.open.length, 4, "past read-only cards do not open the editor");
+  dispatch("click", makeEvent(eventTarget({ card: todayCard })));
+  assert.equal(editorCalls.open.length, 5, "today's card opens the editor");
+  assert.equal(editorCalls.open[4][0].plan_item_id, 42);
 
   let transferred = [];
   const dataTransfer = {
@@ -432,10 +444,10 @@ async function testCardInteractionAndDragContracts() {
   const postDragClick = makeEvent(eventTarget({ card: sourceCard }));
   dispatch("click", postDragClick);
   assert.equal(postDragClick.defaultPrevented, true);
-  assert.equal(editorCalls.open.length, 4, "post-drag click is suppressed");
+  assert.equal(editorCalls.open.length, 5, "post-drag click is suppressed");
   dispatch("pointerdown", makeEvent(eventTarget({ card: sourceCard })));
   dispatch("click", makeEvent(eventTarget({ card: sourceCard })));
-  assert.equal(editorCalls.open.length, 5, "a normal click works after the drag guard resets");
+  assert.equal(editorCalls.open.length, 6, "a normal click works after the drag guard resets");
 
   let preventedMenuDrag = false;
   dispatch("dragstart", makeEvent(
@@ -453,7 +465,7 @@ async function testCardInteractionAndDragContracts() {
   dispatch("dragstart", makeEvent(eventTarget({ card: sourceCard }), { dataTransfer: canceledTransfer }));
   dispatch("dragend", makeEvent(eventTarget({ card: sourceCard })));
   dispatch("click", makeEvent(eventTarget({ card: sourceCard })));
-  assert.equal(editorCalls.open.length, 5, "cancelled drag does not open the editor");
+  assert.equal(editorCalls.open.length, 6, "cancelled drag does not open the editor");
 }
 
 Promise.all([testApiWrapper(), testController(), testCardInteractionAndDragContracts()]).then(() => {

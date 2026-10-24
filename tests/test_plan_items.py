@@ -15,12 +15,16 @@ from routes.plan_items import (
     CreateManualItemPayload,
     api_plan_item_from_template,
     api_plan_item_manual,
+    api_plan_item_update,
     api_plan_items,
+    UpdatePlanItemPayload,
 )
 from services.plan_service import (
     PlanDateNotFuture,
+    cancel_plan_item,
     create_item_from_template,
     create_manual_item,
+    update_plan_item,
 )
 
 
@@ -35,6 +39,7 @@ def item_row(**overrides):
         "sort_order": 10,
         "item_state": "committed",
         "item_source": "template",
+        "prescription_owner_kind": "item",
         "user_note": "Keep this controlled.",
         "plan_category_id": 1,
         "category_key": "endurance",
@@ -284,6 +289,21 @@ class PlanItemRouteTests(unittest.TestCase):
         self.assertEqual(response_json(response)["item_source"], "manual")
         create.assert_called_once_with(payload)
 
+    def test_update_route_passes_same_day_edit_to_service(self):
+        today = date(2026, 10, 11)
+        detail = SimpleNamespace(row=item_row(planned_date=today), segments=[])
+        payload = UpdatePlanItemPayload.model_validate(
+            manual_payload(planned_date=today.isoformat()),
+        )
+        with patch(
+            "routes.plan_items.update_plan_item",
+            return_value=detail,
+        ) as update:
+            response = api_plan_item_update(request_with_headers(), payload, 41)
+
+        self.assertEqual(response.status_code, 200)
+        update.assert_called_once_with(41, payload)
+
     def test_clone_route_returns_created_item(self):
         planned_date = future_planned_date()
         detail = SimpleNamespace(
@@ -321,6 +341,158 @@ class PlanItemRouteTests(unittest.TestCase):
             "physical_therapy",
         )
         create.assert_called_once_with(payload)
+
+    def test_update_service_allows_same_day_edit(self):
+        today = date(2026, 10, 11)
+        item = item_row(plan_item_id=41, planned_date=today)
+        cursor = TransactionCursor(
+            one=[
+                item,
+                {"is_not_past": True},
+                {"plan_category_id": 1},
+                {"plan_prescription_id": 81, "owner_kind": "item"},
+                item,
+            ],
+            many=[[]],
+        )
+        conn = TransactionConnection(cursor)
+        payload = UpdatePlanItemPayload.model_validate(
+            manual_payload(planned_date=today.isoformat()),
+        )
+
+        with patch("services.plan_service.db_conn", return_value=conn):
+            result = update_plan_item(41, payload)
+
+        self.assertEqual(result.row["planned_date"], today)
+        self.assertEqual(conn.commit_count, 1)
+        date_checks = [
+            statement.lower()
+            for statement, _ in cursor.executed
+            if "current_timestamp at time zone 'america/denver'" in statement.lower()
+        ]
+        self.assertEqual(len(date_checks), 1)
+        self.assertIn("<= %s::date", date_checks[0])
+
+    def test_update_service_moves_today_item_only_to_future(self):
+        today = date(2026, 10, 11)
+        tomorrow = today + timedelta(days=1)
+        item = item_row(plan_item_id=41, planned_date=today)
+        moved_item = item_row(plan_item_id=41, planned_date=tomorrow)
+        cursor = TransactionCursor(
+            one=[
+                item,
+                {"is_not_past": True},
+                {"plan_category_id": 1},
+                {"is_future": True},
+                {"plan_prescription_id": 81, "owner_kind": "item"},
+                moved_item,
+            ],
+            many=[[]],
+        )
+        conn = TransactionConnection(cursor)
+        payload = UpdatePlanItemPayload.model_validate(
+            manual_payload(planned_date=tomorrow.isoformat()),
+        )
+
+        with patch("services.plan_service.db_conn", return_value=conn):
+            result = update_plan_item(41, payload)
+
+        self.assertEqual(result.row["planned_date"], tomorrow)
+        self.assertEqual(conn.commit_count, 1)
+
+    def test_update_service_rejects_past_destination(self):
+        today = date(2026, 10, 11)
+        item = item_row(plan_item_id=41, planned_date=today)
+        cursor = TransactionCursor(one=[
+            item,
+            {"is_not_past": True},
+            {"plan_category_id": 1},
+            {"is_future": False},
+        ])
+        conn = TransactionConnection(cursor)
+        payload = UpdatePlanItemPayload.model_validate(
+            manual_payload(planned_date=(today - timedelta(days=1)).isoformat()),
+        )
+
+        with patch("services.plan_service.db_conn", return_value=conn):
+            with self.assertRaises(PlanDateNotFuture):
+                update_plan_item(41, payload)
+
+        self.assertEqual(conn.commit_count, 0)
+        self.assertEqual(conn.rollback_count, 1)
+        self.assertFalse(
+            any("update public." in statement.lower() for statement, _ in cursor.executed)
+        )
+
+    def test_future_item_cannot_move_to_today(self):
+        today = date(2026, 10, 11)
+        future_item = item_row(plan_item_id=41, planned_date=today + timedelta(days=1))
+        cursor = TransactionCursor(one=[
+            future_item,
+            {"is_not_past": True},
+            {"plan_category_id": 1},
+            {"is_future": False},
+        ])
+        conn = TransactionConnection(cursor)
+        payload = UpdatePlanItemPayload.model_validate(
+            manual_payload(planned_date=today.isoformat()),
+        )
+
+        with patch("services.plan_service.db_conn", return_value=conn):
+            with self.assertRaises(PlanDateNotFuture):
+                update_plan_item(41, payload)
+
+        self.assertEqual(conn.commit_count, 0)
+        self.assertEqual(conn.rollback_count, 1)
+
+    def test_update_service_rejects_past_item(self):
+        today = date(2026, 10, 11)
+        past_item = item_row(plan_item_id=41, planned_date=today - timedelta(days=1))
+        cursor = TransactionCursor(one=[past_item, {"is_not_past": False}])
+        conn = TransactionConnection(cursor)
+        payload = UpdatePlanItemPayload.model_validate(
+            manual_payload(planned_date=today.isoformat()),
+        )
+
+        with patch("services.plan_service.db_conn", return_value=conn):
+            with self.assertRaises(PlanDateNotFuture):
+                update_plan_item(41, payload)
+
+        self.assertEqual(conn.commit_count, 0)
+        self.assertEqual(conn.rollback_count, 1)
+        self.assertFalse(
+            any("update public." in statement.lower() for statement, _ in cursor.executed)
+        )
+
+    def test_cancel_service_allows_today_and_rejects_past(self):
+        today = date(2026, 10, 11)
+        today_item = item_row(plan_item_id=41, planned_date=today)
+        today_cursor = TransactionCursor(
+            one=[today_item, {"is_not_past": True}, today_item],
+            many=[[]],
+        )
+        today_conn = TransactionConnection(today_cursor)
+        with patch("services.plan_service.db_conn", return_value=today_conn):
+            result = cancel_plan_item(41)
+
+        self.assertEqual(result.row["planned_date"], today)
+        self.assertEqual(today_conn.commit_count, 1)
+        self.assertTrue(
+            any(
+                "item_state = 'cancelled'" in statement.lower()
+                for statement, _ in today_cursor.executed
+            )
+        )
+
+        past_item = item_row(plan_item_id=42, planned_date=today - timedelta(days=1))
+        past_cursor = TransactionCursor(one=[past_item, {"is_not_past": False}])
+        past_conn = TransactionConnection(past_cursor)
+        with patch("services.plan_service.db_conn", return_value=past_conn):
+            with self.assertRaises(PlanDateNotFuture):
+                cancel_plan_item(42)
+
+        self.assertEqual(past_conn.commit_count, 0)
+        self.assertEqual(past_conn.rollback_count, 1)
 
     def test_clone_service_locks_template_then_prescription_and_commits_once(self):
         detail = item_row(

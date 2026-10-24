@@ -156,7 +156,7 @@
   }
 
   function open(item, opener, mode = "edit", refreshCalendar = mode === "moving") {
-    if (!item || item.item_state !== "committed" || item.planned_date <= todayKey()) return false;
+    if (!item || item.item_state !== "committed" || item.planned_date < todayKey()) return false;
     state.item = item;
     state.opener = opener || null;
     state.mode = mode;
@@ -278,7 +278,7 @@
     if (!itemId || state.saving || dateKey <= todayKey()) return false;
     const item = window.PlanItemsController?.getState?.().items?.find(row =>
       String(row.plan_item_id) === String(itemId));
-    if (!item || item.item_state !== "committed" || item.planned_date <= todayKey()
+    if (!item || item.item_state !== "committed" || item.planned_date < todayKey()
         || item.planned_date === dateKey) {
       return false;
     }
@@ -345,7 +345,8 @@
     });
     panel.addEventListener("submit", event => {
       event.preventDefault();
-      if (value("planned_date") <= todayKey()) {
+      if (value("planned_date") <= todayKey()
+          && value("planned_date") !== state.item.planned_date) {
         state.error = "Planned date must be after today.";
         render();
         return;
@@ -370,7 +371,7 @@
     itemDragMime: ITEM_DRAG_MIME,
     handleDragStart: (itemId, event) => {
       const item = window.PlanItemsController?.getState?.().items?.find(row => String(row.plan_item_id) === String(itemId));
-      if (!item || item.item_state !== "committed" || item.planned_date <= todayKey()) return false;
+      if (!item || item.item_state !== "committed" || item.planned_date < todayKey()) return false;
       event.dataTransfer?.setData(ITEM_DRAG_MIME, String(itemId));
       if (event.dataTransfer) event.dataTransfer.effectAllowed = "move";
       return true;

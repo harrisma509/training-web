@@ -190,6 +190,20 @@ def _require_future_date(cur, planned_date):
         raise PlanDateNotFuture()
 
 
+def _require_not_past_date(cur, planned_date):
+    cur.execute(
+        """
+            select (
+                (current_timestamp at time zone 'America/Denver')::date
+                <= %s::date
+            ) as is_not_past
+        """,
+        (planned_date,),
+    )
+    if not cur.fetchone()["is_not_past"]:
+        raise PlanDateNotFuture()
+
+
 def _load_item_detail(cur, plan_item_id):
     cur.execute(
         """
@@ -721,21 +735,22 @@ def _lock_item_for_update(cur, plan_item_id):
     return item
 
 
-def _require_committed_future_item(cur, item):
+def _require_committed_manageable_item(cur, item):
     if item["item_state"] != "committed" or item["plan_batch_id"] is not None:
         raise PlanItemNotEditable()
     if item["prescription_owner_kind"] != "item":
         raise PlanOwnershipCorrupt()
-    _require_future_date(cur, item["planned_date"])
+    _require_not_past_date(cur, item["planned_date"])
 
 
 def update_plan_item(plan_item_id, payload):
     with db_conn() as conn:
         with conn.cursor() as cur:
             item = _lock_item_for_update(cur, plan_item_id)
-            _require_committed_future_item(cur, item)
+            _require_committed_manageable_item(cur, item)
             _require_active_category(cur, payload.category_id)
-            _require_future_date(cur, payload.planned_date)
+            if payload.planned_date != item["planned_date"]:
+                _require_future_date(cur, payload.planned_date)
 
             cur.execute(
                 """
@@ -831,7 +846,7 @@ def cancel_plan_item(plan_item_id):
                 if detail is None:
                     raise PlanOwnershipCorrupt()
                 return detail
-            _require_committed_future_item(cur, item)
+            _require_committed_manageable_item(cur, item)
             cur.execute(
                 """
                     update public.plan_item

@@ -99,7 +99,7 @@
       ? prescription.segments.length
       : 0;
     const isDraft = item?.item_state === "draft";
-    const isHistorical = dateKey <= getDenverTodayKey();
+    const isHistorical = dateKey < getDenverTodayKey();
     const statusLabel = isDraft ? "Draft" : isHistorical ? "Read-only" : "";
     const isManageable = !isHistorical && item?.item_state === "committed";
     const classes = [

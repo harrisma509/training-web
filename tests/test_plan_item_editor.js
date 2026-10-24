@@ -260,6 +260,27 @@ async function testFullCardDragUsesOneAuthoritativePut() {
   assert.equal(harness.context.window.PlanItemsController.getState().items[0].planned_date, harness.targetDate);
   assert.equal(harness.focus.card, 1, "focus follows the authoritative item to its new date");
   assert.equal(harness.calls.cancels.length, 0);
+
+  const todayHarness = createHarness();
+  todayHarness.item.planned_date = todayHarness.today;
+  const todayEditor = todayHarness.context.window.PlanItemEditor;
+  assert.equal(todayEditor.handleDragStart("31", {
+    dataTransfer: todayHarness.dateTransfer,
+  }), true, "today's committed item remains draggable");
+  assert.equal(await todayEditor.handleDrop(todayHarness.today, {
+    dataTransfer: todayHarness.dateTransfer,
+    preventDefault() {},
+  }), false, "today cannot be a move destination");
+  assert.equal(await todayEditor.handleDrop(todayHarness.targetDate, {
+    dataTransfer: todayHarness.dateTransfer,
+    preventDefault() {},
+  }), true, "today's item can move to a future date");
+  assert.equal(todayHarness.calls.updates[0].payload.planned_date, todayHarness.targetDate);
+  todayHarness.context.window.PlanItemsController.getState().items[0].planned_date =
+    denverDateOffset(-1);
+  assert.equal(todayEditor.handleDragStart("31", {
+    dataTransfer: todayHarness.dateTransfer,
+  }), false, "past items cannot be dragged");
 }
 
 async function testDeleteFromPlanConfirmationAndReadOnlyDates() {
@@ -267,16 +288,24 @@ async function testDeleteFromPlanConfirmationAndReadOnlyDates() {
   const editor = harness.context.window.PlanItemEditor;
   const todayItem = { ...harness.item, planned_date: harness.today };
   const pastItem = { ...harness.item, planned_date: denverDateOffset(-1) };
-  assert.equal(editor.open(todayItem, harness.opener, "edit", false), false);
+  assert.equal(editor.open(todayItem, harness.opener, "edit", false), true);
   assert.equal(editor.open(pastItem, harness.opener, "edit", false), false);
-  assert.equal(harness.panel.hidden, true);
-  assert.equal(editor.open(harness.item, harness.opener, "edit", false), true);
+  assert.equal(harness.panel.hidden, false);
   await Promise.resolve();
   assert.match(harness.panel.innerHTML, /Save changes/);
   assert.match(harness.panel.innerHTML, />Move<\/button>/);
   assert.match(harness.panel.innerHTML, />Delete from plan<\/button>/);
   assert.doesNotMatch(harness.panel.innerHTML, /Cancel planned item/);
 
+  harness.formValues.planned_date = harness.today;
+  const submit = harness.listeners.get("submit");
+  submit({ preventDefault() {} });
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(harness.calls.updates.length, 1, "saving today's existing date is accepted");
+  assert.equal(harness.calls.updates[0].payload.planned_date, harness.today);
+
+  assert.equal(editor.open(todayItem, harness.opener, "edit", false), true);
+  await Promise.resolve();
   const click = harness.listeners.get("click");
   const cancelAction = {
     closest: selector => selector === "[data-plan-item-editor-action]"
@@ -302,6 +331,18 @@ async function testDeleteFromPlanConfirmationAndReadOnlyDates() {
   );
 }
 
+async function testTodayMoveTargetsMustBeFuture() {
+  const harness = createHarness();
+  harness.item.planned_date = harness.today;
+  const editor = harness.context.window.PlanItemEditor;
+  assert.equal(editor.open(harness.item, harness.opener, "moving", false), true);
+  assert.equal(editor.handleTarget(harness.today), false);
+  assert.equal(editor.handleTarget(harness.targetDate), true);
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(harness.calls.updates.length, 1);
+  assert.equal(harness.calls.updates[0].payload.planned_date, harness.targetDate);
+}
+
 async function testPhysicalTherapyEditorLabelPreservesCanonicalToken() {
   const harness = createHarness();
   harness.item.prescription.sport_type = "PhysicalTherapy";
@@ -324,6 +365,7 @@ async function testPhysicalTherapyEditorLabelPreservesCanonicalToken() {
 Promise.all([
   testFullCardDragUsesOneAuthoritativePut(),
   testDeleteFromPlanConfirmationAndReadOnlyDates(),
+  testTodayMoveTargetsMustBeFuture(),
   testPhysicalTherapyEditorLabelPreservesCanonicalToken(),
 ]).then(() => {
   console.log("Plan item editor contract tests passed.");

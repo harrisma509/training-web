@@ -261,9 +261,6 @@ def api_plan_item_update(
     guard_response = _mutation_guard(request)
     if guard_response is not None:
         return guard_response
-    date_response = _future_date_response(payload.planned_date)
-    if date_response is not None:
-        return date_response
     _validate_semantic_payload(payload)
     try:
         detail = update_plan_item(plan_item_id, payload)
