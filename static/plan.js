@@ -8,6 +8,7 @@
   const PLAN_EXPANDED_DAY_KEYS = new Set();
   const PLAN_CHECKIN_ROWS = new Map();
   const PLAN_CHECKIN_LOAD_REQUESTS = { current: 0 };
+  const PLAN_RANGE_DAYS = 119;
   const PLAN_CHECKIN_FLAGS = [
     ["Travel", "is_travel"],
     ["Sick", "is_sick"],
@@ -40,6 +41,7 @@
   let planLoadPromise = null;
   let planLoaded = false;
   let planAnchor = "";
+  let pendingPlanScrollAnchor = "";
   const PLAN_VISIBLE_ACTIVITY_LIMIT = 5;
   const PLAN_LOAD_GAUGE_CONFIG = Object.freeze({
     maxRatio: 1.5,
@@ -165,9 +167,7 @@
   }
 
   function getDefaultPlanAnchor() {
-    const currentWeekStart = getWeekStart(getDenverTodayDate());
-    currentWeekStart.setUTCDate(currentWeekStart.getUTCDate() - 21);
-    return toLocalDateKey(currentWeekStart);
+    return toLocalDateKey(getWeekStart(getDenverTodayDate()));
   }
 
   function toLocalDateKey(dateValue) {
@@ -587,10 +587,10 @@
   }
 
   function getPlanCheckinDateRange() {
-    const start = parsePlanDate(planAnchor);
-    const end = new Date(start);
-    end.setUTCDate(end.getUTCDate() + 27);
-    return { start: planAnchor, end: toLocalDateKey(end) };
+    const range = getPlanRange();
+    const end = parsePlanDate(range.end);
+    end.setUTCDate(end.getUTCDate() - 1);
+    return { start: range.start, end: toLocalDateKey(end) };
   }
 
   async function loadPlanCheckins() {
@@ -1037,20 +1037,27 @@
   }
 
   function getPlanRange() {
-    const start = parsePlanDate(planAnchor);
+    const anchor = parsePlanDate(planAnchor);
+    const start = new Date(anchor);
+    start.setUTCDate(start.getUTCDate() - 56);
     const end = new Date(start);
-    end.setUTCDate(end.getUTCDate() + 28);
-    return { start: planAnchor, end: toLocalDateKey(end) };
+    end.setUTCDate(end.getUTCDate() + PLAN_RANGE_DAYS);
+    return { start: toLocalDateKey(start), end: toLocalDateKey(end) };
   }
 
   function setPlanAnchor(value, source = "plan-navigation") {
     const nextAnchor = normalizePlanAnchor(value);
     const changed = nextAnchor !== planAnchor;
     planAnchor = nextAnchor;
+    if (changed || source === "plan-navigation") {
+      pendingPlanScrollAnchor = nextAnchor;
+    }
     const dateInput = document.getElementById("planDateJump");
     if (dateInput) dateInput.value = nextAnchor;
     if (changed && source === "plan-navigation") {
       window.TrainingApp?.navigatePlan?.(nextAnchor);
+    } else if (!changed && source === "plan-navigation") {
+      positionPendingPlanAnchor();
     }
     return changed;
   }
@@ -1119,7 +1126,7 @@
     }).join("");
 
     return `
-      <div class="plan-week-row ${collapsed ? "collapsed" : "expanded"}">
+      <div class="plan-week-row ${collapsed ? "collapsed" : "expanded"}" data-plan-week="${escapeHtml(weekKey || "")}">
         <div class="plan-week-toggle-cell">
           <button type="button" class="plan-week-toggle" data-plan-week-toggle="${escapeHtml(weekKey || "")}" aria-expanded="${collapsed ? "false" : "true"}" aria-label="${escapeHtml(collapsed ? `Expand week of ${weekLabel}` : `Collapse week of ${weekLabel}`)}">${collapsed ? "+" : "−"}</button>
           ${renderPlanWeeklyLoadGauge(weekKey, weeklyRecord, isCurrentWeek)}
@@ -1127,6 +1134,30 @@
         <div class="plan-strip">${html}</div>
       </div>
     `;
+  }
+
+  function positionPendingPlanAnchor() {
+    const weekKey = pendingPlanScrollAnchor;
+    if (!weekKey) {
+      return false;
+    }
+
+    const scrollRegion = document.getElementById("planCalendarScroll");
+    if (!scrollRegion || scrollRegion.clientHeight === 0) {
+      return false;
+    }
+    const weekRow = Array.from(scrollRegion.querySelectorAll("[data-plan-week]"))
+      .find(row => row.dataset.planWeek === weekKey);
+    if (!weekRow) {
+      return false;
+    }
+
+    const scrollRegionTop = scrollRegion.getBoundingClientRect().top;
+    const weekRowTop = weekRow.getBoundingClientRect().top;
+    scrollRegion.scrollTop += weekRowTop - scrollRegionTop
+      - ((scrollRegion.clientHeight - weekRow.offsetHeight) / 2);
+    pendingPlanScrollAnchor = "";
+    return true;
   }
 
   function renderPlanStrip() {
@@ -1139,7 +1170,7 @@
     const rowMap = buildPlanRowMap(rows);
     const weeklyRows = getPlanWeeklyRows();
     const weeklyRowMap = buildPlanWeeklyRowMap(weeklyRows);
-    const weekOffsets = [0, 1, 2, 3];
+    const weekOffsets = Array.from({ length: 17 }, (_, index) => index - 8);
 
     const html = weekOffsets.map((weeksBack) => {
       const weekDates = getWeekDatesOffset(weeksBack);
@@ -1149,6 +1180,7 @@
     }).join("");
 
     strip.innerHTML = html;
+    positionPendingPlanAnchor();
     setupPlanToggleHandlers();
     setupPlanCheckinHandlers();
     setupPlanPaletteDragHandlers();
@@ -1173,7 +1205,7 @@
 
     try {
       const range = getPlanRange();
-      const payload = await window.api.fetchWeekly(4, range.start, range.end);
+      const payload = await window.api.fetchWeekly(17, range.start, range.end);
       const rows = Array.isArray(payload) ? payload : (payload && Array.isArray(payload.rows) ? payload.rows : []);
       window.AppState.weeklyRows = rows;
     } catch (error) {
@@ -1199,7 +1231,7 @@
         throw new Error("Daily API unavailable");
       }
 
-      const payload = await window.api.fetchDaily(28, "", "", range.start, range.end);
+      const payload = await window.api.fetchDaily(365, "", "", range.start, range.end);
       const rows = Array.isArray(payload) ? payload : (payload && Array.isArray(payload.rows) ? payload.rows : []);
       if (requestId !== PLAN_LOAD_REQUESTS.current) {
         return;
@@ -1248,6 +1280,7 @@
     }
     planInitialized = true;
     planAnchor = normalizePlanAnchor(new URL(window.location.href).searchParams.get(PLAN_ANCHOR_PARAMETER));
+    pendingPlanScrollAnchor = planAnchor;
     const initialUrl = new URL(window.location.href);
     if (initialUrl.searchParams.get("tab") === "plan"
       && initialUrl.searchParams.get(PLAN_ANCHOR_PARAMETER) !== planAnchor) {

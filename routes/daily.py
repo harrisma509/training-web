@@ -15,6 +15,7 @@ from fastapi.responses import JSONResponse
 from db import db_conn, rows_to_json
 
 router = APIRouter()
+MAX_READ_RANGE_DAYS = 119
 
 
 def _ride_search_pattern(query: str) -> str:
@@ -81,8 +82,8 @@ def api_daily(
         raise HTTPException(status_code=422, detail="start_date and end_date must be provided together")
     if start_date is not None and start_date >= end_date:
         raise HTTPException(status_code=422, detail="start_date must be before end_date")
-    if start_date is not None and (end_date - start_date).days > 31:
-        raise HTTPException(status_code=422, detail="date range must not exceed 31 days")
+    if start_date is not None and (end_date - start_date).days > MAX_READ_RANGE_DAYS:
+        raise HTTPException(status_code=422, detail="date range must not exceed 119 days")
 
     trimmed_q = (q or "").strip()
     if trimmed_q:

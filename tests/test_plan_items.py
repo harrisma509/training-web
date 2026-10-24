@@ -464,7 +464,7 @@ class PlanItemRouteTests(unittest.TestCase):
         for start_date, end_date in (
             ("2026-10-05", "2026-10-05"),
             ("2026-11-02", "2026-10-05"),
-            ("2026-10-01", "2026-11-03"),
+            ("2026-10-19", "2027-02-16"),
         ):
             with self.subTest(start_date=start_date, end_date=end_date):
                 response = client.get(
@@ -472,6 +472,17 @@ class PlanItemRouteTests(unittest.TestCase):
                     params={"start_date": start_date, "end_date": end_date},
                 )
                 self.assertEqual(response.status_code, 422)
+
+    def test_119_day_plan_window_range_is_accepted(self):
+        cursor = FakeCursor(results=[[]])
+        with patch(
+            "routes.plan_items.db_conn",
+            return_value=FakeConnection(cursor),
+        ):
+            response = api_plan_items(date(2026, 10, 19), date(2027, 2, 15))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(cursor.executed), 1)
 
     def test_valid_empty_range_echoes_boundaries_and_uses_one_query(self):
         cursor = FakeCursor(results=[[]])

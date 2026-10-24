@@ -537,6 +537,7 @@ def test_core_pane_partials_are_single_authority_at_original_composition_points(
                 "planPaletteOpen",
                 "planTemplateLibraryOpen",
                 "planPalettePlacement",
+                "planCalendarScroll",
                 "planStrip",
                 "planPalette",
                 "planPaletteTitle",

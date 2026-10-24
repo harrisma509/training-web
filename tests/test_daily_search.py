@@ -1,7 +1,9 @@
 import json
 import unittest
-from datetime import date
+from datetime import date, timedelta
 from unittest.mock import patch
+
+from fastapi import HTTPException
 
 from routes.daily import api_daily, api_ride_search
 
@@ -124,6 +126,40 @@ class RideSearchRouteTests(unittest.TestCase):
 
 
 class DailyDateRouteTests(unittest.TestCase):
+    def test_plan_window_range_is_accepted_and_uses_exclusive_end(self):
+        start_date = date(2026, 8, 24)
+        end_date = start_date + timedelta(days=119)
+        connection = FakeConn([], 0)
+
+        with patch("routes.daily.db_conn", return_value=connection):
+            response = api_daily(limit=365, start_date=start_date, end_date=end_date)
+
+        self.assertEqual(response.status_code, 200)
+        sql, params = connection.cursor_value.executed[0]
+        self.assertIn("dates.date >= %s", sql)
+        self.assertIn("dates.date < %s", sql)
+        self.assertEqual(params[-3:], (start_date, end_date, 365))
+
+    def test_ranges_over_limit_and_existing_invalid_ranges_are_rejected(self):
+        start_date = date(2026, 8, 24)
+        invalid_ranges = (
+            ({"start_date": start_date, "end_date": start_date + timedelta(days=120)},
+             "date range must not exceed 119 days"),
+            ({"start_date": start_date}, "start_date and end_date must be provided together"),
+            ({"start_date": start_date, "end_date": start_date},
+             "start_date must be before end_date"),
+            ({"date": start_date, "start_date": start_date, "end_date": start_date + timedelta(days=1)},
+             "date cannot be combined with a date range"),
+        )
+
+        for parameters, expected_detail in invalid_ranges:
+            with self.subTest(parameters=parameters), patch("routes.daily.db_conn") as db_conn:
+                with self.assertRaises(HTTPException) as raised:
+                    api_daily(**parameters)
+                self.assertEqual(raised.exception.status_code, 422)
+                self.assertEqual(raised.exception.detail, expected_detail)
+                db_conn.assert_not_called()
+
     def test_exact_date_is_parameterized_for_default_and_text_filtered_reads(self):
         requested_date = date(2012, 7, 15)
         rows = [{"date": requested_date, "main_ride_name": "Historic Ride"}]

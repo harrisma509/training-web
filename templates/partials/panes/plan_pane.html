@@ -3,7 +3,7 @@
         <div class="plan-toolbar" aria-label="Plan calendar navigation">
             <button id="planPreviousFour" type="button" aria-label="Show the previous four weeks">−4 weeks</button>
             <button id="planPreviousOne" type="button" aria-label="Show the previous week">−1 week</button>
-            <button id="planToday" type="button" aria-label="Show the current week and next three weeks">Today</button>
+            <button id="planToday" type="button" aria-label="Show the current week">Today</button>
             <label class="plan-date-jump" for="planDateJump">Jump to date
                 <input id="planDateJump" type="date">
             </label>
@@ -50,7 +50,10 @@
         <div class="plan-workspace">
             <div class="plan-calendar-region">
                 <div id="planPalettePlacement" class="plan-palette-placement" aria-live="polite"></div>
-                <div id="planStrip" class="plan-weeks" aria-live="polite"></div>
+                <div id="planCalendarScroll" class="plan-calendar-scroll" role="region"
+                    aria-label="Plan calendar weeks" tabindex="0">
+                    <div id="planStrip" class="plan-weeks" aria-live="polite"></div>
+                </div>
             </div>
             <aside id="planPalette" class="plan-palette" aria-labelledby="planPaletteTitle" hidden>
                 <div class="plan-palette-header">

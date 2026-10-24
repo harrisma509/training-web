@@ -1,9 +1,11 @@
 import json
 import subprocess
 import unittest
-from datetime import date
+from datetime import date, timedelta
 from pathlib import Path
 from unittest.mock import patch
+
+from fastapi import HTTPException
 
 from routes.weekly import api_weekly
 
@@ -46,6 +48,37 @@ class FakeConnection:
 
 
 class WeeklyRouteCurrentEmptyWeekTests(unittest.TestCase):
+    def test_plan_window_range_is_accepted_and_uses_exclusive_end(self):
+        start_date = date(2026, 8, 24)
+        end_date = start_date + timedelta(days=119)
+        connection = FakeConnection([])
+
+        with patch("routes.weekly.db_conn", return_value=connection):
+            response = api_weekly(limit=17, start_date=start_date, end_date=end_date)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("weeks.week_start >= %s", connection.cursor_value.sql[0])
+        self.assertIn("weeks.week_start < %s", connection.cursor_value.sql[0])
+        self.assertEqual(connection.cursor_value.params, [(start_date, end_date, 17)])
+
+    def test_ranges_over_limit_and_existing_invalid_ranges_are_rejected(self):
+        start_date = date(2026, 8, 24)
+        invalid_ranges = (
+            ({"start_date": start_date, "end_date": start_date + timedelta(days=120)},
+             "date range must not exceed 119 days"),
+            ({"start_date": start_date}, "start_date and end_date must be provided together"),
+            ({"start_date": start_date, "end_date": start_date},
+             "start_date must be before end_date"),
+        )
+
+        for parameters, expected_detail in invalid_ranges:
+            with self.subTest(parameters=parameters), patch("routes.weekly.db_conn") as db_conn:
+                with self.assertRaises(HTTPException) as raised:
+                    api_weekly(**parameters)
+                self.assertEqual(raised.exception.status_code, 422)
+                self.assertEqual(raised.exception.detail, expected_detail)
+                db_conn.assert_not_called()
+
     def test_zero_activity_row_preserves_null_interpretive_values_and_missing_audit(self):
         row = {
             "week_start": date(2026, 10, 5),

@@ -30,6 +30,7 @@ from services.plan_service import (
 )
 
 router = APIRouter()
+MAX_READ_RANGE_DAYS = 119
 logger = logging.getLogger(__name__)
 DENVER = ZoneInfo("America/Denver")
 
@@ -290,10 +291,10 @@ def api_plan_items(start_date: date, end_date: date):
             status_code=422,
             detail="start_date must be before end_date",
         )
-    if (end_date - start_date).days > 31:
+    if (end_date - start_date).days > MAX_READ_RANGE_DAYS:
         raise HTTPException(
             status_code=422,
-            detail="date range must not exceed 31 days",
+            detail="date range must not exceed 119 days",
         )
 
     try:
