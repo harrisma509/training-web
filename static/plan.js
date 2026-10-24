@@ -1056,7 +1056,7 @@
     if (dateInput) dateInput.value = nextAnchor;
     if (changed && source === "plan-navigation") {
       window.TrainingApp?.navigatePlan?.(nextAnchor);
-    } else if (!changed && source === "plan-navigation") {
+    } else if (!changed && source === "plan-navigation" && !planLoadPromise) {
       positionPendingPlanAnchor();
     }
     return changed;
@@ -1160,6 +1160,25 @@
     return true;
   }
 
+  function setupPlanCalendarScrollHandlers() {
+    const scrollRegion = document.getElementById("planCalendarScroll");
+    if (!scrollRegion || scrollRegion.dataset.planScrollBound === "true") {
+      return;
+    }
+
+    const cancelPendingPosition = () => {
+      pendingPlanScrollAnchor = "";
+    };
+    scrollRegion.addEventListener("wheel", cancelPendingPosition, { passive: true });
+    scrollRegion.addEventListener("touchmove", cancelPendingPosition, { passive: true });
+    scrollRegion.addEventListener("keydown", event => {
+      if (["ArrowDown", "ArrowUp", "PageDown", "PageUp", "Home", "End", " "].includes(event.key)) {
+        cancelPendingPosition();
+      }
+    });
+    scrollRegion.dataset.planScrollBound = "true";
+  }
+
   function renderPlanStrip() {
     const strip = document.getElementById("planStrip");
     if (!strip) {
@@ -1178,9 +1197,8 @@
       const defaultCollapsed = false;
       return renderPlanWeekRow(weekDates[0], rowMap, weeklyRowMap, defaultCollapsed);
     }).join("");
-
     strip.innerHTML = html;
-    positionPendingPlanAnchor();
+    strip.innerHTML = html;
     setupPlanToggleHandlers();
     setupPlanCheckinHandlers();
     setupPlanPaletteDragHandlers();
@@ -1224,7 +1242,7 @@
     const range = getPlanRange();
 
     strip.innerHTML = '<div class="plan-empty-state">Loading plan…</div>';
-    window.PlanItemsController?.load?.(range, { force });
+    const planItemsPromise = window.PlanItemsController?.load?.(range, { force });
 
     try {
       if (!window.api || typeof window.api.fetchDaily !== "function") {
@@ -1243,7 +1261,11 @@
         return;
       }
       renderPlanStrip();
-      await loadPlanCheckins();
+      await Promise.all([planItemsPromise, loadPlanCheckins()]);
+      if (requestId !== PLAN_LOAD_REQUESTS.current) {
+        return false;
+      }
+      positionPendingPlanAnchor();
       return true;
     } catch (error) {
       console.error(error);
@@ -1288,6 +1310,7 @@
       window.history.replaceState({}, "", initialUrl);
     }
     setupPlanNavigation();
+    setupPlanCalendarScrollHandlers();
     window.PlanOptionsController?.init?.({ onChange: renderPlanStrip });
     window.PlanItemsController?.init?.({ onChange: renderPlanStrip });
     window.PlanPaletteController?.init?.({ onChange: renderPlanStrip });

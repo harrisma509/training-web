@@ -41,7 +41,10 @@ assert.match(planSource, /fetchDaily\(365, "", "", range\.start, range\.end\)/);
 assert.match(planSource, /fetchWeekly\(17, range\.start, range\.end\)/);
 assert.match(planSource, /data-plan-week="\$\{escapeHtml\(weekKey \|\| ""\)\}"/);
 assert.match(planSource, /function positionPendingPlanAnchor\(\)/);
-assert.match(planSource, /strip\.innerHTML = html;\s+positionPendingPlanAnchor\(\);/);
+assert.match(planSource, /const planItemsPromise = window\.PlanItemsController\?\.load\?\.\(range, \{ force \}\)/);
+assert.match(planSource, /await Promise\.all\(\[planItemsPromise, loadPlanCheckins\(\)\]\);\s+if \(requestId !== PLAN_LOAD_REQUESTS\.current\) \{\s+return false;\s+\}\s+positionPendingPlanAnchor\(\);/);
+assert.match(planSource, /scrollRegion\.addEventListener\("wheel", cancelPendingPosition/);
+assert.match(planSource, /scrollRegion\.addEventListener\("touchmove", cancelPendingPosition/);
 assert.match(planSource, /pendingPlanScrollAnchor = planAnchor/);
 assert.match(planSource, /PLAN_WEEK_COLLAPSE_STATE/);
 
