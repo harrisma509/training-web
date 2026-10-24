@@ -18,10 +18,10 @@ function extractPlanFunction(name) {
 
 assert.match(planSource, /const PLAN_ANCHOR_PARAMETER = "plan_start"/);
 assert.match(planSource, /const PLAN_TIME_ZONE = "America\/Denver"/);
-assert.match(planSource, /const PLAN_RANGE_DAYS = 119/);
+assert.match(planSource, /const PLAN_RANGE_DAYS = 91/);
 assert.match(planSource, /const MONTH_NAMES = \["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"\]/);
 assert.match(planSource, /const month = MONTH_NAMES\[dateValue\.getUTCMonth\(\)\]/);
-assert.match(planSource, /const weekOffsets = Array\.from\(\{ length: 17 \}, \(_, index\) => index - 8\)/);
+assert.match(planSource, /const weekOffsets = Array\.from\(\{ length: 13 \}, \(_, index\) => index - 8\)/);
 assert.match(planSource, /setUTCDate\(start\.getUTCDate\(\) \+ index\)/);
 assert.match(planSource, /function getDefaultPlanAnchor\(\)/);
 assert.match(planSource, /return toLocalDateKey\(getWeekStart\(getDenverTodayDate\(\)\)\)/);
@@ -38,7 +38,7 @@ assert.match(planSource, /aria-current="date"/);
 assert.match(planSource, /const isCurrentDay = dayKey === getDenverTodayKey\(\)/);
 assert.match(planSource, /setPlanAnchor\(getDefaultPlanAnchor\(\)\)/);
 assert.match(planSource, /fetchDaily\(365, "", "", range\.start, range\.end\)/);
-assert.match(planSource, /fetchWeekly\(17, range\.start, range\.end\)/);
+assert.match(planSource, /fetchWeekly\(13, range\.start, range\.end\)/);
 assert.match(planSource, /data-plan-week="\$\{escapeHtml\(weekKey \|\| ""\)\}"/);
 assert.match(planSource, /function positionPendingPlanAnchor\(\)/);
 assert.match(planSource, /const planItemsPromise = window\.PlanItemsController\?\.load\?\.\(range, \{ force \}\)/);
@@ -55,15 +55,15 @@ const planDateHelpers = [
 ].join("\n");
 const rangeContext = vm.createContext({
   planAnchor: "2026-10-19",
-  PLAN_RANGE_DAYS: 119,
+  PLAN_RANGE_DAYS: 91,
 });
 vm.runInContext(`${planDateHelpers}\n${extractPlanFunction("getPlanRange")}`, rangeContext);
 const planRange = vm.runInContext("getPlanRange()", rangeContext);
-assert.deepEqual({ ...planRange }, { start: "2026-08-24", end: "2026-12-21" });
+assert.deepEqual({ ...planRange }, { start: "2026-08-24", end: "2026-11-23" });
 const rangeStart = new Date(`${planRange.start}T00:00:00Z`);
 const rangeEnd = new Date(`${planRange.end}T00:00:00Z`);
-assert.equal((rangeEnd - rangeStart) / 86400000, 119);
-assert.equal((rangeEnd - rangeStart) / (7 * 86400000), 17);
+assert.equal((rangeEnd - rangeStart) / 86400000, 91);
+assert.equal((rangeEnd - rangeStart) / (7 * 86400000), 13);
 const defaultAnchorContext = vm.createContext({
   getDenverTodayDate: () => new Date(Date.UTC(2026, 9, 21)),
 });
@@ -156,4 +156,4 @@ for (const [isoDate, expectedMonth, expectedDate] of [
   assert.equal(`${label.month} ${label.date}`, `${expectedMonth} ${expectedDate}`);
 }
 
-console.log("Plan 17-week calendar contract tests passed.");
+console.log("Plan 13-week calendar contract tests passed.");

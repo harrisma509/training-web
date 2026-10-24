@@ -8,7 +8,7 @@
   const PLAN_EXPANDED_DAY_KEYS = new Set();
   const PLAN_CHECKIN_ROWS = new Map();
   const PLAN_CHECKIN_LOAD_REQUESTS = { current: 0 };
-  const PLAN_RANGE_DAYS = 119;
+  const PLAN_RANGE_DAYS = 91;
   const PLAN_CHECKIN_FLAGS = [
     ["Travel", "is_travel"],
     ["Sick", "is_sick"],
@@ -1189,7 +1189,7 @@
     const rowMap = buildPlanRowMap(rows);
     const weeklyRows = getPlanWeeklyRows();
     const weeklyRowMap = buildPlanWeeklyRowMap(weeklyRows);
-    const weekOffsets = Array.from({ length: 17 }, (_, index) => index - 8);
+    const weekOffsets = Array.from({ length: 13 }, (_, index) => index - 8);
 
     const html = weekOffsets.map((weeksBack) => {
       const weekDates = getWeekDatesOffset(weeksBack);
@@ -1223,7 +1223,7 @@
 
     try {
       const range = getPlanRange();
-      const payload = await window.api.fetchWeekly(17, range.start, range.end);
+      const payload = await window.api.fetchWeekly(13, range.start, range.end);
       const rows = Array.isArray(payload) ? payload : (payload && Array.isArray(payload.rows) ? payload.rows : []);
       window.AppState.weeklyRows = rows;
     } catch (error) {
