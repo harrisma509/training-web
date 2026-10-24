@@ -7,6 +7,7 @@ const apiSource = fs.readFileSync("static/api.js", "utf8");
 const planSource = fs.readFileSync("static/plan.js", "utf8");
 const itemSource = fs.readFileSync("static/plan_items.js", "utf8");
 const templateSource = fs.readFileSync("templates/index.html", "utf8");
+const paneSource = fs.readFileSync("templates/partials/panes/plan_pane.html", "utf8");
 const cssSource = fs.readFileSync("static/plan.css", "utf8");
 
 assert.match(apiSource, /async fetchPlanItems\(startDate, endDate, options = \{\}\)/);
@@ -24,7 +25,9 @@ assert.match(itemSource, /item_state === "draft"/);
 assert.match(itemSource, /structured workout with/);
 assert.match(itemSource, /role="listitem" tabindex="0" draggable="true"/);
 assert.match(itemSource, /data-plan-item-action="manage"/);
-assert.match(itemSource, /Manage \$\{escape\(title\)\} planned for/);
+assert.match(itemSource, /data-plan-quick-action="move"/);
+assert.match(itemSource, /role="menuitem"/);
+assert.match(itemSource, /Actions for \$\{escape\(title\)\} planned for/);
 assert.match(itemSource, /draggable="false"[\s\S]*data-plan-item-action="manage"/);
 assert.doesNotMatch(itemSource, /data-plan-item-action="(?:edit|move|drag-move)"/);
 assert.doesNotMatch(itemSource, /plan-planned-actions|plan-planned-move-handle/);
@@ -34,6 +37,8 @@ assert.doesNotMatch(itemSource, /user_note/);
 assert.match(planSource, /PlanItemsController\?\.init\?\.\(\{ onChange: renderPlanStrip \}\)/);
 assert.match(planSource, /PlanItemsController\?\.load\?\.\(range, \{ force \}\)/);
 assert.match(planSource, /renderDaySection\?\.\(dayKey\)/);
+assert.match(planSource, /isQuickMoveDestination\?\.\(dayKey\)/);
+assert.match(planSource, /is-plan-item-move-valid/);
 assert.match(planSource, /No activity recorded yet/);
 assert.match(planSource, /plannedState\.status === "success"/);
 assert.match(planSource, /MONTH_NAMES\[dateValue\.getUTCMonth\(\)\]/);
@@ -46,6 +51,10 @@ assert.match(cssSource, /\.plan-planned-manage:focus-visible/);
 assert.match(cssSource, /var\(--panel2\)/);
 assert.match(cssSource, /var\(--blue\)/);
 assert.match(cssSource, /overflow-wrap: anywhere/);
+assert.match(cssSource, /\.plan-item-quick-actions/);
+assert.match(cssSource, /\.plan-day\.is-plan-item-move-valid/);
+assert.match(paneSource, /id="planItemActionStatus"/);
+assert.match(paneSource, /id="planItemMoveCancel"/);
 
 async function testApiWrapper() {
   let request;
@@ -230,7 +239,7 @@ async function testController() {
     month: "long",
     day: "numeric",
   }).format(new Date(`${future}T12:00:00Z`));
-  assert.ok(rendered.includes(`aria-label="Manage Second item planned for ${fullDate}"`));
+  assert.ok(rendered.includes(`aria-label="Actions for Second item planned for ${fullDate}"`));
   assert.match(rendered, /draggable="false"/);
   assert.match(rendered, /draggable="true"/);
   assert.match(rendered, /Drag is optional; activate to edit/);
@@ -300,11 +309,98 @@ function makeEvent(target, extra = {}) {
   };
 }
 
+function createMenuHarness() {
+  const documentListeners = new Map();
+  const windowListeners = new Map();
+  const menuListeners = new Map();
+  let activeElement = null;
+  const document = {
+    documentElement: { clientWidth: 1024, clientHeight: 768 },
+    body: { appendChild(element) { element.isConnected = true; } },
+    get activeElement() { return activeElement; },
+    set activeElement(element) { activeElement = element; },
+    getElementById(id) { return id === "planStrip" ? strip : null; },
+    createElement() {
+      let innerHTML = "";
+      let menuItems = [];
+      return {
+        id: "",
+        className: "",
+        hidden: false,
+        isConnected: false,
+        style: {},
+        attributes: {},
+        addEventListener(type, listener) { menuListeners.set(type, listener); },
+        setAttribute(name, value) { this.attributes[name] = value; },
+        set innerHTML(value) {
+          innerHTML = value;
+          menuItems = Array.from(value.matchAll(/data-plan-quick-action="([^"]+)"/g), match => ({
+            dataset: { planQuickAction: match[1] },
+            focus() { activeElement = this; },
+            closest(selector) {
+              return selector === "[data-plan-quick-action]" ? this : null;
+            },
+          }));
+        },
+        get innerHTML() { return innerHTML; },
+        querySelector(selector) {
+          return selector === '[role="menuitem"]' ? menuItems[0] || null : null;
+        },
+        querySelectorAll(selector) {
+          return selector === '[role="menuitem"]' ? menuItems : [];
+        },
+        contains(element) { return element === this || menuItems.includes(element); },
+        getBoundingClientRect() { return { width: 180, height: 120 }; },
+      };
+    },
+    addEventListener(type, listener) { documentListeners.set(type, listener); },
+  };
+  const stripListeners = new Map();
+  const strip = {
+    dataset: {},
+    addEventListener(type, listener) {
+      const listeners = stripListeners.get(type) || [];
+      listeners.push(listener);
+      stripListeners.set(type, listeners);
+    },
+    querySelectorAll() { return []; },
+  };
+  let surfaceOpen = false;
+  const surface = {
+    create(options) {
+      return {
+        isOpen: () => surfaceOpen,
+        open() { surfaceOpen = true; },
+        close(reason) {
+          if (!surfaceOpen) return false;
+          surfaceOpen = false;
+          options.onBeforeClose?.(reason, options.getSurface());
+          options.onAfterClose?.(reason, options.getSurface());
+          return true;
+        },
+        requestClose(reason) { return Promise.resolve(this.close(reason)); },
+      };
+    },
+  };
+  const windowListenersAdd = (type, listener) => windowListeners.set(type, listener);
+  return {
+    document,
+    documentListeners,
+    menuListeners,
+    strip,
+    stripListeners,
+    surface,
+    windowListeners,
+    windowListenersAdd,
+  };
+}
+
 async function testCardInteractionAndDragContracts() {
   const listeners = new Map();
   const today = denverDateOffset(0);
   const yesterday = denverDateOffset(-1);
   const tomorrow = denverDateOffset(1);
+  const nextWeek = denverDateOffset(7);
   const sourceCard = {
     dataset: { planItemId: "41", planItemManageable: "true" },
     classList: createClassList(),
@@ -312,6 +408,13 @@ async function testCardInteractionAndDragContracts() {
   const manageButton = {
     dataset: { planItemId: "41" },
     classList: createClassList(),
+    isConnected: true,
+    attributes: {},
+    setAttribute(name, value) { this.attributes[name] = value; },
+    focus() { menuHarness.document.activeElement = this; },
+    getBoundingClientRect() {
+      return { top: 20, right: 240, bottom: 48 };
+    },
   };
   const oldCard = {
     dataset: { planItemId: "43", planItemManageable: "false" },
@@ -321,7 +424,7 @@ async function testCardInteractionAndDragContracts() {
     dataset: { planItemId: "42", planItemManageable: "true" },
     classList: createClassList(),
   };
-  const days = [yesterday, today, tomorrow].map(planDate => ({
+  const days = [yesterday, today, tomorrow, nextWeek].map(planDate => ({
     dataset: { planDate },
     classList: createClassList(),
     contains: () => false,
@@ -337,14 +440,32 @@ async function testCardInteractionAndDragContracts() {
       return [...days, sourceCard, todayCard, oldCard];
     },
   };
-  const editorCalls = { open: [], dragStart: [], drop: [] };
+  const menuHarness = createMenuHarness();
+  const editorCalls = {
+    open: [],
+    quickMove: [],
+    quickDelete: [],
+    quickMoveTargets: [],
+    dragStart: [],
+    drop: [],
+  };
+  let quickMoveMode = false;
   const context = {
     window: {
+      innerWidth: 1024,
+      innerHeight: 768,
+      addEventListener: menuHarness.windowListenersAdd,
+      TrainingApp: { TransientSurface: menuHarness.surface },
       escapeHtml: value => String(value ?? ""),
       api: { fetchPlanItems: async () => ({ items: [] }) },
       PlanItemEditor: {
         itemDragMime: "application/x-training-plan-item-id",
         open: (...args) => editorCalls.open.push(args),
+        startQuickMove: (...args) => editorCalls.quickMove.push(args),
+        cancelFromQuickAction: (...args) => editorCalls.quickDelete.push(args),
+        isQuickMoveMode: () => quickMoveMode,
+        isQuickMoveDestination: date => date > today && date !== tomorrow,
+        handleQuickMoveTarget: date => editorCalls.quickMoveTargets.push(date),
         handleDragStart: (itemId, event) => {
           editorCalls.dragStart.push(itemId);
           event.dataTransfer.setData("application/x-training-plan-item-id", String(itemId));
@@ -353,11 +474,17 @@ async function testCardInteractionAndDragContracts() {
         handleDrop: (...args) => editorCalls.drop.push(args),
       },
     },
-    document: {
-      getElementById: id => id === "planStrip" ? strip : null,
-      querySelectorAll: () => [...days, sourceCard, todayCard, oldCard],
-    },
+    document: menuHarness.document,
   };
+  menuHarness.document.getElementById = id =>
+    id === "planStrip" ? strip : null;
+  menuHarness.document.documentElement.clientWidth = 1024;
+  menuHarness.document.documentElement.clientHeight = 768;
+  menuHarness.document.body.appendChild = element => {
+    element.isConnected = true;
+    menuHarness.menu = element;
+  };
+  menuHarness.document.querySelectorAll = () => [...days, sourceCard, todayCard, oldCard];
   vm.runInNewContext(itemSource, context);
   const controller = context.window.PlanItemsController;
   let changes = 0;
@@ -393,9 +520,56 @@ async function testCardInteractionAndDragContracts() {
 
   const ellipsisClick = makeEvent(eventTarget({ card: sourceCard, manageButton, button: true }));
   dispatch("click", ellipsisClick);
+  assert.equal(editorCalls.open.length, 1, "ellipsis opens the action menu, not the editor");
+  assert.equal(ellipsisClick.propagationStopped, true);
+  assert.equal(manageButton.attributes["aria-expanded"], "true");
+  assert.equal(menuHarness.menu.hidden, false);
+  assert.equal(menuHarness.document.activeElement.dataset.planQuickAction, "edit");
+
+  const menuButtons = menuHarness.menu.querySelectorAll('[role="menuitem"]');
+  const keydownMenu = menuHarness.menuListeners.get("keydown");
+  const arrowDown = makeEvent(menuButtons[0], { key: "ArrowDown" });
+  keydownMenu(arrowDown);
+  assert.equal(arrowDown.defaultPrevented, true);
+  assert.equal(menuHarness.document.activeElement.dataset.planQuickAction, "move");
+  const endKey = makeEvent(menuButtons[1], { key: "End" });
+  keydownMenu(endKey);
+  assert.equal(menuHarness.document.activeElement.dataset.planQuickAction, "delete");
+  const escapeMenu = makeEvent(menuButtons[2], { key: "Escape" });
+  keydownMenu(escapeMenu);
+  assert.equal(escapeMenu.defaultPrevented, true);
+  assert.equal(menuHarness.menu.hidden, true);
+  assert.equal(manageButton.attributes["aria-expanded"], "false");
+  assert.equal(menuHarness.document.activeElement, manageButton);
+
+  dispatch("click", makeEvent(eventTarget({ card: sourceCard, manageButton, button: true })));
+  menuHarness.documentListeners.get("pointerdown")(makeEvent({}));
+  assert.equal(menuHarness.menu.hidden, true, "outside pointer closes the menu");
+  assert.equal(menuHarness.document.activeElement, manageButton);
+
+  dispatch("click", makeEvent(eventTarget({ card: sourceCard, manageButton, button: true })));
+  dispatch("click", makeEvent(eventTarget({ card: sourceCard, manageButton, button: true })));
+  assert.equal(menuHarness.menu.hidden, true, "activating the open trigger toggles the menu closed");
+
+  dispatch("click", makeEvent(eventTarget({ card: sourceCard, manageButton, button: true })));
+  const editButton = menuHarness.menu.querySelectorAll('[role="menuitem"]')[0];
+  menuHarness.menuListeners.get("click")({
+    target: editButton,
+  });
   assert.equal(editorCalls.open.length, 2);
   assert.equal(editorCalls.open[1][1], manageButton);
-  assert.equal(ellipsisClick.propagationStopped, true);
+
+  dispatch("click", makeEvent(eventTarget({ card: sourceCard, manageButton, button: true })));
+  const moveButton = menuHarness.menu.querySelectorAll('[role="menuitem"]')[1];
+  menuHarness.menuListeners.get("click")({ target: moveButton });
+  assert.equal(editorCalls.quickMove.length, 1);
+  assert.equal(editorCalls.quickMove[0][0].plan_item_id, 41);
+  assert.equal(editorCalls.quickMove[0][1], manageButton);
+
+  dispatch("click", makeEvent(eventTarget({ card: sourceCard, manageButton, button: true })));
+  const deleteButton = menuHarness.menu.querySelectorAll('[role="menuitem"]')[2];
+  menuHarness.menuListeners.get("click")({ target: deleteButton });
+  assert.equal(editorCalls.quickDelete.length, 1);
 
   for (const key of ["Enter", " "]) {
     const keyEvent = makeEvent(eventTarget({ card: sourceCard }), { key });
@@ -408,6 +582,33 @@ async function testCardInteractionAndDragContracts() {
   dispatch("click", makeEvent(eventTarget({ card: todayCard })));
   assert.equal(editorCalls.open.length, 5, "today's card opens the editor");
   assert.equal(editorCalls.open[4][0].plan_item_id, 42);
+
+  quickMoveMode = true;
+  const targetCountBeforeMoveClicks = editorCalls.quickMoveTargets.length;
+  dispatch("click", makeEvent(eventTarget({
+    day: days.find(day => day.dataset.planDate === today),
+  })));
+  dispatch("click", makeEvent(eventTarget({
+    day: days.find(day => day.dataset.planDate === tomorrow),
+  })));
+  assert.equal(
+    editorCalls.quickMoveTargets.length,
+    targetCountBeforeMoveClicks,
+    "today and the source day are not quick-move destinations",
+  );
+  const validMoveClick = makeEvent(eventTarget({
+    day: days.find(day => day.dataset.planDate === nextWeek),
+  }));
+  dispatch("click", validMoveClick);
+  assert.equal(validMoveClick.defaultPrevented, true);
+  assert.deepEqual(editorCalls.quickMoveTargets, [nextWeek]);
+  const validMoveKey = makeEvent(eventTarget({
+    day: days.find(day => day.dataset.planDate === nextWeek),
+  }), { key: "Enter" });
+  dispatch("keydown", validMoveKey);
+  assert.equal(validMoveKey.defaultPrevented, true);
+  assert.deepEqual(editorCalls.quickMoveTargets, [nextWeek, nextWeek]);
+  quickMoveMode = false;
 
   let transferred = [];
   const dataTransfer = {

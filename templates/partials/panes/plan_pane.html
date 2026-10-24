@@ -49,6 +49,14 @@
         </div>
         <div class="plan-workspace">
             <div class="plan-calendar-region">
+                <div id="planItemActionStatus" class="plan-item-action-status" role="status"
+                    aria-live="polite" aria-atomic="true" tabindex="-1" hidden>
+                    <span id="planItemActionStatusText"></span>
+                    <button id="planItemMoveCancel" type="button" class="button-secondary"
+                        data-plan-item-move-cancel hidden>Cancel</button>
+                    <button id="planItemActionStatusDismiss" type="button" class="plan-item-action-dismiss"
+                        aria-label="Dismiss Plan action message" hidden>×</button>
+                </div>
                 <div id="planPalettePlacement" class="plan-palette-placement" aria-live="polite"></div>
                 <div id="planCalendarScroll" class="plan-calendar-scroll" role="region"
                     aria-label="Plan calendar weeks" tabindex="0">

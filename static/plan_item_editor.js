@@ -8,10 +8,16 @@
     error: "",
     categories: [],
     opener: null,
+    quickMove: false,
+    actionNotice: "",
   };
   let panel;
   let form;
   let status;
+  let actionStatus;
+  let actionStatusText;
+  let moveCancelButton;
+  let actionStatusDismiss;
   let initialized = false;
 
   function renderCalendar() {
@@ -93,10 +99,30 @@
     };
   }
 
+  function renderActionStatus() {
+    if (!actionStatus || !actionStatusText) return;
+    const moving = state.quickMove && state.item;
+    actionStatus.hidden = !moving && !state.actionNotice;
+    actionStatusText.textContent = moving
+      ? state.saving
+        ? `Moving "${state.item.prescription?.title || "planned item"}"…`
+        : `Moving "${state.item.prescription?.title || "planned item"}" - choose a future day`
+      : state.actionNotice;
+    if (moveCancelButton) {
+      moveCancelButton.hidden = !moving;
+      moveCancelButton.disabled = state.saving;
+    }
+    if (actionStatusDismiss) {
+      actionStatusDismiss.hidden = Boolean(moving) || !state.actionNotice;
+    }
+  }
+
   function render() {
     if (!panel) return;
-    panel.hidden = state.mode === "idle";
+    renderActionStatus();
+    panel.hidden = state.quickMove || state.mode === "idle";
     panel.classList.toggle("is-moving", state.mode === "moving");
+    if (state.quickMove) return;
     if (state.mode === "idle") return;
     const item = state.item;
     const prescription = item.prescription || {};
@@ -161,6 +187,8 @@
     state.opener = opener || null;
     state.mode = mode;
     state.error = "";
+    state.quickMove = false;
+    state.actionNotice = "";
     render();
     loadCategories().then(() => {
       if (state.item !== item || !form) return;
@@ -190,6 +218,8 @@
     state.item = null;
     state.mode = "idle";
     state.error = "";
+    state.quickMove = false;
+    state.actionNotice = "";
     render();
     renderCalendar();
     if (opener?.isConnected !== false && opener) {
@@ -203,6 +233,121 @@
     }
     state.opener = null;
     return true;
+  }
+
+  function startQuickMove(item, opener) {
+    if (
+      !item
+      || item.item_state !== "committed"
+      || item.planned_date < todayKey()
+      || state.mode !== "idle"
+      || state.saving
+    ) return false;
+    state.item = item;
+    state.opener = opener || null;
+    state.mode = "moving";
+    state.quickMove = true;
+    state.error = "";
+    state.actionNotice = "";
+    render();
+    renderCalendar();
+    moveCancelButton?.focus();
+    return true;
+  }
+
+  function finishQuickMove({ restoreFocus = true, notice = "" } = {}) {
+    if (!state.quickMove || state.saving) return false;
+    const opener = state.opener;
+    state.item = null;
+    state.opener = null;
+    state.mode = "idle";
+    state.quickMove = false;
+    state.actionNotice = notice;
+    render();
+    renderCalendar();
+    if (notice) {
+      actionStatus?.focus();
+    } else if (restoreFocus && opener?.isConnected !== false && opener) {
+      opener.focus?.();
+    }
+    return true;
+  }
+
+  function isQuickMoveDestination(dateKey) {
+    return Boolean(
+      state.quickMove
+      && state.item
+      && dateKey > todayKey()
+      && dateKey !== state.item.planned_date
+    );
+  }
+
+  async function persistMove(item, dateKey) {
+    const updated = await window.api.updatePlanItem(
+      item.plan_item_id,
+      movePayload(item, dateKey),
+    );
+    if (String(updated?.plan_item_id) !== String(item.plan_item_id)
+        || !window.PlanItemsController?.replaceItem?.(updated)) {
+      throw new Error("The move response did not contain the moved planned item.");
+    }
+    return updated;
+  }
+
+  function moveErrorMessage(error) {
+    return error?.status
+      ? (error.detail || "Unable to move planned item.")
+      : "The outcome is unknown. Review the calendar before retrying.";
+  }
+
+  async function handleQuickMoveTarget(dateKey) {
+    if (!isQuickMoveDestination(dateKey) || state.saving) return false;
+    const item = state.item;
+    state.saving = true;
+    renderActionStatus();
+    try {
+      await persistMove(item, dateKey);
+      state.item = null;
+      state.opener = null;
+      state.mode = "idle";
+      state.quickMove = false;
+      state.actionNotice = "";
+      render();
+      renderCalendar();
+      const cards = Array.from(
+        document.querySelectorAll?.(".plan-planned-card[data-plan-item-id]") || [],
+      );
+      const movedCard = cards.find(card =>
+        String(card.dataset.planItemId) === String(item.plan_item_id));
+      movedCard?.focus?.();
+      return true;
+    } catch (error) {
+      let notice = moveErrorMessage(error);
+      if (!error?.status) {
+        try {
+          await window.PlanController?.refresh?.();
+        } catch {
+          notice = "The outcome is unknown. Refresh failed; review the calendar before retrying.";
+        }
+      }
+      state.saving = false;
+      finishQuickMove({ restoreFocus: false, notice });
+      return false;
+    } finally {
+      state.saving = false;
+      renderActionStatus();
+    }
+  }
+
+  function cancelConfirmation(item) {
+    const title = item.prescription?.title || "this planned item";
+    const date = formatFullDate(item.planned_date);
+    return `Delete ${title} from the plan for ${date}?\nThis removes the item from the active Plan calendar.`;
+  }
+
+  async function persistCancellation(item) {
+    await window.api.cancelPlanItem(item.plan_item_id);
+    window.PlanItemsController?.removeItem?.(item.plan_item_id);
   }
 
   async function submit(payload) {
@@ -225,17 +370,12 @@
 
   async function cancelItem() {
     if (state.saving || !state.item) return;
-    const title = state.item.prescription?.title || "this planned item";
-    const date = formatFullDate(state.item.planned_date);
-    if (!window.confirm(
-      `Delete ${title} from the plan for ${date}?\nThis removes the item from the active Plan calendar.`,
-    )) return;
+    if (!window.confirm(cancelConfirmation(state.item))) return;
     state.saving = true;
     state.error = "Cancelling planned item…";
     render();
     try {
-      await window.api.cancelPlanItem(state.item.plan_item_id);
-      window.PlanItemsController?.removeItem?.(state.item.plan_item_id);
+      await persistCancellation(state.item);
       close(true);
     } catch (error) {
       state.error = error?.status ? (error.detail || "Unable to cancel planned item.") : "The outcome is unknown. Review the calendar before retrying.";
@@ -243,6 +383,47 @@
       render();
     } finally {
       state.saving = false;
+    }
+  }
+
+  async function cancelFromQuickAction(item, opener) {
+    if (!item || state.saving) return false;
+    if (!window.confirm(cancelConfirmation(item))) {
+      opener?.focus?.();
+      return false;
+    }
+    state.saving = true;
+    state.actionNotice = "Removing planned item from the calendar…";
+    renderActionStatus();
+    try {
+      await persistCancellation(item);
+      state.actionNotice = "";
+      renderActionStatus();
+      document.getElementById("planDateJump")?.focus();
+      return true;
+    } catch (error) {
+      let message = error?.status
+        ? (error.detail || "Unable to cancel planned item.")
+        : "The outcome is unknown. Review the calendar before retrying.";
+      if (!error?.status) {
+        try {
+          await window.PlanController?.refresh?.();
+        } catch {
+          message = "The outcome is unknown. Refresh failed; review the calendar before retrying.";
+        }
+      }
+      state.item = item;
+      state.opener = opener || null;
+      state.mode = "edit";
+      state.quickMove = false;
+      state.error = message;
+      state.actionNotice = "";
+      render();
+      panel?.querySelector("input, select, textarea, button")?.focus();
+      return false;
+    } finally {
+      state.saving = false;
+      renderActionStatus();
     }
   }
 
@@ -275,7 +456,7 @@
 
   async function handleDrop(dateKey, event) {
     const itemId = event.dataTransfer?.getData(ITEM_DRAG_MIME);
-    if (!itemId || state.saving || dateKey <= todayKey()) return false;
+    if (!itemId || state.quickMove || state.saving || dateKey <= todayKey()) return false;
     const item = window.PlanItemsController?.getState?.().items?.find(row =>
       String(row.plan_item_id) === String(itemId));
     if (!item || item.item_state !== "committed" || item.planned_date < todayKey()
@@ -286,14 +467,7 @@
     state.saving = true;
     let showError = false;
     try {
-      const updated = await window.api.updatePlanItem(
-        item.plan_item_id,
-        movePayload(item, dateKey),
-      );
-      if (String(updated?.plan_item_id) !== String(item.plan_item_id)
-          || !window.PlanItemsController?.replaceItem?.(updated)) {
-        throw new Error("The move response did not contain the moved planned item.");
-      }
+      await persistMove(item, dateKey);
       const cards = Array.from(
         document.querySelectorAll?.(".plan-planned-card[data-plan-item-id]") || [],
       );
@@ -303,12 +477,11 @@
     } catch (error) {
       state.item = item;
       state.mode = "edit";
+      state.quickMove = false;
       state.opener = Array.from(
         document.querySelectorAll?.(".plan-planned-card[data-plan-item-id]") || [],
       ).find(card => String(card.dataset.planItemId) === String(item.plan_item_id)) || null;
-      state.error = error?.status
-        ? (error.detail || "Unable to move planned item.")
-        : "The outcome is unknown. Review the calendar before retrying.";
+      state.error = moveErrorMessage(error);
       if (!error?.status) await window.PlanController?.refresh?.();
       showError = true;
       return false;
@@ -322,6 +495,7 @@
   }
 
   function handleTarget(dateKey) {
+    if (state.quickMove) return handleQuickMoveTarget(dateKey);
     if (state.mode !== "moving" || !state.item || dateKey <= todayKey()) return false;
     const payload = itemPayload(dateKey);
     submit(payload);
@@ -331,6 +505,10 @@
   function bind() {
     if (initialized) return;
     panel = document.getElementById("planItemEditor");
+    actionStatus = document.getElementById("planItemActionStatus");
+    actionStatusText = document.getElementById("planItemActionStatusText");
+    moveCancelButton = document.getElementById("planItemMoveCancel");
+    actionStatusDismiss = document.getElementById("planItemActionStatusDismiss");
     if (!panel) return;
     panel.addEventListener("click", event => {
       const action = event.target.closest("[data-plan-item-editor-action]")?.dataset.planItemEditorAction;
@@ -353,8 +531,20 @@
       }
       try { submit(itemPayload()); } catch (error) { state.error = error.message; render(); }
     });
+    moveCancelButton?.addEventListener("click", () => finishQuickMove());
+    actionStatusDismiss?.addEventListener("click", () => {
+      state.actionNotice = "";
+      renderActionStatus();
+      document.getElementById("planDateJump")?.focus();
+    });
     document.addEventListener("keydown", event => {
-      if (event.key === "Escape" && state.mode !== "idle") close();
+      if (event.key !== "Escape") return;
+      if (state.quickMove) {
+        event.preventDefault();
+        finishQuickMove();
+      } else if (state.mode !== "idle") {
+        close();
+      }
     });
     initialized = true;
   }
@@ -363,15 +553,20 @@
     bind,
     open,
     close,
+    startQuickMove,
+    isQuickMoveMode: () => state.quickMove,
+    isQuickMoveDestination,
+    handleQuickMoveTarget,
+    cancelFromQuickAction,
     getState: () => ({ ...state }),
-    targetMarkup: (dateKey, dateLabel) => state.mode === "moving" && dateKey > todayKey()
+    targetMarkup: (dateKey, dateLabel) => !state.quickMove && state.mode === "moving" && dateKey > todayKey()
       ? `<button type="button" class="plan-item-day-target" data-plan-item-target="${escape(dateKey)}" aria-label="Move ${escape(state.item?.prescription?.title || "planned item")} to ${escape(dateLabel)}">+ Move here</button>`
       : "",
     handleTarget,
     itemDragMime: ITEM_DRAG_MIME,
     handleDragStart: (itemId, event) => {
       const item = window.PlanItemsController?.getState?.().items?.find(row => String(row.plan_item_id) === String(itemId));
-      if (!item || item.item_state !== "committed" || item.planned_date < todayKey()) return false;
+      if (state.quickMove || !item || item.item_state !== "committed" || item.planned_date < todayKey()) return false;
       event.dataTransfer?.setData(ITEM_DRAG_MIME, String(itemId));
       if (event.dataTransfer) event.dataTransfer.effectAllowed = "move";
       return true;

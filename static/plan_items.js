@@ -1,6 +1,7 @@
 (function () {
   const PLAN_TIME_ZONE = "America/Denver";
   const ISO_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
+  const QUICK_ACTIONS_MENU_ID = "planItemQuickActions";
   const state = {
     range: { start: null, end: null },
     status: "idle",
@@ -12,6 +13,9 @@
   };
   let initialized = false;
   let onChange = null;
+  let quickActionMenu = null;
+  let quickActionSurface = null;
+  let quickActionState = null;
 
   function escape(value) {
     if (typeof window.escapeHtml === "function") {
@@ -117,7 +121,7 @@
       context.push(statusLabel);
     }
     if (isManageable) {
-      context.push("Drag is optional; activate to edit. The Manage button also opens the editor.");
+      context.push("Drag is optional; activate to edit. The Actions button opens planned-item actions.");
     }
     return `
       <li class="${classes}" data-plan-item-id="${escape(item?.plan_item_id)}"
@@ -129,7 +133,8 @@
           <span class="plan-planned-title">${escape(title)}</span>
           ${isManageable ? `<button type="button" class="plan-planned-manage" draggable="false"
             data-plan-item-action="manage" data-plan-item-id="${escape(item?.plan_item_id)}"
-            aria-label="Manage ${escape(title)} planned for ${escape(fullDate)}">⋮</button>` : ""}
+            aria-label="Actions for ${escape(title)} planned for ${escape(fullDate)}"
+            aria-haspopup="menu" aria-expanded="false" aria-controls="${QUICK_ACTIONS_MENU_ID}">⋮</button>` : ""}
         </div>
         <div class="plan-planned-meta">${escape([category, sport].filter(Boolean).join(" · "))}</div>
         ${metrics.length ? `<div class="plan-planned-metrics">${escape(metrics.join(" · "))}</div>` : ""}
@@ -229,6 +234,147 @@
   let activeDragItemId = null;
   let suppressClickForItemId = null;
 
+  function closeQuickActionMenu(reason) {
+    if (quickActionSurface?.isOpen()) {
+      quickActionSurface.close(reason);
+    }
+  }
+
+  function positionQuickActionMenu(trigger) {
+    const triggerRect = trigger.getBoundingClientRect();
+    const menuRect = quickActionMenu.getBoundingClientRect();
+    const margin = 8;
+    const viewportWidth = window.innerWidth || document.documentElement.clientWidth;
+    const viewportHeight = window.innerHeight || document.documentElement.clientHeight;
+    let left = Math.min(triggerRect.right - menuRect.width, viewportWidth - menuRect.width - margin);
+    let top = triggerRect.bottom + margin;
+    if (
+      top + menuRect.height > viewportHeight - margin
+      && triggerRect.top - menuRect.height - margin >= margin
+    ) {
+      top = triggerRect.top - menuRect.height - margin;
+    }
+    quickActionMenu.style.left = `${Math.max(margin, left)}px`;
+    quickActionMenu.style.top = `${Math.max(margin, top)}px`;
+  }
+
+  function openQuickActionMenu(item, trigger) {
+    if (!quickActionMenu && !ensureQuickActionMenu()) return false;
+    if (quickActionSurface.isOpen() && quickActionState?.trigger === trigger) {
+      closeQuickActionMenu("toggle");
+      return true;
+    }
+    if (quickActionSurface.isOpen()) closeQuickActionMenu("replace");
+    const title = item?.prescription?.title || "Untitled planned item";
+    const date = formatFullDate(item.planned_date);
+    quickActionState = { itemId: String(item.plan_item_id), trigger };
+    quickActionMenu.innerHTML = `
+      <button type="button" role="menuitem" data-plan-quick-action="edit">Edit</button>
+      <button type="button" role="menuitem" data-plan-quick-action="move">Move</button>
+      <button type="button" role="menuitem" data-plan-quick-action="delete" class="is-destructive">Delete from plan</button>
+    `;
+    quickActionMenu.setAttribute("aria-label", `Actions for ${title} planned for ${date}`);
+    quickActionMenu.hidden = false;
+    quickActionMenu.style.visibility = "hidden";
+    quickActionSurface.open({ opener: trigger });
+    trigger.setAttribute("aria-expanded", "true");
+    positionQuickActionMenu(trigger);
+    quickActionMenu.style.visibility = "";
+    quickActionMenu.querySelector('[role="menuitem"]')?.focus();
+    return true;
+  }
+
+  function ensureQuickActionMenu() {
+    if (quickActionMenu) return true;
+    const transientSurface = window.TrainingApp?.TransientSurface;
+    if (typeof transientSurface?.create !== "function") {
+      throw new Error("Plan quick actions require the transient surface controller.");
+    }
+    quickActionMenu = document.createElement("div");
+    quickActionMenu.id = QUICK_ACTIONS_MENU_ID;
+    quickActionMenu.className = "plan-item-quick-actions";
+    quickActionMenu.setAttribute("role", "menu");
+    quickActionMenu.hidden = true;
+    document.body.appendChild(quickActionMenu);
+    quickActionSurface = transientSurface.create({
+      getSurface: () => quickActionMenu,
+      restoreFocus: false,
+      onBeforeClose: (_reason, surface) => {
+        surface.hidden = true;
+        quickActionState?.trigger?.setAttribute("aria-expanded", "false");
+      },
+      onAfterClose: reason => {
+        const trigger = quickActionState?.trigger;
+        quickActionState = null;
+        if (
+          !["action", "replace", "tab", "viewport-change"].includes(reason)
+          && trigger?.isConnected !== false
+        ) {
+          trigger?.focus?.();
+        }
+      },
+    });
+    quickActionMenu.addEventListener("click", event => {
+      const actionButton = event.target.closest?.("[data-plan-quick-action]");
+      if (!actionButton || !quickActionState || !quickActionMenu.contains(actionButton)) return;
+      const { itemId, trigger } = quickActionState;
+      const item = state.items.find(row => String(row.plan_item_id) === itemId);
+      const action = actionButton.dataset.planQuickAction;
+      closeQuickActionMenu("action");
+      if (!item) {
+        trigger?.focus?.();
+        return;
+      }
+      if (action === "edit") {
+        if (!window.PlanItemEditor?.open?.(item, trigger, "edit", false)) {
+          trigger?.focus?.();
+        }
+      } else if (action === "move") {
+        if (!window.PlanItemEditor?.startQuickMove?.(item, trigger)) {
+          trigger?.focus?.();
+        }
+      } else if (action === "delete") {
+        window.PlanItemEditor?.cancelFromQuickAction?.(item, trigger);
+      }
+    });
+    quickActionMenu.addEventListener("keydown", event => {
+      const items = [...quickActionMenu.querySelectorAll('[role="menuitem"]')];
+      const currentIndex = items.indexOf(document.activeElement);
+      if (event.key === "Escape") {
+        event.preventDefault();
+        closeQuickActionMenu("escape");
+      } else if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+        event.preventDefault();
+        const direction = event.key === "ArrowDown" ? 1 : -1;
+        items[(currentIndex + direction + items.length) % items.length]?.focus();
+      } else if (event.key === "Home" || event.key === "End") {
+        event.preventDefault();
+        items[event.key === "Home" ? 0 : items.length - 1]?.focus();
+      }
+    });
+    quickActionMenu.addEventListener("focusout", event => {
+      if (!quickActionMenu.contains(event.relatedTarget)) {
+        quickActionSurface.close("tab");
+      }
+    });
+    document.addEventListener("pointerdown", event => {
+      if (
+        quickActionSurface.isOpen()
+        && !quickActionMenu.contains(event.target)
+        && event.target !== quickActionState?.trigger
+      ) {
+        quickActionSurface.requestClose("outside");
+      }
+    });
+    document.addEventListener("scroll", () => {
+      if (quickActionSurface.isOpen()) quickActionSurface.requestClose("viewport-change");
+    }, true);
+    window.addEventListener("resize", () => {
+      if (quickActionSurface.isOpen()) quickActionSurface.requestClose("viewport-change");
+    });
+    return true;
+  }
+
   function bindCardInteractions() {
     if (typeof document === "undefined") {
       return;
@@ -237,6 +383,7 @@
     if (!strip || strip.dataset.planItemBound === "true") {
       return;
     }
+    ensureQuickActionMenu();
     const getCard = target => target?.closest?.(".plan-planned-card[data-plan-item-id]");
     const getItem = itemId => state.items.find(item =>
       String(item.plan_item_id) === String(itemId));
@@ -254,6 +401,19 @@
       suppressClickForItemId = null;
     });
     strip.addEventListener("click", event => {
+      if (window.PlanItemEditor?.isQuickMoveMode?.()) {
+        const day = event.target.closest?.("[data-plan-date]");
+        const interactive = event.target.closest?.("button, a, input, select, textarea");
+        if (
+          day
+          && !interactive
+          && window.PlanItemEditor?.isQuickMoveDestination?.(day.dataset.planDate)
+        ) {
+          event.preventDefault();
+          window.PlanItemEditor?.handleQuickMoveTarget?.(day.dataset.planDate);
+        }
+        return;
+      }
       const moveTarget = event.target.closest?.("[data-plan-item-target]");
       if (moveTarget) {
         event.preventDefault();
@@ -265,6 +425,20 @@
         return;
       }
       const itemId = card.dataset.planItemId;
+      const manageButton = event.target.closest?.('[data-plan-item-action="manage"]');
+      if (manageButton) {
+        event.preventDefault();
+        event.stopPropagation();
+        const item = getItem(manageButton.dataset.planItemId);
+        if (
+          item
+          && card.dataset.planItemManageable === "true"
+          && !window.PlanItemEditor?.isQuickMoveMode?.()
+        ) {
+          openQuickActionMenu(item, manageButton);
+        }
+        return;
+      }
       if (suppressClickForItemId !== null) {
         const shouldSuppress = String(suppressClickForItemId) === String(itemId);
         suppressClickForItemId = null;
@@ -273,16 +447,6 @@
           event.stopPropagation();
           return;
         }
-      }
-      const manageButton = event.target.closest?.('[data-plan-item-action="manage"]');
-      if (manageButton) {
-        event.preventDefault();
-        event.stopPropagation();
-        const item = getItem(manageButton.dataset.planItemId);
-        if (item && card.dataset.planItemManageable === "true") {
-          window.PlanItemEditor?.open?.(item, manageButton, "edit", false);
-        }
-        return;
       }
       if (card.dataset.planItemManageable !== "true") {
         return;
@@ -294,6 +458,18 @@
     });
     strip.addEventListener("keydown", event => {
       const card = getCard(event.target);
+      if (window.PlanItemEditor?.isQuickMoveMode?.()) {
+        const day = event.target.closest?.("[data-plan-date]");
+        if (
+          day
+          && ["Enter", " ", "Spacebar"].includes(event.key)
+          && window.PlanItemEditor?.isQuickMoveDestination?.(day.dataset.planDate)
+        ) {
+          event.preventDefault();
+          window.PlanItemEditor?.handleQuickMoveTarget?.(day.dataset.planDate);
+        }
+        return;
+      }
       if (!card || event.target.closest?.("button, input, select, textarea, a")) {
         return;
       }

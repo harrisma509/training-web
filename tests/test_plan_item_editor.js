@@ -25,6 +25,10 @@ assert.match(editorSource, /data-plan-item-target/);
 assert.match(editorSource, />\+ Move here<\/button>/);
 assert.match(editorSource, /plan-item-editor-primary-actions/);
 assert.match(editorSource, /plan-item-editor-delete/);
+assert.match(editorSource, /startQuickMove/);
+assert.match(editorSource, /isQuickMoveDestination/);
+assert.match(editorSource, /cancelFromQuickAction/);
+assert.match(editorSource, /Moving .* choose a future day/);
 assert.match(editorSource, /window\.api\.updatePlanItem\(/);
 assert.match(editorSource, /window\.PlanItemsController\?\.replaceItem\?\.\(updated\)/);
 assert.match(itemsSource, /replaceItem\(item\)/);
@@ -57,7 +61,7 @@ function createHarness() {
   const today = denverDateOffset(0);
   const sourceDate = denverDateOffset(4);
   const targetDate = denverDateOffset(2);
-  const focus = { panel: 0, dateJump: 0, card: 0 };
+  const focus = { panel: 0, dateJump: 0, card: 0, cancel: 0, status: 0 };
   const formValues = {
     planned_date: sourceDate,
     sort_order: "3",
@@ -87,7 +91,24 @@ function createHarness() {
     },
   };
   const status = {};
+  const actionStatus = {
+    hidden: true,
+    focus() { focus.status += 1; },
+  };
+  const actionStatusText = { textContent: "" };
+  const moveCancelButton = {
+    hidden: true,
+    disabled: false,
+    listeners: new Map(),
+    addEventListener(type, listener) { this.listeners.set(type, listener); },
+    focus() { focus.cancel += 1; },
+  };
+  const actionStatusDismiss = {
+    hidden: true,
+    addEventListener(type, listener) { this.listener = listener; },
+  };
   const listeners = new Map();
+  const documentListeners = new Map();
   const panel = {
     hidden: true,
     innerHTML: "",
@@ -150,10 +171,14 @@ function createHarness() {
     getElementById(id) {
       if (id === "planItemEditor") return panel;
       if (id === "planDateJump") return dateJump;
+      if (id === "planItemActionStatus") return actionStatus;
+      if (id === "planItemActionStatusText") return actionStatusText;
+      if (id === "planItemMoveCancel") return moveCancelButton;
+      if (id === "planItemActionStatusDismiss") return actionStatusDismiss;
       return null;
     },
     querySelectorAll() { return cards; },
-    addEventListener() {},
+    addEventListener(type, listener) { documentListeners.set(type, listener); },
   };
   const context = {
     document,
@@ -197,14 +222,19 @@ function createHarness() {
   vm.runInNewContext(editorSource, context);
   context.window.PlanItemEditor.bind();
   return {
+    actionStatus,
+    actionStatusDismiss,
+    actionStatusText,
     calls,
     context,
     dateJump,
+    documentListeners,
     dateTransfer,
     focus,
     formValues,
     item,
     listeners,
+    moveCancelButton,
     opener,
     panel,
     sourceDate,
@@ -343,6 +373,99 @@ async function testTodayMoveTargetsMustBeFuture() {
   assert.equal(harness.calls.updates[0].payload.planned_date, harness.targetDate);
 }
 
+async function testQuickMoveLifecycleAndFailure() {
+  const harness = createHarness();
+  const editor = harness.context.window.PlanItemEditor;
+  assert.equal(editor.startQuickMove(harness.item, harness.opener), true);
+  assert.equal(editor.isQuickMoveMode(), true);
+  assert.equal(harness.panel.hidden, true, "quick move does not open the full editor");
+  assert.equal(harness.moveCancelButton.hidden, false);
+  assert.equal(harness.focus.cancel, 1, "focus moves to the visible Cancel control");
+  assert.equal(harness.actionStatus.hidden, false);
+  assert.match(harness.actionStatusText.textContent, /choose a future day/);
+  assert.equal(editor.isQuickMoveDestination(denverDateOffset(-1)), false);
+  assert.equal(editor.isQuickMoveDestination(harness.today), false);
+  assert.equal(editor.isQuickMoveDestination(harness.sourceDate), false);
+  assert.equal(editor.isQuickMoveDestination(harness.targetDate), true);
+  const escapeEvent = {
+    key: "Escape",
+    defaultPrevented: false,
+    preventDefault() { this.defaultPrevented = true; },
+  };
+  harness.documentListeners.get("keydown")(escapeEvent);
+  assert.equal(escapeEvent.defaultPrevented, true);
+  assert.equal(editor.isQuickMoveMode(), false);
+  assert.equal(harness.focus.card, 1, "cancel returns focus to the menu trigger");
+  assert.equal(harness.calls.updates.length, 0, "cancel does not mutate the planned item");
+
+  assert.equal(editor.startQuickMove(harness.item, harness.opener), true);
+  harness.moveCancelButton.listeners.get("click")();
+  assert.equal(editor.isQuickMoveMode(), false, "the persistent Cancel control exits move mode");
+  assert.equal(harness.focus.card, 2);
+
+  assert.equal(editor.startQuickMove(harness.item, harness.opener), true);
+  assert.equal(await editor.handleQuickMoveTarget(harness.targetDate), true);
+  assert.equal(harness.calls.updates.length, 1, "one destination click sends one update");
+  assert.equal(harness.calls.updates[0].payload.planned_date, harness.targetDate);
+  assert.equal(editor.isQuickMoveMode(), false);
+  assert.equal(harness.actionStatus.hidden, true);
+  assert.equal(harness.focus.card, 3, "success focuses the moved card after rerender");
+
+  const failureHarness = createHarness();
+  const failureEditor = failureHarness.context.window.PlanItemEditor;
+  failureHarness.context.window.api.updatePlanItem = async () => {
+    const error = new Error("Move rejected");
+    error.status = 409;
+    error.detail = "The item can no longer be moved.";
+    throw error;
+  };
+  assert.equal(failureEditor.startQuickMove(failureHarness.item, failureHarness.opener), true);
+  assert.equal(await failureEditor.handleQuickMoveTarget(failureHarness.targetDate), false);
+  assert.equal(failureEditor.isQuickMoveMode(), false);
+  assert.equal(failureHarness.actionStatus.hidden, false);
+  assert.match(failureHarness.actionStatusText.textContent, /can no longer be moved/);
+  assert.equal(failureHarness.focus.status, 1, "failure notice receives focus");
+  assert.equal(failureHarness.context.window.PlanItemEditor.getState().saving, false);
+  failureHarness.actionStatusDismiss.listener();
+  assert.equal(failureHarness.actionStatus.hidden, true);
+  assert.equal(failureHarness.focus.dateJump, 1, "dismissing the notice focuses a stable control");
+
+  const refreshFailureHarness = createHarness();
+  refreshFailureHarness.context.window.api.updatePlanItem = async () => {
+    throw new Error("Connection lost");
+  };
+  refreshFailureHarness.context.window.PlanController.refresh = async () => {
+    throw new Error("Refresh unavailable");
+  };
+  const refreshFailureEditor = refreshFailureHarness.context.window.PlanItemEditor;
+  assert.equal(
+    refreshFailureEditor.startQuickMove(refreshFailureHarness.item, refreshFailureHarness.opener),
+    true,
+  );
+  assert.equal(
+    await refreshFailureEditor.handleQuickMoveTarget(refreshFailureHarness.targetDate),
+    false,
+  );
+  assert.equal(refreshFailureEditor.isQuickMoveMode(), false);
+  assert.match(refreshFailureHarness.actionStatusText.textContent, /Refresh failed/);
+  assert.equal(refreshFailureEditor.getState().saving, false);
+}
+
+async function testQuickDeleteConfirmationAndMutation() {
+  const harness = createHarness();
+  const editor = harness.context.window.PlanItemEditor;
+  harness.calls.confirmResult = false;
+  assert.equal(await editor.cancelFromQuickAction(harness.item, harness.opener), false);
+  assert.equal(harness.calls.cancels.length, 0);
+  assert.equal(harness.calls.removed.length, 0);
+
+  harness.calls.confirmResult = true;
+  assert.equal(await editor.cancelFromQuickAction(harness.item, harness.opener), true);
+  assert.deepEqual(harness.calls.cancels, [31]);
+  assert.deepEqual(harness.calls.removed, [31]);
+  assert.equal(harness.focus.dateJump, 1);
+}
+
 async function testPhysicalTherapyEditorLabelPreservesCanonicalToken() {
   const harness = createHarness();
   harness.item.prescription.sport_type = "PhysicalTherapy";
@@ -366,6 +489,8 @@ Promise.all([
   testFullCardDragUsesOneAuthoritativePut(),
   testDeleteFromPlanConfirmationAndReadOnlyDates(),
   testTodayMoveTargetsMustBeFuture(),
+  testQuickMoveLifecycleAndFailure(),
+  testQuickDeleteConfirmationAndMutation(),
   testPhysicalTherapyEditorLabelPreservesCanonicalToken(),
 ]).then(() => {
   console.log("Plan item editor contract tests passed.");

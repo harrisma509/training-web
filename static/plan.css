@@ -520,9 +520,115 @@
     outline-offset: 1px;
 }
 
+.plan-item-quick-actions {
+    position: fixed;
+    z-index: 1200;
+    width: 190px;
+    max-width: calc(100vw - 16px);
+    padding: 6px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: var(--panel);
+    box-shadow: 0 12px 28px rgba(0, 0, 0, 0.28);
+}
+
+.plan-item-quick-actions[hidden] {
+    display: none;
+}
+
+.plan-item-quick-actions button {
+    display: block;
+    width: 100%;
+    min-height: 38px;
+    padding: 8px 10px;
+    border: 0;
+    border-radius: 5px;
+    background: transparent;
+    color: var(--text);
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+
+.plan-item-quick-actions button:hover,
+.plan-item-quick-actions button:focus-visible {
+    outline: none;
+    background: var(--panel2);
+}
+
+.plan-item-quick-actions button:focus-visible {
+    box-shadow: inset 0 0 0 2px var(--focus-ring, var(--blue));
+}
+
+.plan-item-quick-actions .is-destructive {
+    color: var(--red);
+}
+
+.plan-item-action-status {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
+    margin: 0 0 10px;
+    padding: 9px 12px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: var(--panel2);
+    color: var(--text);
+}
+
+.plan-item-action-status[hidden] {
+    display: none;
+}
+
+.plan-item-action-status span {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+
+.plan-item-action-dismiss {
+    flex: 0 0 30px;
+    width: 30px;
+    min-height: 30px;
+    border: 1px solid transparent;
+    border-radius: 5px;
+    background: transparent;
+    color: var(--muted);
+    font: inherit;
+    font-size: 20px;
+    line-height: 1;
+    cursor: pointer;
+}
+
+.plan-item-action-dismiss:hover,
+.plan-item-action-dismiss:focus-visible {
+    border-color: var(--line);
+    background: var(--panel);
+    color: var(--text);
+}
+
+.plan-item-action-dismiss:focus-visible {
+    outline: 2px solid var(--focus-ring, var(--blue));
+    outline-offset: 1px;
+}
+
 .plan-day.is-item-drop-valid {
     outline: 2px dashed var(--blue);
     outline-offset: -3px;
+}
+
+.plan-day.is-plan-item-move-valid {
+    outline: 2px dashed rgba(96, 165, 250, 0.65);
+    outline-offset: -3px;
+    background: rgba(96, 165, 250, 0.05);
+    cursor: pointer;
+}
+
+.plan-day.is-plan-item-move-valid:hover,
+.plan-day.is-plan-item-move-valid:focus-within {
+    outline: 3px solid var(--blue);
+    background: rgba(96, 165, 250, 0.12);
 }
 
 .plan-day.is-item-drop-hover {
@@ -996,6 +1102,14 @@
 }
 
 @media (max-width: 700px) {
+    .plan-item-quick-actions {
+        width: min(190px, calc(100vw - 16px));
+    }
+
+    .plan-item-action-status {
+        align-items: flex-start;
+    }
+
     .plan-item-editor {
         position: fixed;
         z-index: 31;

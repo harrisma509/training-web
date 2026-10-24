@@ -945,6 +945,9 @@
     const paletteDropClass = paletteState.mode === "dragging" && dayKey > getDenverTodayKey()
       ? " is-palette-drop-valid"
       : "";
+    const itemMoveClass = window.PlanItemEditor?.isQuickMoveDestination?.(dayKey)
+      ? " is-plan-item-move-valid"
+      : "";
 
     let bodyHtml = "";
     if (!hasActualActivity) {
@@ -997,7 +1000,7 @@
     bodyHtml = `${plannedHtml}${paletteTargetHtml}${itemTargetHtml}${bodyHtml}`;
 
     return `
-      <div class="plan-day ${isWeekCollapsed ? "is-collapsed" : ""}${paletteDropClass}" data-plan-date="${escapeHtml(dayKey)}">
+      <div class="plan-day ${isWeekCollapsed ? "is-collapsed" : ""}${paletteDropClass}${itemMoveClass}" data-plan-date="${escapeHtml(dayKey)}">
         <div class="plan-day-header${isCurrentWeek ? " is-current-week" : ""}${isCurrentDay ? " is-current-day" : ""}"${isCurrentDay ? ' aria-current="date"' : ""}>
           <span class="plan-weekday">${escapeHtml(label.weekday || "")}</span>
           <span class="plan-day-load" aria-label="${escapeHtml(loadLabel)}" title="${escapeHtml(loadLabel)}">${escapeHtml(loadDisplay)}</span>
