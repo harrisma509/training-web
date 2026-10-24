@@ -66,7 +66,7 @@
 
   function isValidTarget(dateKey) {
     return /^\d{4}-\d{2}-\d{2}$/.test(String(dateKey || ""))
-      && String(dateKey) > getDenverTodayKey();
+      && String(dateKey) >= getDenverTodayKey();
   }
 
   function isMobile() {
@@ -179,7 +179,7 @@
     if (placementBanner) {
       placementBanner.innerHTML = state.selectedTemplate && !state.paletteOpen
         ? `<div class="plan-palette-placement-banner" role="status">
-            <span>${escape(state.selectedTemplate.templateName)} selected. Choose a future day.</span>
+            <span>${escape(state.selectedTemplate.templateName)} selected. Choose today or a future day.</span>
             <button type="button" class="button-secondary" data-plan-palette-action="cancel">Cancel placement</button>
           </div>`
         : "";
@@ -251,7 +251,7 @@
     };
     state.targetDate = null;
     state.mode = "selected";
-    announce(`${state.selectedTemplate.templateName} selected. Choose a future Plan date.`);
+    announce(`${state.selectedTemplate.templateName} selected. Choose today or a future Plan date.`);
     if (isMobile() && closeMobile) setOpen(false, { focus: false });
     render();
     if (typeof onChange === "function") onChange();
@@ -326,7 +326,7 @@
       const templateName = state.selectedTemplate.templateName;
       clearSelection(
         statusCode === 400
-          ? "That date is no longer available. Choose another future day."
+          ? "That date is no longer available. Choose today or a future day."
           : statusCode === 404
             ? "This template is no longer available."
             : statusCode === 403
@@ -373,7 +373,7 @@
     event.dataTransfer.effectAllowed = "copy";
     event.dataTransfer.setData("application/x-training-plan-template-id", String(template.plan_template_id));
     event.dataTransfer.setData("text/plain", String(template.template_name));
-    announce(`${template.template_name} ready to place. Drop on a future Plan date.`);
+    announce(`${template.template_name} ready to place. Drop on today or a future Plan date.`);
     window.PlanController?.setPaletteDragState?.(true);
   }
 

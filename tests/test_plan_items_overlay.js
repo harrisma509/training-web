@@ -191,6 +191,12 @@ async function testController() {
         prescription: { title: "Today item" },
       },
       {
+        plan_item_id: 5,
+        planned_date: today,
+        item_state: "committed",
+        prescription: { title: "Second today item" },
+      },
+      {
         plan_item_id: 4,
         planned_date: past,
         item_state: "committed",
@@ -213,7 +219,7 @@ async function testController() {
   assert.equal(state.status, "success");
   assert.equal(state.range.start, "2026-10-12");
   assert.equal(state.range.end, "2026-11-09");
-  assert.equal(state.items.map(item => item.plan_item_id).join(","), "2,1,3,4");
+  assert.equal(state.items.map(item => item.plan_item_id).join(","), "2,1,3,5,4");
   assert.equal(
     controller.getItemsForDate(future).map(item => item.plan_item_id).join(","),
     "2,1",
@@ -251,9 +257,25 @@ async function testController() {
   }
   const todayRendered = controller.renderDaySection(today);
   assert.match(todayRendered, /Today item/);
+  assert.match(todayRendered, /Second today item/);
+  assert.equal((todayRendered.match(/role="listitem"/g) || []).length, 2);
+  assert.equal((todayRendered.match(/data-plan-item-action="manage"/g) || []).length, 2);
   assert.match(todayRendered, /data-plan-item-manageable="true"/);
   assert.match(todayRendered, /data-plan-item-action="manage"/);
   assert.doesNotMatch(todayRendered, /Read-only/);
+  const createdTodayItem = {
+    plan_item_id: 6,
+    planned_date: today,
+    item_state: "committed",
+    prescription: { title: "New same-day item" },
+  };
+  assert.equal(controller.acceptCreatedItem(createdTodayItem), true);
+  assert.equal(controller.getItemsForDate(today).length, 3);
+  const itemsAfterSameDayCreate = controller.renderDaySection(today);
+  assert.match(itemsAfterSameDayCreate, /Today item/);
+  assert.match(itemsAfterSameDayCreate, /Second today item/);
+  assert.match(itemsAfterSameDayCreate, /New same-day item/);
+  assert.equal((itemsAfterSameDayCreate.match(/role="listitem"/g) || []).length, 3);
   hidePastPlanned = true;
   assert.equal(controller.getItemsForDate(past).length, 1, "the full Plan collection retains past items");
   assert.equal(controller.getVisibleItemsForDate(past).length, 0);

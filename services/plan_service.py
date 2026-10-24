@@ -663,7 +663,7 @@ def create_item_from_template(payload):
                 (template["plan_prescription_id"],),
             )
             segments = cur.fetchall()
-            _require_future_date(cur, payload.planned_date)
+            _require_not_past_date(cur, payload.planned_date)
 
             item_prescription_id = _insert_item_prescription(cur, prescription)
             _insert_segments(cur, item_prescription_id, segments)
@@ -688,7 +688,7 @@ def create_manual_item(payload):
     with db_conn() as conn:
         with conn.cursor() as cur:
             _require_active_category(cur, payload.category_id)
-            _require_future_date(cur, payload.planned_date)
+            _require_not_past_date(cur, payload.planned_date)
 
             item_prescription_id = _insert_item_prescription(
                 cur,

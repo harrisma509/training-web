@@ -82,8 +82,8 @@ def _denver_today() -> date:
     return datetime.now(DENVER).date()
 
 
-def _future_date_response(planned_date):
-    if planned_date <= _denver_today():
+def _creation_date_response(planned_date):
+    if planned_date < _denver_today():
         return JSONResponse(
             {"detail": "planned_date must be after today."},
             status_code=400,
@@ -223,7 +223,7 @@ def api_plan_item_from_template(
     guard_response = _mutation_guard(request)
     if guard_response is not None:
         return guard_response
-    date_response = _future_date_response(payload.planned_date)
+    date_response = _creation_date_response(payload.planned_date)
     if date_response is not None:
         return date_response
     try:
@@ -241,7 +241,7 @@ def api_plan_item_manual(
     guard_response = _mutation_guard(request)
     if guard_response is not None:
         return guard_response
-    date_response = _future_date_response(payload.planned_date)
+    date_response = _creation_date_response(payload.planned_date)
     if date_response is not None:
         return date_response
     _validate_semantic_payload(payload)

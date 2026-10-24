@@ -241,8 +241,8 @@ def response_json(response):
 
 
 class PlanItemRouteTests(unittest.TestCase):
-    def test_manual_route_rejects_today_before_service(self):
-        payload = manual_payload(planned_date="2026-10-11")
+    def test_manual_route_rejects_past_date_before_service(self):
+        payload = manual_payload(planned_date="2026-10-10")
         with (
             patch("routes.plan_items._denver_today", return_value=date(2026, 10, 11)),
             patch("routes.plan_items.create_manual_item") as create,
@@ -255,6 +255,25 @@ class PlanItemRouteTests(unittest.TestCase):
         self.assertEqual(response.status_code, 400)
         self.assertEqual(response_json(response)["detail"], "planned_date must be after today.")
         create.assert_not_called()
+
+    def test_manual_route_accepts_today(self):
+        today = date(2026, 10, 11)
+        payload = CreateManualItemPayload.model_validate(
+            manual_payload(planned_date=today.isoformat()),
+        )
+        detail = SimpleNamespace(
+            row=item_row(plan_item_id=101, planned_date=today, item_source="manual"),
+            segments=[],
+        )
+        with (
+            patch("routes.plan_items._denver_today", return_value=today),
+            patch("routes.plan_items.create_manual_item", return_value=detail) as create,
+        ):
+            response = api_plan_item_manual(request_with_headers(), payload)
+
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(response_json(response)["planned_date"], today.isoformat())
+        create.assert_called_once_with(payload)
 
     def test_manual_route_rejects_cross_origin_before_service(self):
         payload = CreateManualItemPayload.model_validate(manual_payload())
@@ -341,6 +360,44 @@ class PlanItemRouteTests(unittest.TestCase):
             "physical_therapy",
         )
         create.assert_called_once_with(payload)
+
+    def test_clone_route_accepts_today_and_rejects_past(self):
+        today = date(2026, 10, 11)
+        detail = SimpleNamespace(
+            row=item_row(plan_item_id=102, planned_date=today),
+            segments=[segment_row()],
+        )
+        today_payload = CreateFromTemplatePayload(
+            plan_template_id=7,
+            planned_date=today,
+        )
+        with (
+            patch("routes.plan_items._denver_today", return_value=today),
+            patch(
+                "routes.plan_items.create_item_from_template",
+                return_value=detail,
+            ) as create,
+        ):
+            today_response = api_plan_item_from_template(
+                request_with_headers(),
+                today_payload,
+            )
+            past_response = api_plan_item_from_template(
+                request_with_headers(),
+                CreateFromTemplatePayload(
+                    plan_template_id=7,
+                    planned_date=today - timedelta(days=1),
+                ),
+            )
+
+        self.assertEqual(today_response.status_code, 201)
+        self.assertEqual(response_json(today_response)["planned_date"], today.isoformat())
+        self.assertEqual(past_response.status_code, 400)
+        self.assertEqual(
+            response_json(past_response)["detail"],
+            "planned_date must be after today.",
+        )
+        create.assert_called_once_with(today_payload)
 
     def test_update_service_allows_same_day_edit(self):
         today = date(2026, 10, 11)
@@ -495,8 +552,10 @@ class PlanItemRouteTests(unittest.TestCase):
         self.assertEqual(past_conn.rollback_count, 1)
 
     def test_clone_service_locks_template_then_prescription_and_commits_once(self):
+        today = date(2026, 10, 11)
         detail = item_row(
             plan_item_id=101,
+            planned_date=today,
             plan_prescription_id=201,
             sport_type="PhysicalTherapy",
             activity_category="physical_therapy",
@@ -515,7 +574,7 @@ class PlanItemRouteTests(unittest.TestCase):
                     sport_type="PhysicalTherapy",
                     activity_category="physical_therapy",
                 ),
-                {"is_future": True},
+                {"is_not_past": True},
                 {"plan_prescription_id": 201},
                 {"plan_item_id": 101},
                 detail,
@@ -525,7 +584,7 @@ class PlanItemRouteTests(unittest.TestCase):
         conn = TransactionConnection(cursor)
         payload = CreateFromTemplatePayload(
             plan_template_id=7,
-            planned_date=date(2026, 10, 12),
+            planned_date=today,
             sort_order=0,
             user_note="Clone",
         )
@@ -534,6 +593,7 @@ class PlanItemRouteTests(unittest.TestCase):
             result = create_item_from_template(payload)
 
         self.assertEqual(result.row["plan_item_id"], 101)
+        self.assertEqual(result.row["planned_date"], today)
         self.assertEqual(result.row["sport_type"], "PhysicalTherapy")
         self.assertEqual(result.row["activity_category"], "physical_therapy")
         self.assertEqual(conn.commit_count, 1)
@@ -562,7 +622,7 @@ class PlanItemRouteTests(unittest.TestCase):
         )
         self.assertLess(future_index, first_insert)
 
-    def test_clone_service_rejects_nonfuture_date_before_any_insert(self):
+    def test_clone_service_rejects_past_date_before_any_insert(self):
         cursor = TransactionCursor(
             one=[
                 {
@@ -574,14 +634,14 @@ class PlanItemRouteTests(unittest.TestCase):
                 },
                 {"plan_category_id": 1, "is_active": True},
                 prescription_row(),
-                {"is_future": False},
+                {"is_not_past": False},
             ],
             many=[[segment_row()]],
         )
         conn = TransactionConnection(cursor)
         payload = CreateFromTemplatePayload(
             plan_template_id=7,
-            planned_date=date(2026, 10, 11),
+            planned_date=date(2026, 10, 10),
             sort_order=0,
         )
 
@@ -600,7 +660,7 @@ class PlanItemRouteTests(unittest.TestCase):
         cursor = TransactionCursor(
             one=[
                 {"plan_category_id": 1, "is_active": True},
-                {"is_future": True},
+                {"is_not_past": True},
                 {"plan_prescription_id": 203},
                 {"plan_item_id": 103},
                 detail,
@@ -619,6 +679,61 @@ class PlanItemRouteTests(unittest.TestCase):
         self.assertIn("values ('item'", insert_sql)
         self.assertIn("values (", insert_sql)
         self.assertIn("'committed'", insert_sql)
+
+    def test_manual_service_accepts_today_and_rejects_past(self):
+        today = date(2026, 10, 11)
+        today_detail = item_row(
+            plan_item_id=104,
+            planned_date=today,
+            plan_prescription_id=204,
+            item_source="manual",
+        )
+        today_cursor = TransactionCursor(
+            one=[
+                {"plan_category_id": 1, "is_active": True},
+                {"is_not_past": True},
+                {"plan_prescription_id": 204},
+                {"plan_item_id": 104},
+                today_detail,
+            ],
+            many=[[]],
+        )
+        today_conn = TransactionConnection(today_cursor)
+        today_payload = CreateManualItemPayload.model_validate(
+            manual_payload(planned_date=today.isoformat()),
+        )
+
+        with patch("services.plan_service.db_conn", return_value=today_conn):
+            today_result = create_manual_item(today_payload)
+
+        self.assertEqual(today_result.row["planned_date"], today)
+        self.assertEqual(today_conn.commit_count, 1)
+        today_guard = next(
+            statement.lower()
+            for statement, _ in today_cursor.executed
+            if "current_timestamp at time zone 'america/denver'" in statement.lower()
+        )
+        self.assertIn("<= %s::date", today_guard)
+
+        past_cursor = TransactionCursor(
+            one=[
+                {"plan_category_id": 1, "is_active": True},
+                {"is_not_past": False},
+            ],
+        )
+        past_conn = TransactionConnection(past_cursor)
+        past_payload = CreateManualItemPayload.model_validate(
+            manual_payload(planned_date=(today - timedelta(days=1)).isoformat()),
+        )
+        with patch("services.plan_service.db_conn", return_value=past_conn):
+            with self.assertRaises(PlanDateNotFuture):
+                create_manual_item(past_payload)
+
+        self.assertEqual(past_conn.commit_count, 0)
+        self.assertEqual(past_conn.rollback_count, 1)
+        self.assertFalse(
+            any("insert into" in statement.lower() for statement, _ in past_cursor.executed)
+        )
 
     def test_required_and_invalid_ranges_return_422(self):
         client = TestClient(training_app)

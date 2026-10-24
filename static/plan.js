@@ -942,7 +942,7 @@
       formattedDateLabel,
     ) || "";
     const paletteState = window.PlanPaletteController?.getState?.() || {};
-    const paletteDropClass = paletteState.mode === "dragging" && dayKey > getDenverTodayKey()
+    const paletteDropClass = paletteState.mode === "dragging" && dayKey >= getDenverTodayKey()
       ? " is-palette-drop-valid"
       : "";
     const itemMoveClass = window.PlanItemEditor?.isQuickMoveDestination?.(dayKey)
@@ -1211,7 +1211,7 @@
   function setPaletteDragState(active) {
     const todayKey = getDenverTodayKey();
     document.querySelectorAll("#planStrip [data-plan-date]").forEach(day => {
-      const valid = Boolean(active) && day.dataset.planDate > todayKey;
+      const valid = Boolean(active) && day.dataset.planDate >= todayKey;
       day.classList.toggle("is-palette-drop-valid", valid);
       if (!valid) {
         day.classList.remove("is-palette-drop-hover");
