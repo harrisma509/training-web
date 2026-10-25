@@ -1,20 +1,60 @@
 ## Required Engineering Grounding
 
-Before planning, investigating, or changing code, read:
+Before work, classify the turn as **fresh implementation**, **continuing implementation**, or **release-only continuation**. Read only the smallest authoritative context required.
 
-1. `docs/ENGINEERING_CONSTITUTION.md`
-2. The relevant architecture or feature document
-3. `docs/TESTING_GUIDE.md`
+For fresh implementation, read:
+
+1. This file.
+2. Only the directly relevant sections of `docs/ENGINEERING_CONSTITUTION.md`.
+3. The directly relevant architecture, feature, testing, and ADR sections.
+
+For continuing implementation, reuse unchanged context already established in the current GHC session. For release-only continuation, use the fast path below and do not reread implementation or architecture material.
 
 The Engineering Constitution defines cross-repository principles.
 This file defines repository-specific mandatory instructions.
 Feature documents define detailed contracts and current behavior.
 
+## Execution modes and release-only fast path
+
+### Fresh implementation
+
+Use when the session is new, prior governance reads cannot be established, or the task enters a new ownership boundary. Run the fresh-session Git gate, perform one bounded ownership inventory, and read only targeted governance sections.
+
+### Continuing implementation
+
+Use when the current session already established the relevant governance and ownership boundaries. Do not repeat the Git gate, ownership inventory, broad searches, or unchanged document reads merely because another prompt was pasted. Reread only when Git shows a relevant document changed, a boundary is unclear, or a test exposes an unknown.
+
+### Release-only continuation
+
+Use when implementation is complete, the approved worktree was already tested in the current session, and the user asks to commit, push, deploy, or finish release.
+
+Do not reread the implementation prompt, architecture documents, testing guide, or unchanged governance. Do not rediscover ownership. Do not rerun source tests unless source or test code changed after the recorded green validation.
+
+Release-only sequence:
+
+1. Verify modified paths exactly match the approved list and no unrelated or untracked files exist.
+2. Run `git diff --check` and review the bounded diff.
+3. Stage only approved files and run `git diff --cached --check`.
+4. Commit with required attribution and push `main`.
+5. Fetch once and verify a clean worktree, no active Git operation, and `HEAD == origin/main`.
+6. Deploy with the documented platform-native script.
+7. Restart only `training-web` if startup-derived revision metadata is proven stale.
+8. Verify root HTTP 200 and the advertised full revision equals `HEAD`.
+9. Stop and report. Mike performs product acceptance unless the current prompt explicitly authorizes browser automation.
+
+Release-only limits:
+
+- No full suites when no source or test code changed.
+- No Playwright, browser automation, cross-tab tour, or manual-style UI checks unless explicitly requested in the current prompt.
+- Do not hash every asset when full revision verification succeeds. Hash only changed assets when revision verification fails, metadata is inconsistent, or the prompt requires hashes.
+- One pre-commit Git inspection and one post-push synchronization check are enough unless either fails.
+
+
 # GitHub Copilot Instructions for training-web
 
 ## Mandatory fresh-session Git gate
 
-Before any mutating work, every new or resumed session MUST run the
+Before any implementation edit in a fresh session, run the
 [Fresh-Session Git Synchronization Gate](../docs/ENGINEERING_CONSTITUTION.md#fresh-session-git-synchronization-gate)
 in this repository and every affected sibling repository. Run `git fetch
 origin` as part of the preflight; stale remote-tracking refs are not proof of
@@ -22,6 +62,8 @@ current state. A dirty, divergent, active-operation, cross-repository mismatch,
 or unverifiable remote state is a hard STOP, not a warning. Do not
 automatically pull, rebase, merge, reset, clean, stash, overwrite, or
 force-push unpreserved work.
+
+This clean-tree rule applies before GHC starts editing. After GHC intentionally edits approved files, a dirty worktree is expected. Before commit, verify every changed path belongs to the approved scope and no unrelated or untracked files appeared. Do not misapply the pre-edit clean-tree rule to GHC's own tested changes.
 
 Before deployment, the tested commit MUST be on the intended release branch,
 the worktree MUST be clean, no Git operation may be active, and local `HEAD`
@@ -233,6 +275,8 @@ If GHC discovers a nonblocking improvement:
 
 ### Completion-report requirement
 
+Keep completion reports concise and evidence-focused. Do not narrate every search, read, or routine Git command.
+
 Every completion report involving an autonomous discovered fix must include:
 
 - the discovered issue;
@@ -429,13 +473,13 @@ Implementation:
 
 Validation order:
 
-1. Focused new contract.
+1. Focused new or changed contract.
 2. Changed-file syntax.
-3. Adjacent regression contracts.
-4. Complete Node inventory.
-5. Complete Python suite.
-6. `git diff --check`.
-7. Scope and staged-diff review.
+3. Adjacent regression contracts for directly coupled owners.
+4. `git diff --check` and bounded diff review.
+5. Complete Node inventory and complete Python suite once after final source/test changes only for substantial runtime behavior, cross-cutting shared owners, or when `docs/TESTING_GUIDE.md` explicitly requires them.
+
+For a tiny isolated CSS, copy, constant, selector, test-only, or deployment-packaging change, focused deterministic validation is sufficient unless the testing guide explicitly mandates more.
 
 Once full suites are green, do not rerun them unless source or test code
 changes again. Before editing, always check Git cleanliness, local/remote
@@ -448,7 +492,7 @@ blocked after two retries, report it. Do not change production source because
 of an unproven browser observation.
 
 After commit, the boundary is: push, deploy only when runtime files changed,
-restart only when startup metadata must refresh, verify version and hashes,
-run bounded live scenarios, verify final Git status, and report. No post-commit
+restart only when startup metadata must refresh, verify the full live revision,
+run only explicitly authorized live scenarios, verify final Git status, and report. No post-commit
 architecture discovery or speculative cleanup. Corrections require a new
 normal commit.
