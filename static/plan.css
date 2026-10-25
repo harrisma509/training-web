@@ -903,6 +903,11 @@
     border-bottom: 1px solid var(--line);
 }
 
+.plan-palette-header > div:first-child {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
 .plan-palette .plan-palette-close {
     display: inline-flex;
     flex: 0 0 32px;
@@ -935,7 +940,7 @@
     margin: 4px 0 0;
     color: var(--muted);
     font-size: 12px;
-    white-space: nowrap;
+    white-space: normal;
 }
 
 .plan-palette-body {
