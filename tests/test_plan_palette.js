@@ -15,6 +15,8 @@ const templateControllerSource = fs.readFileSync("static/plan_templates.js", "ut
 assert.match(templateSource, /id="planPalette"/);
 assert.match(templateSource, /<aside id="planPalette"/);
 assert.match(templateSource, /id="planPaletteOpen"[^>]*>[\s\S]*?Add plans/);
+assert.equal((templateSource.match(/id="planPaletteClose"/g) || []).length, 1);
+assert.match(templateSource, /<button id="planPaletteClose"[^>]*aria-label="Close Add plans">×<\/button>/);
 assert.match(templateSource, /id="planPaletteManage"[^>]*>[\s\S]*?Manage templates/);
 assert.match(templateSource, /id="planPalettePlacement"/);
 assert.match(templateSource, /id="planPaletteQuickPicksTitle"[^>]*>Quick Picks/);
@@ -167,7 +169,9 @@ async function testQuickPicksUseSharedPhysicalTherapyPresentation() {
       closest(selector) {
         return selector === ".plan-workspace" ? workspace : null;
       },
-      focus() {},
+      focus() {
+        document.activeElement = this;
+      },
       querySelector() {
         return { replaceChildren() {} };
       },
@@ -194,6 +198,7 @@ async function testQuickPicksUseSharedPhysicalTherapyPresentation() {
   const dragStateChanges = [];
   const document = {
     readyState: "loading",
+    activeElement: null,
     getElementById: id => elements.get(id) || null,
     addEventListener(type, listener) {
       listeners.set(type, listener);
@@ -322,6 +327,59 @@ async function testQuickPicksUseSharedPhysicalTherapyPresentation() {
   assert.deepEqual(placementCalls.map(call => call.plannedDate), [today, today]);
   assert.deepEqual(acceptedItems.map(item => item.plan_item_id), [101, 102]);
   assert.deepEqual(dragStateChanges, [false, true, false]);
+
+  selectTemplate();
+  assert.match(palette.targetMarkup(today, "today"), /data-plan-palette-target/);
+  closeButton.listeners.get("click")();
+  let paletteState = palette.getState();
+  assert.equal(root.hidden, true);
+  assert.equal(trigger.attributes["aria-expanded"], "false");
+  assert.equal(paletteState.selectedTemplate, null);
+  assert.equal(paletteState.mode, "idle");
+  assert.equal(paletteState.statusMessage, "");
+  assert.equal(placementBanner.innerHTML, "");
+  assert.equal(palette.targetMarkup(today, "today"), "");
+  assert.equal(dragStateChanges.at(-1), false);
+  assert.equal(document.activeElement, trigger);
+  assert.equal(placementCalls.length, 2, "the close button performs no placement mutation");
+
+  trigger.listeners.get("click")();
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(root.hidden, false, "the trigger reopens the panel");
+  selectTemplate();
+  document.activeElement = trigger;
+  trigger.listeners.get("click")();
+  paletteState = palette.getState();
+  assert.equal(root.hidden, true, "the Add plans trigger toggles the panel closed");
+  assert.equal(trigger.attributes["aria-expanded"], "false");
+  assert.equal(paletteState.selectedTemplate, null);
+  assert.equal(paletteState.mode, "idle");
+  assert.equal(placementBanner.innerHTML, "");
+  assert.equal(palette.targetMarkup(today, "today"), "");
+  assert.equal(placementCalls.length, 2, "the trigger toggle performs no placement mutation");
+
+  trigger.listeners.get("click")();
+  await new Promise(resolve => setImmediate(resolve));
+  selectTemplate();
+  listeners.get("keydown")({
+    key: "Escape",
+    preventDefault() {},
+  });
+  paletteState = palette.getState();
+  assert.equal(root.hidden, true, "Escape closes the panel");
+  assert.equal(trigger.attributes["aria-expanded"], "false");
+  assert.equal(paletteState.selectedTemplate, null);
+  assert.equal(paletteState.mode, "idle");
+  assert.equal(placementBanner.innerHTML, "");
+  assert.equal(palette.targetMarkup(today, "today"), "");
+  assert.equal(document.activeElement, trigger);
+  assert.equal(placementCalls.length, 2, "Escape performs no placement mutation");
+
+  trigger.listeners.get("click")();
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(root.hidden, false, "reopening after close succeeds");
+  assert.equal(palette.getState().mode, "idle", "reopening starts in idle mode");
+  assert.equal(palette.getState().selectedTemplate, null);
 }
 
 function denverDateOffset(offset) {

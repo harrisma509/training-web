@@ -221,7 +221,7 @@
     if (open && focus) {
       window.setTimeout(() => searchInput?.focus(), 0);
     }
-    if (!open) {
+    if (!open && focus) {
       trigger?.focus();
     }
   }
@@ -434,9 +434,10 @@
   }
 
   function handleKeydown(event) {
-    if (event.key === "Escape" && state.selectedTemplate && !state.inFlight) {
+    if (event.key === "Escape" && !state.inFlight
+      && (state.paletteOpen || state.selectedTemplate || state.mode !== "idle")) {
       event.preventDefault();
-      clearSelection("Placement cancelled.");
+      closePalette();
     }
   }
 
@@ -444,6 +445,23 @@
     if (state.inFlight) return;
     setOpen(true);
     loadTemplates(true);
+  }
+
+  function closePalette({ focus = true } = {}) {
+    if (state.inFlight) return;
+    if (state.selectedTemplate || state.mode !== "idle" || state.targetDate || state.dragTemplate) {
+      clearSelection();
+    }
+    state.statusMessage = "";
+    setOpen(false, { focus });
+  }
+
+  function togglePalette() {
+    if (state.paletteOpen) {
+      closePalette({ focus: false });
+    } else {
+      openPalette();
+    }
   }
 
   function manageTemplates() {
@@ -475,11 +493,8 @@
       return false;
     }
     initialized = true;
-    trigger.addEventListener("click", openPalette);
-    closeButton.addEventListener("click", () => {
-      if (state.selectedTemplate) clearSelection("Placement cancelled.");
-      setOpen(false);
-    });
+    trigger.addEventListener("click", togglePalette);
+    closeButton.addEventListener("click", () => closePalette());
     manageButton.addEventListener("click", manageTemplates);
     allTemplatesToggle.addEventListener("click", () => setAllTemplatesExpanded(!state.allTemplatesExpanded));
     root.addEventListener("click", handleClick);
@@ -504,7 +519,7 @@
   window.PlanPaletteController = {
     init,
     open: openPalette,
-    close: () => setOpen(false),
+    close: () => closePalette({ focus: false }),
     deactivate: () => {
       state.requestGeneration += 1;
       state.abortController?.abort();
