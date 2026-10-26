@@ -1192,7 +1192,7 @@
     const rowMap = buildPlanRowMap(rows);
     const weeklyRows = getPlanWeeklyRows();
     const weeklyRowMap = buildPlanWeeklyRowMap(weeklyRows);
-    const weekOffsets = Array.from({ length: 13 }, (_, index) => index - 8);
+    const weekOffsets = Array.from({ length: 13 }, (_, index) => 4 - index);
 
     const html = weekOffsets.map((weeksBack) => {
       const weekDates = getWeekDatesOffset(weeksBack);

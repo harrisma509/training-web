@@ -21,7 +21,7 @@ assert.match(planSource, /const PLAN_TIME_ZONE = "America\/Denver"/);
 assert.match(planSource, /const PLAN_RANGE_DAYS = 91/);
 assert.match(planSource, /const MONTH_NAMES = \["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"\]/);
 assert.match(planSource, /const month = MONTH_NAMES\[dateValue\.getUTCMonth\(\)\]/);
-assert.match(planSource, /const weekOffsets = Array\.from\(\{ length: 13 \}, \(_, index\) => index - 8\)/);
+assert.match(planSource, /const weekOffsets = Array\.from\(\{ length: 13 \}, \(_, index\) => 4 - index\)/);
 assert.match(planSource, /setUTCDate\(start\.getUTCDate\(\) \+ index\)/);
 assert.match(planSource, /function getDefaultPlanAnchor\(\)/);
 assert.match(planSource, /return toLocalDateKey\(getWeekStart\(getDenverTodayDate\(\)\)\)/);
@@ -41,6 +41,7 @@ assert.match(planSource, /fetchDaily\(365, "", "", range\.start, range\.end\)/);
 assert.match(planSource, /fetchWeekly\(13, range\.start, range\.end\)/);
 assert.match(planSource, /data-plan-week="\$\{escapeHtml\(weekKey \|\| ""\)\}"/);
 assert.match(planSource, /function positionPendingPlanAnchor\(\)/);
+assert.match(planSource, /const isCurrentWeek = weekKey === getPlanWeekKey\(getDenverTodayDate\(\)\)/);
 assert.match(planSource, /const planItemsPromise = window\.PlanItemsController\?\.load\?\.\(range, \{ force \}\)/);
 assert.match(planSource, /await Promise\.all\(\[planItemsPromise, loadPlanCheckins\(\)\]\);\s+if \(requestId !== PLAN_LOAD_REQUESTS\.current\) \{\s+return false;\s+\}\s+positionPendingPlanAnchor\(\);/);
 assert.match(planSource, /scrollRegion\.addEventListener\("wheel", cancelPendingPosition/);
@@ -75,23 +76,95 @@ const jumpAnchorContext = vm.createContext({
 vm.runInContext(`${planDateHelpers}\n${extractPlanFunction("normalizePlanAnchor")}`, jumpAnchorContext);
 assert.equal(vm.runInContext('normalizePlanAnchor("2026-10-22")', jumpAnchorContext), "2026-10-19");
 
+const renderedStrip = { innerHTML: "" };
+const stripRenderContext = vm.createContext({
+  planAnchor: "2026-10-19",
+  document: {
+    getElementById: id => id === "planStrip" ? renderedStrip : null,
+  },
+  window: { PlanItemEditor: { bind() {} } },
+  getPlanRows: () => [],
+  buildPlanRowMap: () => new Map(),
+  getPlanWeeklyRows: () => [],
+  buildPlanWeeklyRowMap: () => new Map(),
+  setupPlanToggleHandlers() {},
+  setupPlanCheckinHandlers() {},
+  setupPlanPaletteDragHandlers() {},
+});
+vm.runInContext([
+  planDateHelpers,
+  extractPlanFunction("getWeekDates"),
+  extractPlanFunction("getWeekDatesOffset"),
+  extractPlanFunction("getPlanWeekKey"),
+  extractPlanFunction("renderPlanStrip"),
+].join("\n"), stripRenderContext);
+vm.runInContext(`
+  renderPlanWeekRow = function (weekStartDate) {
+    const days = getWeekDates(weekStartDate).map(toLocalDateKey);
+    return '<section data-plan-week="' + toLocalDateKey(weekStartDate)
+      + '" data-plan-days="' + days.join(",") + '"></section>';
+  };
+  renderPlanStrip();
+`, stripRenderContext);
+const renderedWeekRows = Array.from(
+  renderedStrip.innerHTML.matchAll(/data-plan-week="([^"]+)" data-plan-days="([^"]+)"/g),
+  match => ({ weekKey: match[1], dayKeys: match[2].split(",") }),
+);
+const renderedWeekOffsets = renderedWeekRows.map(({ weekKey }) => {
+  const anchorDate = new Date("2026-10-19T00:00:00Z");
+  const weekDate = new Date(`${weekKey}T00:00:00Z`);
+  return (weekDate - anchorDate) / (7 * 86400000);
+});
+assert.equal(renderedWeekRows.length, 13);
+assert.deepEqual(renderedWeekOffsets, [4, 3, 2, 1, 0, -1, -2, -3, -4, -5, -6, -7, -8]);
+assert.deepEqual(renderedWeekOffsets.slice(3, 6), [1, 0, -1]);
+for (const { weekKey, dayKeys } of renderedWeekRows) {
+  const weekStart = new Date(`${weekKey}T00:00:00Z`);
+  assert.equal(weekStart.getUTCDay(), 1, `${weekKey} starts on Monday`);
+  assert.equal(dayKeys.length, 7);
+  const expectedDays = Array.from({ length: 7 }, (_, index) => {
+    const date = new Date(weekStart);
+    date.setUTCDate(date.getUTCDate() + index);
+    return date.toISOString().slice(0, 10);
+  });
+  assert.deepEqual(dayKeys, expectedDays);
+}
+
+const scrollWeekKeys = [
+  "2026-11-16",
+  "2026-11-09",
+  "2026-11-02",
+  "2026-10-26",
+  "2026-10-19",
+  "2026-10-12",
+  "2026-10-05",
+  "2026-09-28",
+  "2026-09-21",
+  "2026-09-14",
+  "2026-09-07",
+  "2026-08-31",
+  "2026-08-24",
+];
+const scrollRows = scrollWeekKeys.map((weekKey, index) => ({
+  dataset: { planWeek: weekKey },
+  offsetHeight: 140,
+  getBoundingClientRect: () => ({ top: index === 4 ? 400 : 200 }),
+}));
+const scrollRegion = {
+  clientHeight: 600,
+  scrollTop: 0,
+  getBoundingClientRect: () => ({ top: 100 }),
+  querySelectorAll: () => scrollRows,
+};
 const scrollContext = vm.createContext({
   pendingPlanScrollAnchor: "2026-10-19",
   document: {
-    getElementById: () => ({
-      clientHeight: 600,
-      scrollTop: 0,
-      getBoundingClientRect: () => ({ top: 100 }),
-      querySelectorAll: () => [{
-        dataset: { planWeek: "2026-10-19" },
-        offsetHeight: 140,
-        getBoundingClientRect: () => ({ top: 400 }),
-      }],
-    }),
+    getElementById: () => scrollRegion,
   },
 });
 vm.runInContext(extractPlanFunction("positionPendingPlanAnchor"), scrollContext);
 assert.equal(vm.runInContext("positionPendingPlanAnchor()", scrollContext), true);
+assert.equal(scrollRegion.scrollTop, 70);
 assert.equal(vm.runInContext("pendingPlanScrollAnchor", scrollContext), "");
 
 for (const id of [
