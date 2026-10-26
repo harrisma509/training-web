@@ -131,17 +131,37 @@ I am done with my manual edits. Review the current uncommitted diff, identify th
 
 ## Test safety invariants
 
+The default automated test suite must be safe, deterministic, non-billable,
+and runnable without access to production infrastructure.
+
 The default suite must never:
 
-- call OpenAI or another paid provider;
-- call Strava or production training-api;
-- connect to production PostgreSQL;
-- use Docker or SSH;
-- deploy, restart, rebuild, or recreate services;
-- require or print production credentials;
-- print complete prompts, memories, health context, provider payloads, tokens, or secrets.
+- call OpenAI, another paid provider, Strava, or any external production service;
+- call the production training-api or connect to production PostgreSQL;
+- use SSH or perform remote host operations;
+- deploy, restart, rebuild, recreate, or modify running services;
+- require, retrieve, or print production credentials;
+- print secrets, access tokens, complete real prompts, memories, health context,
+  provider payloads, or other sensitive production data;
+- make an unmocked external network request.
 
-Use fakes, mocks, synthetic context, fake database objects, and patched network boundaries. Provider and context tests must prove call prevention or error mapping without making real calls.
+Provider, API, database, and context tests must use fakes, mocks, synthetic
+context, disposable test data, fake database objects, or patched network
+boundaries. Tests must prove call prevention, request construction, response
+handling, and error mapping without making real provider or production calls.
+
+Unexpected external network access must fail the test rather than silently
+falling through to a real service.
+
+The fast default suite must not require Docker. A separately named and
+explicitly invoked local integration suite may use disposable Docker
+containers when container behavior is material to the contract being tested.
+It must not connect to production systems or reuse production credentials,
+volumes, databases, or networks.
+
+SSH, deployment, service restart, and live-environment validation belong only
+in explicitly authorized deployment or live-validation workflows. They must
+never run as part of the default automated test suite.
 
 ## What requires tests
 
