@@ -105,7 +105,7 @@ def get_yearly_data():
         values = [
             float(row[metric])
             for row in annual_rows
-            if row.get("is_ytd") is False and row.get(metric) is not None
+            if row.get(metric) is not None
         ]
         annual_record_max[metric] = max(values) if values else None
 
@@ -113,9 +113,7 @@ def get_yearly_data():
         for metric in ANNUAL_RECORD_METRICS:
             value = row.get(metric)
             record_max = annual_record_max.get(metric)
-            row[f"{metric}_record"] = bool(
-                row.get("is_ytd") is False and _value_is_record(value, record_max)
-            )
+            row[f"{metric}_record"] = _value_is_record(value, record_max)
 
     year_meta = {int(row["calendar_year"]): row for row in annual_rows}
 

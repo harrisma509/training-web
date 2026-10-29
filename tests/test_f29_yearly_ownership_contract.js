@@ -17,6 +17,20 @@ assert.equal((yearlySource.match(/function renderYearlyTable\(/g) || []).length,
 assert.equal((yearlySource.match(/function renderYearlyMonthlyTable\(/g) || []).length, 1);
 assert.equal((yearlySource.match(/function showYearlyView\(/g) || []).length, 1);
 assert.equal((yearlySource.match(/function loadYearly\(/g) || []).length, 1);
+for (const metric of [
+  "training_hours",
+  "active_days",
+  "cycling_distance_mi",
+  "total_elevation_ft",
+  "bike_elevation_ft",
+  "ride_count",
+  "ski_days",
+]) {
+  assert.match(
+    yearlySource,
+    new RegExp(`formatRecordCell\\(row\\.${metric},\\s*\\d+,\\s*Boolean\\(row\\.${metric}_record\\)\\)`),
+  );
+}
 assert.doesNotMatch(appSource, /fetchYearly\(\)|function renderYearlyTable|function renderYearlyMonthlyTable|function showYearlyView|function loadYearly/);
 assert.doesNotMatch(appSource, /yearlyAnnualTab|yearlyMonthlyTab|yearlyAnnualView|yearlyMonthlyView|yearlyRefresh/);
 assert.match(appSource, /window\.TrainingApp\?\.features\?\.yearly\?\.refresh\?\.\(\)/);
