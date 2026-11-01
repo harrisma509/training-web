@@ -2,7 +2,7 @@
 
 import logging
 from decimal import Decimal, InvalidOperation
-from typing import Annotated
+from typing import Annotated, Literal
 from urllib.parse import urlsplit
 
 from fastapi import APIRouter, HTTPException, Request
@@ -22,6 +22,8 @@ from db import db_conn, json_safe
 from services.plan_service import (
     PlanCategoryNotFound,
     PlanOwnershipCorrupt,
+    PlanSavedLocationNotFound,
+    PlanSavedLocationUnavailable,
     PlanTemplateNotFound,
     create_template,
     deactivate_template,
@@ -67,6 +69,7 @@ def _optional_text(value):
 PlanDecimal = Annotated[Decimal, BeforeValidator(_strict_decimal)]
 RequiredText = Annotated[StrictStr, BeforeValidator(_required_text)]
 OptionalText = Annotated[str | None, BeforeValidator(_optional_text)]
+PlanEnvironment = Literal["outdoor", "indoor", "either", "not_applicable"]
 
 
 class PlanPrescriptionSegmentPayload(BaseModel):
@@ -128,6 +131,8 @@ class PlanTemplatePayload(BaseModel):
     category_id: StrictInt = Field(gt=0)
     sort_order: StrictInt = Field(ge=0)
     is_favorite: StrictBool = False
+    environment: PlanEnvironment
+    saved_location_id: StrictInt | None = Field(default=None, gt=0)
     prescription: PlanPrescriptionPayload
     segments: list[PlanPrescriptionSegmentPayload] = Field(max_length=200)
 
@@ -267,6 +272,9 @@ def _template_summary_payload(row):
         "template_description": row["template_description"],
         "sort_order": row["sort_order"],
         "is_favorite": row["is_favorite"],
+        "environment": row["environment"],
+        "saved_location_id": _json_value(row["saved_location_id"]),
+        "saved_location": _saved_location_payload(row),
         "category": _category_payload(row, include_sort_order=False),
         "prescription": _prescription_payload(row),
     }
@@ -280,8 +288,22 @@ def _template_detail_payload(row, segments):
         "sort_order": row["sort_order"],
         "is_favorite": row["is_favorite"],
         "is_active": row["is_active"],
+        "environment": row["environment"],
+        "saved_location_id": _json_value(row["saved_location_id"]),
+        "saved_location": _saved_location_payload(row),
         "category": _category_payload(row),
         "prescription": _prescription_payload(row, segments),
+    }
+
+
+def _saved_location_payload(row):
+    if row["saved_location_id"] is None:
+        return None
+    return {
+        "location_id": _json_value(row["saved_location_id"]),
+        "display_name": row["saved_location_name"],
+        "lifecycle_state": row["saved_location_lifecycle_state"],
+        "is_home": row["saved_location_is_home"],
     }
 
 
@@ -422,6 +444,11 @@ def api_plan_templates(category_id: int | None = None, limit: int = 100):
                             pt.template_description,
                             pt.sort_order,
                             pt.is_favorite,
+                            pt.environment,
+                            pt.saved_location_id,
+                            sl.display_name as saved_location_name,
+                            sl.lifecycle_state as saved_location_lifecycle_state,
+                            sl.is_home as saved_location_is_home,
                             pc.plan_category_id,
                             pc.category_key,
                             pc.category_name,
@@ -448,6 +475,8 @@ def api_plan_templates(category_id: int | None = None, limit: int = 100):
                            and pp.owner_kind = 'template'
                         left join public.plan_prescription_segment pps
                             on pps.plan_prescription_id = pp.plan_prescription_id
+                        left join public.saved_location sl
+                            on sl.location_id = pt.saved_location_id
                         where pt.is_active = true
                           {category_filter}
                         group by
@@ -456,6 +485,11 @@ def api_plan_templates(category_id: int | None = None, limit: int = 100):
                             pt.template_description,
                             pt.sort_order,
                             pt.is_favorite,
+                            pt.environment,
+                            pt.saved_location_id,
+                            sl.display_name,
+                            sl.lifecycle_state,
+                            sl.is_home,
                             pc.plan_category_id,
                             pc.category_key,
                             pc.category_name,
@@ -505,6 +539,13 @@ def api_plan_template_detail(plan_template_id: int):
 def _mutation_error(exc):
     if isinstance(exc, PlanCategoryNotFound):
         return JSONResponse({"detail": "Plan category not found."}, status_code=404)
+    if isinstance(exc, PlanSavedLocationNotFound):
+        return JSONResponse({"detail": "Saved location not found."}, status_code=404)
+    if isinstance(exc, PlanSavedLocationUnavailable):
+        return JSONResponse(
+            {"detail": "Saved location is not selectable."},
+            status_code=409,
+        )
     if isinstance(exc, PlanTemplateNotFound):
         return JSONResponse({"detail": "Plan template not found."}, status_code=404)
     if isinstance(exc, PlanOwnershipCorrupt):

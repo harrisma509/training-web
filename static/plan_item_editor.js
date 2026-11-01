@@ -7,6 +7,8 @@
     saving: false,
     error: "",
     categories: [],
+    savedLocations: [],
+    savedLocationsGeneration: 0,
     opener: null,
     quickMove: false,
     actionNotice: "",
@@ -58,6 +60,41 @@
     return Number.isFinite(parsed) ? parsed : null;
   }
 
+  function environmentOptionMarkup(value) {
+    const choices = [
+      ["Outdoor", "outdoor"],
+      ["Indoor", "indoor"],
+      ["Either", "either"],
+      ["Not applicable", "not_applicable"],
+    ];
+    return choices.map(([label, optionValue]) =>
+      `<option value="${optionValue}" ${value === optionValue ? "selected" : ""}>${label}</option>`).join("");
+  }
+
+  function savedLocationOptionMarkup(item) {
+    const selected = item.saved_location_id == null ? "" : String(item.saved_location_id);
+    const options = [
+      `<option value="" ${selected === "" ? "selected" : ""}>No saved location</option>`,
+    ];
+    for (const location of state.savedLocations) {
+      if (location.lifecycle_state !== "active") continue;
+      const locationId = String(location.location_id);
+      options.push(
+        `<option value="${escape(locationId)}" ${selected === locationId ? "selected" : ""}>${escape(location.display_name)}</option>`,
+      );
+    }
+    if (selected && !state.savedLocations.some(
+      location => location.lifecycle_state === "active" && String(location.location_id) === selected,
+    )) {
+      const name = item.saved_location?.display_name || `Saved location ${selected}`;
+      const lifecycle = item.saved_location?.lifecycle_state || "current";
+      options.push(
+        `<option value="${escape(selected)}" selected>Current: ${escape(name)} (${escape(lifecycle)})</option>`,
+      );
+    }
+    return options.join("");
+  }
+
   function itemPayload(plannedDate = value("planned_date")) {
     const item = state.item;
     const prescription = item.prescription || {};
@@ -81,6 +118,11 @@
       sort_order: Number(value("sort_order", item.sort_order || 0)),
       category_id: Number(value("category_id", item.category?.plan_category_id)),
       user_note: value("user_note").trim() || null,
+      environment: value("environment", item.environment || ""),
+      saved_location_id: numberOrNull(value(
+        "saved_location_id",
+        item.saved_location_id == null ? "" : String(item.saved_location_id),
+      )),
       prescription: {
         title: value("title", prescription.title).trim(),
         description: value("description", prescription.description || "").trim() || null,
@@ -135,6 +177,8 @@
     const categoryRows = state.categories.length ? state.categories : (item.category ? [item.category] : []);
     const categories = categoryRows.map(category =>
       `<option value="${escape(category.plan_category_id)}" ${String(category.plan_category_id) === String(item.category?.plan_category_id) ? "selected" : ""}>${escape(category.category_name)}</option>`).join("");
+    const environments = environmentOptionMarkup(item.environment);
+    const savedLocations = savedLocationOptionMarkup(item);
     panel.innerHTML = `
       <div class="plan-item-editor-header">
         <div><h2 id="planItemEditorTitle">${state.mode === "moving" ? "Move planned item" : "Edit planned item"}</h2>
@@ -147,6 +191,8 @@
         <form id="planItemEditorForm" class="plan-item-editor-form">
           <label>Planned date<input name="planned_date" type="date" value="${escape(item.planned_date)}" required></label>
           <label>Category<select name="category_id" required>${categories}</select></label>
+          <label>Environment<select name="environment" required><option value="">Select an environment</option>${environments}</select></label>
+          <label>Saved location<select name="saved_location_id">${savedLocations}</select></label>
           <label>Sort order<input name="sort_order" type="number" min="0" step="1" value="${escape(item.sort_order ?? 0)}"></label>
           <label>Title<input name="title" maxlength="200" required value="${escape(prescription.title)}"></label>
           <label>Description<textarea name="description" maxlength="2000">${escape(prescription.description || "")}</textarea></label>
@@ -181,6 +227,17 @@
     state.categories = Array.isArray(payload?.categories) ? payload.categories : [];
   }
 
+  async function loadSavedLocations() {
+    const generation = ++state.savedLocationsGeneration;
+    const payload = await window.api.fetchSavedLocations();
+    if (generation !== state.savedLocationsGeneration) return false;
+    if (!Array.isArray(payload?.locations)) {
+      throw new Error("Saved locations response is invalid.");
+    }
+    state.savedLocations = payload.locations;
+    return true;
+  }
+
   function open(item, opener, mode = "edit", refreshCalendar = mode === "moving") {
     if (!item || item.item_state !== "committed" || item.planned_date < todayKey()) return false;
     state.item = item;
@@ -200,6 +257,13 @@
       select.value = selected;
     }).catch(() => {
       state.error = "Categories are temporarily unavailable.";
+      render();
+    });
+    loadSavedLocations().then(loaded => {
+      if (loaded && state.item === item) render();
+    }).catch(() => {
+      if (state.item !== item) return;
+      state.error = "Saved locations are temporarily unavailable.";
       render();
     });
     if (refreshCalendar) renderCalendar();
@@ -437,6 +501,8 @@
       sort_order: Number(item.sort_order || 0),
       category_id: Number(item.category?.plan_category_id),
       user_note: String(item.user_note || "").trim() || null,
+      environment: item.environment,
+      saved_location_id: item.saved_location_id ?? null,
       prescription: {
         title: String(prescription.title || "").trim(),
         description: String(prescription.description || "").trim() || null,

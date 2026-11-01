@@ -129,6 +129,10 @@
       return fetchJson("/api/plan/categories");
     },
 
+    async fetchSavedLocations() {
+      return fetchJson("/api/saved-locations");
+    },
+
     async fetchPlanPreferences() {
       return fetchJson("/api/plan/preferences");
     },

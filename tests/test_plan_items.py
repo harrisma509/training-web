@@ -7,6 +7,7 @@ from unittest.mock import patch
 from zoneinfo import ZoneInfo
 
 from fastapi.testclient import TestClient
+from pydantic import ValidationError
 from starlette.requests import Request
 
 from app import app as training_app
@@ -21,6 +22,7 @@ from routes.plan_items import (
 )
 from services.plan_service import (
     PlanDateNotFuture,
+    PlanSavedLocationUnavailable,
     cancel_plan_item,
     create_item_from_template,
     create_manual_item,
@@ -41,6 +43,11 @@ def item_row(**overrides):
         "item_source": "template",
         "prescription_owner_kind": "item",
         "user_note": "Keep this controlled.",
+        "environment": "not_applicable",
+        "saved_location_id": None,
+        "saved_location_name": None,
+        "saved_location_lifecycle_state": None,
+        "saved_location_is_home": None,
         "plan_category_id": 1,
         "category_key": "endurance",
         "category_name": "Endurance",
@@ -116,6 +123,8 @@ def manual_payload(**overrides):
         "category_id": 1,
         "sort_order": 0,
         "user_note": None,
+        "environment": "not_applicable",
+        "saved_location_id": None,
         "prescription": {
             "title": "Manual Endurance Ride",
             "description": None,
@@ -241,6 +250,16 @@ def response_json(response):
 
 
 class PlanItemRouteTests(unittest.TestCase):
+    def test_manual_item_requires_a_valid_environment(self):
+        payload = manual_payload()
+        del payload["environment"]
+        with self.assertRaises(ValidationError):
+            CreateManualItemPayload.model_validate(payload)
+        with self.assertRaises(ValidationError):
+            CreateManualItemPayload.model_validate(
+                manual_payload(environment="outside")
+            )
+
     def test_manual_route_rejects_past_date_before_service(self):
         payload = manual_payload(planned_date="2026-10-10")
         with (
@@ -557,6 +576,11 @@ class PlanItemRouteTests(unittest.TestCase):
             plan_item_id=101,
             planned_date=today,
             plan_prescription_id=201,
+            environment="indoor",
+            saved_location_id=55,
+            saved_location_name="Training studio",
+            saved_location_lifecycle_state="active",
+            saved_location_is_home=False,
             sport_type="PhysicalTherapy",
             activity_category="physical_therapy",
         )
@@ -568,6 +592,8 @@ class PlanItemRouteTests(unittest.TestCase):
                     "plan_prescription_id": 42,
                     "prescription_owner_kind": "template",
                     "is_active": True,
+                    "environment": "indoor",
+                    "saved_location_id": 55,
                 },
                 {"plan_category_id": 1, "is_active": True},
                 prescription_row(
@@ -596,6 +622,8 @@ class PlanItemRouteTests(unittest.TestCase):
         self.assertEqual(result.row["planned_date"], today)
         self.assertEqual(result.row["sport_type"], "PhysicalTherapy")
         self.assertEqual(result.row["activity_category"], "physical_therapy")
+        self.assertEqual(result.row["environment"], "indoor")
+        self.assertEqual(result.row["saved_location_id"], 55)
         self.assertEqual(conn.commit_count, 1)
         self.assertEqual(conn.rollback_count, 0)
         item_prescription_params = next(
@@ -607,6 +635,12 @@ class PlanItemRouteTests(unittest.TestCase):
             item_prescription_params[2:4],
             ("PhysicalTherapy", "physical_therapy"),
         )
+        item_params = next(
+            params
+            for statement, params in cursor.executed
+            if "insert into public.plan_item" in statement.lower()
+        )
+        self.assertEqual(item_params[-2:], ("indoor", 55))
         sql = [statement.lower() for statement, _ in cursor.executed]
         self.assertIn("from public.plan_template", sql[0])
         self.assertIn("for update", sql[0])
@@ -621,6 +655,54 @@ class PlanItemRouteTests(unittest.TestCase):
             index for index, statement in enumerate(sql) if "insert into" in statement
         )
         self.assertLess(future_index, first_insert)
+
+    def test_clone_without_template_location_and_home_keeps_location_null(self):
+        today = date(2026, 10, 11)
+        detail = item_row(
+            plan_item_id=102,
+            planned_date=today,
+            plan_prescription_id=202,
+            environment="not_applicable",
+            saved_location_id=None,
+        )
+        cursor = TransactionCursor(
+            one=[
+                {
+                    "plan_template_id": 7,
+                    "plan_category_id": 1,
+                    "plan_prescription_id": 42,
+                    "prescription_owner_kind": "template",
+                    "is_active": True,
+                    "environment": "not_applicable",
+                    "saved_location_id": None,
+                },
+                {"plan_category_id": 1, "is_active": True},
+                prescription_row(),
+                {"is_not_past": True},
+                {"plan_prescription_id": 202},
+                None,
+                {"plan_item_id": 102},
+                detail,
+            ],
+            many=[[segment_row()], []],
+        )
+        conn = TransactionConnection(cursor)
+        payload = CreateFromTemplatePayload(
+            plan_template_id=7,
+            planned_date=today,
+            sort_order=0,
+        )
+        with patch("services.plan_service.db_conn", return_value=conn):
+            result = create_item_from_template(payload)
+
+        item_params = next(
+            params
+            for statement, params in cursor.executed
+            if "insert into public.plan_item" in statement.lower()
+        )
+        self.assertEqual(item_params[-2:], ("not_applicable", None))
+        self.assertIsNone(result.row["saved_location_id"])
+        self.assertEqual(conn.commit_count, 1)
 
     def test_clone_service_rejects_past_date_before_any_insert(self):
         cursor = TransactionCursor(
@@ -843,6 +925,12 @@ class PlanItemRouteTests(unittest.TestCase):
                 plan_item_id=41,
                 planned_date=date(2026, 10, 12),
                 sort_order=10,
+                saved_location_id=23,
+                saved_location_name="Prior location",
+                saved_location_lifecycle_state="archived",
+                saved_location_is_home=False,
+                latitude=39.7,
+                longitude=-104.9,
             ),
         ]
         segments = [
@@ -870,6 +958,15 @@ class PlanItemRouteTests(unittest.TestCase):
         self.assertEqual(payload["items"][0]["batch"]["batch_name"], "October planning")
         self.assertIsNone(payload["items"][0]["source_template"])
         self.assertEqual(payload["items"][1]["source_template"]["is_active"], False)
+        self.assertEqual(payload["items"][1]["environment"], "not_applicable")
+        self.assertEqual(payload["items"][1]["saved_location"], {
+            "location_id": 23,
+            "display_name": "Prior location",
+            "lifecycle_state": "archived",
+            "is_home": False,
+        })
+        self.assertNotIn("latitude", payload["items"][1]["saved_location"])
+        self.assertNotIn("longitude", payload["items"][1]["saved_location"])
         self.assertEqual(
             [segment["segment_order"] for segment in payload["items"][1]["prescription"]["segments"]],
             [1, 2],

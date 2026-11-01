@@ -74,6 +74,7 @@ assert.match(moduleSource, /state\.view = "library"/);
 
 for (const method of [
   "fetchPlanCategories",
+  "fetchSavedLocations",
   "fetchPlanTemplates",
   "fetchPlanTemplate",
   "createPlanTemplate",
@@ -83,6 +84,7 @@ for (const method of [
   assert.match(apiSource, new RegExp(`async ${method}\\(`));
 }
 assert.match(apiSource, /\/api\/plan\/categories/);
+assert.match(apiSource, /\/api\/saved-locations/);
 assert.match(apiSource, /\/api\/plan\/templates/);
 assert.doesNotMatch(moduleSource, /\/api\/(?:plan\/)?(?:items|batches|actual|derived)/);
 
@@ -182,6 +184,14 @@ function createPlanHarness() {
   let templatesResolve;
   const api = {
     fetchPlanCategories: () => Promise.resolve({ categories: [] }),
+    fetchSavedLocations: () => Promise.resolve({
+      locations: [{
+        location_id: 17,
+        display_name: "Training studio",
+        lifecycle_state: "active",
+        is_home: false,
+      }],
+    }),
     fetchPlanTemplates: () => new Promise(resolve => { templatesResolve = resolve; }),
     fetchPlanTemplate: () => Promise.resolve({
       plan_template_id: 7,
@@ -189,6 +199,14 @@ function createPlanHarness() {
       template_description: "Existing description",
       sort_order: 4,
       is_favorite: true,
+      environment: "either",
+      saved_location_id: 17,
+      saved_location: {
+        location_id: 17,
+        display_name: "Training studio",
+        lifecycle_state: "active",
+        is_home: false,
+      },
       category: { plan_category_id: 1 },
       prescription: {
         title: "Legacy prescription title",
@@ -215,6 +233,8 @@ function createPlanHarness() {
       template_description: payload.template_description,
       sort_order: payload.sort_order,
       is_favorite: payload.is_favorite,
+      environment: payload.environment,
+      saved_location_id: payload.saved_location_id,
       category: { plan_category_id: payload.category_id },
       prescription: { ...payload.prescription, segments: payload.segments },
     });
@@ -227,6 +247,8 @@ function createPlanHarness() {
       template_description: payload.template_description,
       sort_order: payload.sort_order,
       is_favorite: payload.is_favorite,
+      environment: payload.environment,
+      saved_location_id: payload.saved_location_id,
       category: { plan_category_id: payload.category_id },
       prescription: { ...payload.prescription, segments: payload.segments },
     });
@@ -321,7 +343,28 @@ async function flush() {
   await Promise.resolve();
 }
 
+async function testSavedLocationsApiWrapper() {
+  const calls = [];
+  const payload = { locations: [] };
+  const context = {
+    window: {},
+    fetch: async (url, options) => {
+      calls.push({ url, options });
+      return { ok: true, json: async () => payload };
+    },
+  };
+  vm.runInNewContext(apiSource, context);
+  const result = await context.window.api.fetchSavedLocations();
+  assert.deepEqual(JSON.parse(JSON.stringify(result)), payload);
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].url, "/api/saved-locations");
+  assert.deepEqual(JSON.parse(JSON.stringify(calls[0].options.headers)), {
+    Accept: "application/json",
+  });
+}
+
 async function runBehavioralTests() {
+  await testSavedLocationsApiWrapper();
   const harness = createPlanHarness();
   harness.controller.open();
   harness.dispatchRootAction("create");
@@ -354,6 +397,7 @@ async function runBehavioralTests() {
   const serializerHarness = createPlanHarness();
   serializerHarness.controller.open();
   serializerHarness.dispatchRootAction("create");
+  await flush();
   assert.equal(
     (serializerHarness.content.innerHTML.match(/<option value="PhysicalTherapy"[^>]*>Physical Therapy<\/option>/g) || []).length,
     1,
@@ -361,6 +405,9 @@ async function runBehavioralTests() {
   serializerHarness.dispatchChange("sport_type", "PhysicalTherapy");
   serializerHarness.dispatchChange("template_name", "Shared name");
   serializerHarness.dispatchChange("category_id", "1");
+  assert.match(serializerHarness.content.innerHTML, /<option value="17"\s*>Training studio<\/option>/);
+  serializerHarness.dispatchChange("environment", "indoor");
+  serializerHarness.dispatchChange("saved_location_id", "17");
   serializerHarness.dispatchChange("template_description", "Shared description");
   serializerHarness.dispatchChange("target_duration_min", "0");
   serializerHarness.content.dispatch("submit", { target: { id: "planTemplateForm" }, preventDefault() {} });
@@ -375,6 +422,8 @@ async function runBehavioralTests() {
   assert.equal(serializerHarness.mutationPayloads[0].prescription.target_load_source, null);
   assert.equal(serializerHarness.mutationPayloads[0].sort_order, 0);
   assert.equal(serializerHarness.mutationPayloads[0].is_favorite, false);
+  assert.equal(serializerHarness.mutationPayloads[0].environment, "indoor");
+  assert.equal(serializerHarness.mutationPayloads[0].saved_location_id, 17);
 
   const editHarness = createPlanHarness();
   const fetchExistingTemplate = editHarness.api.fetchPlanTemplate;
@@ -389,6 +438,8 @@ async function runBehavioralTests() {
   editHarness.dispatchRootAction("edit", 7);
   await flush();
   assert.match(editHarness.content.innerHTML, /<option value="PhysicalTherapy" selected>Physical Therapy<\/option>/);
+  assert.match(editHarness.content.innerHTML, /<option value="17" selected>Training studio<\/option>/);
+  assert.match(editHarness.content.innerHTML, /<option value="either" selected>Either<\/option>/);
   assert.match(editHarness.content.innerHTML, /<details class="plan-template-more-options" open>/);
   assert.match(editHarness.content.innerHTML, /id="plan-template-is-favorite"[^>]*checked/);
   assert.match(editHarness.content.innerHTML, /Distance \(mi\)/);
@@ -400,6 +451,8 @@ async function runBehavioralTests() {
   assert.equal(preservedPayload.prescription.description, "Legacy prescription description");
   assert.equal(preservedPayload.prescription.sport_type, "PhysicalTherapy");
   assert.equal(preservedPayload.is_favorite, true);
+  assert.equal(preservedPayload.environment, "either");
+  assert.equal(preservedPayload.saved_location_id, 17);
   editHarness.dispatchChange("template_name", "Unified name");
   editHarness.dispatchChange("template_description", "Unified description");
   editHarness.content.dispatch("submit", { target: { id: "planTemplateForm" }, preventDefault() {} });

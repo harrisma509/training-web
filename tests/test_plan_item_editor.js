@@ -67,6 +67,8 @@ function createHarness() {
     sort_order: "3",
     category_id: "7",
     user_note: "  Keep the note  ",
+    environment: "either",
+    saved_location_id: "17",
     title: "  Sunday tempo  ",
     description: " Workout details ",
     sport_type: " Road ride ",
@@ -137,6 +139,14 @@ function createHarness() {
     sort_order: 3,
     item_state: "committed",
     user_note: "Keep the note",
+    environment: "either",
+    saved_location_id: 17,
+    saved_location: {
+      location_id: 17,
+      display_name: "Training studio",
+      lifecycle_state: "active",
+      is_home: false,
+    },
     category: { plan_category_id: 7, category_name: "Endurance" },
     prescription: {
       title: "Sunday tempo",
@@ -189,6 +199,14 @@ function createHarness() {
         return calls.confirmResult === true;
       },
       api: {
+        fetchSavedLocations: async () => ({
+          locations: [{
+            location_id: 17,
+            display_name: "Training studio",
+            lifecycle_state: "active",
+            is_home: false,
+          }],
+        }),
         fetchPlanCategories: async () => ({
           categories: [{ plan_category_id: 7, category_name: "Endurance" }],
         }),
@@ -272,6 +290,8 @@ async function testFullCardDragUsesOneAuthoritativePut() {
     sort_order: 3,
     category_id: 7,
     user_note: "Keep the note",
+    environment: "either",
+    saved_location_id: 17,
     prescription: {
       title: "Sunday tempo",
       description: "Workout details",
@@ -323,16 +343,25 @@ async function testDeleteFromPlanConfirmationAndReadOnlyDates() {
   assert.equal(harness.panel.hidden, false);
   await Promise.resolve();
   assert.match(harness.panel.innerHTML, /Save changes/);
+  assert.match(harness.panel.innerHTML, /<option value="either" selected>Either<\/option>/);
+  assert.match(
+    harness.panel.innerHTML,
+    /<option value="17" selected>Current: Training studio \(active\)<\/option>/,
+  );
   assert.match(harness.panel.innerHTML, />Move<\/button>/);
   assert.match(harness.panel.innerHTML, />Delete from plan<\/button>/);
   assert.doesNotMatch(harness.panel.innerHTML, /Cancel planned item/);
 
   harness.formValues.planned_date = harness.today;
+  harness.formValues.environment = "indoor";
+  harness.formValues.saved_location_id = "17";
   const submit = harness.listeners.get("submit");
   submit({ preventDefault() {} });
   await new Promise(resolve => setImmediate(resolve));
   assert.equal(harness.calls.updates.length, 1, "saving today's existing date is accepted");
   assert.equal(harness.calls.updates[0].payload.planned_date, harness.today);
+  assert.equal(harness.calls.updates[0].payload.environment, "indoor");
+  assert.equal(harness.calls.updates[0].payload.saved_location_id, 17);
 
   assert.equal(editor.open(todayItem, harness.opener, "edit", false), true);
   await Promise.resolve();

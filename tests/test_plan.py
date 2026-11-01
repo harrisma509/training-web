@@ -46,6 +46,11 @@ def template_row(**overrides):
         "sort_order": 1,
         "is_favorite": False,
         "is_active": True,
+        "environment": "not_applicable",
+        "saved_location_id": None,
+        "saved_location_name": None,
+        "saved_location_lifecycle_state": None,
+        "saved_location_is_home": None,
         **category_row(),
         "category_sort_order": 1,
         "plan_prescription_id": 42,
@@ -93,6 +98,8 @@ def mutation_payload(**overrides):
         "category_id": 1,
         "sort_order": 1,
         "is_favorite": False,
+        "environment": "outdoor",
+        "saved_location_id": None,
         "prescription": {
             "title": "Tempo Ride",
             "description": "Controlled sustained effort.",
@@ -253,13 +260,30 @@ class PlanRouteTests(unittest.TestCase):
         self.assertNotIn("secret", response.body.decode("utf-8"))
 
     def test_template_collection_is_bounded_parameterized_and_one_query(self):
-        cursor = FakeCursor(rows=[template_row()])
+        cursor = FakeCursor(rows=[template_row(
+            saved_location_id=17,
+            saved_location_name="Training studio",
+            saved_location_lifecycle_state="active",
+            saved_location_is_home=False,
+            latitude=39.7,
+            longitude=-104.9,
+        )])
         with patch("routes.plan.db_conn", return_value=FakeConnection(cursor)):
             response = api_plan_templates(category_id=3, limit=200)
 
         payload = response_json(response)["templates"][0]
         self.assertEqual(response.status_code, 200)
         self.assertFalse(payload["is_favorite"])
+        self.assertEqual(payload["environment"], "not_applicable")
+        self.assertEqual(payload["saved_location_id"], 17)
+        self.assertEqual(payload["saved_location"], {
+            "location_id": 17,
+            "display_name": "Training studio",
+            "lifecycle_state": "active",
+            "is_home": False,
+        })
+        self.assertNotIn("latitude", payload["saved_location"])
+        self.assertNotIn("longitude", payload["saved_location"])
         self.assertEqual(payload["prescription"]["sport_type"], "Unlisted Future Sport")
         self.assertEqual(payload["prescription"]["target_load"], 0)
         self.assertEqual(payload["prescription"]["target_distance_mi"], 0.0)
@@ -410,6 +434,24 @@ class PlanMutationRouteTests(unittest.TestCase):
                     PlanTemplatePayload.model_validate(
                         mutation_payload(is_favorite=value)
                     )
+
+    def test_environment_is_required_and_limited_to_contract(self):
+        for value in ("outdoor", "indoor", "either", "not_applicable"):
+            with self.subTest(value=value):
+                payload = PlanTemplatePayload.model_validate(
+                    mutation_payload(environment=value)
+                )
+                self.assertEqual(payload.environment, value)
+        for value in (None, "unknown", 1):
+            with self.subTest(value=value):
+                with self.assertRaises(ValidationError):
+                    PlanTemplatePayload.model_validate(
+                        mutation_payload(environment=value)
+                    )
+        without_environment = mutation_payload()
+        del without_environment["environment"]
+        with self.assertRaises(ValidationError):
+            PlanTemplatePayload.model_validate(without_environment)
 
     def test_structural_errors_use_fastapi_422_and_semantic_order_uses_400(self):
         client = TestClient(training_app)
@@ -577,20 +619,35 @@ class PlanServiceTransactionTests(unittest.TestCase):
         cursor = TransactionCursor(
             [
                 {"plan_category_id": 1},
+                {"lifecycle_state": "active"},
                 {"plan_prescription_id": 42},
                 {"plan_template_id": 12},
-                template_row(),
+                template_row(
+                    environment="outdoor",
+                    saved_location_id=55,
+                    saved_location_name="Training studio",
+                    saved_location_lifecycle_state="active",
+                    saved_location_is_home=False,
+                ),
                 [segment_row(1)],
             ]
         )
         conn = TransactionConnection(cursor)
         with patch("services.plan_service.db_conn", return_value=conn):
             detail = create_template(
-                PlanTemplatePayload.model_validate(mutation_payload())
+                PlanTemplatePayload.model_validate(
+                    mutation_payload(saved_location_id=55)
+                )
             )
         self.assertEqual(detail.row["plan_template_id"], 12)
         self.assertEqual(conn.commit_count, 1)
         self.assertEqual(conn.rollback_count, 0)
+        template_params = next(
+            params
+            for statement, params in cursor.executed
+            if "insert into public.plan_template" in statement.lower()
+        )
+        self.assertEqual(template_params[-2:], ("outdoor", 55))
         sql = "\n".join(statement for statement, _ in cursor.executed).lower()
         self.assertNotIn("plan_item", sql)
         self.assertNotIn("plan_batch", sql)
@@ -663,6 +720,7 @@ class PlanServiceTransactionTests(unittest.TestCase):
                     "plan_prescription_id": 42,
                     "prescription_owner_kind": "template",
                     "is_active": True,
+                    "saved_location_id": None,
                 },
                 {"plan_prescription_id": 42, "owner_kind": "template"},
                 {"plan_category_id": 1},
@@ -695,6 +753,7 @@ class PlanServiceTransactionTests(unittest.TestCase):
                     "plan_prescription_id": 42,
                     "prescription_owner_kind": "template",
                     "is_active": True,
+                    "saved_location_id": None,
                 },
                 {"plan_prescription_id": 42, "owner_kind": "template"},
                 {"plan_category_id": 1},
@@ -728,6 +787,7 @@ class PlanServiceTransactionTests(unittest.TestCase):
                     "plan_prescription_id": 42,
                     "prescription_owner_kind": "template",
                     "is_active": True,
+                    "saved_location_id": None,
                 },
                 {"plan_prescription_id": 42, "owner_kind": "template"},
                 {"plan_category_id": 1},

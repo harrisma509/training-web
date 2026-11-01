@@ -11,9 +11,11 @@ from fastapi.responses import JSONResponse
 
 from db import db_conn, json_safe
 from routes.plan import (
+    PlanEnvironment,
     PlanPrescriptionPayload,
     PlanPrescriptionSegmentPayload,
     _mutation_guard,
+    _saved_location_payload,
     _validate_semantic_payload,
 )
 from services.plan_service import (
@@ -22,6 +24,8 @@ from services.plan_service import (
     PlanItemNotEditable,
     PlanItemNotFound,
     PlanOwnershipCorrupt,
+    PlanSavedLocationNotFound,
+    PlanSavedLocationUnavailable,
     PlanTemplateNotFound,
     cancel_plan_item,
     create_item_from_template,
@@ -63,6 +67,8 @@ class CreateManualItemPayload(BaseModel):
     category_id: StrictInt = Field(gt=0)
     sort_order: StrictInt = Field(default=0, ge=0)
     user_note: UserNote = Field(default=None, max_length=4000)
+    environment: PlanEnvironment
+    saved_location_id: StrictInt | None = Field(default=None, gt=0)
     prescription: PlanPrescriptionPayload
     segments: list[PlanPrescriptionSegmentPayload] = Field(default_factory=list, max_length=200)
 
@@ -74,6 +80,8 @@ class UpdatePlanItemPayload(BaseModel):
     sort_order: StrictInt = Field(default=0, ge=0)
     category_id: StrictInt = Field(gt=0)
     user_note: UserNote = Field(default=None, max_length=4000)
+    environment: PlanEnvironment
+    saved_location_id: StrictInt | None = Field(default=None, gt=0)
     prescription: PlanPrescriptionPayload
     segments: list[PlanPrescriptionSegmentPayload] = Field(default_factory=list, max_length=200)
 
@@ -99,6 +107,13 @@ def _item_mutation_error(exc):
         )
     if isinstance(exc, PlanCategoryNotFound):
         return JSONResponse({"detail": "Plan category not found."}, status_code=404)
+    if isinstance(exc, PlanSavedLocationNotFound):
+        return JSONResponse({"detail": "Saved location not found."}, status_code=404)
+    if isinstance(exc, PlanSavedLocationUnavailable):
+        return JSONResponse(
+            {"detail": "Saved location is not selectable."},
+            status_code=409,
+        )
     if isinstance(exc, PlanItemNotFound):
         return JSONResponse({"detail": "Plan item not found."}, status_code=404)
     if isinstance(exc, PlanItemNotEditable):
@@ -208,6 +223,9 @@ def _item_payload(row, segments):
         "item_state": json_safe(row["item_state"]),
         "item_source": json_safe(row["item_source"]),
         "user_note": json_safe(row["user_note"]),
+        "environment": row["environment"],
+        "saved_location_id": json_safe(row["saved_location_id"]),
+        "saved_location": _saved_location_payload(row),
         "category": category,
         "source_template": source_template,
         "batch": batch,
@@ -306,6 +324,11 @@ def api_plan_items(start_date: date, end_date: date):
                             pi.item_state,
                             pi.item_source,
                             pi.user_note,
+                            pi.environment,
+                            pi.saved_location_id,
+                            sl.display_name as saved_location_name,
+                            sl.lifecycle_state as saved_location_lifecycle_state,
+                            sl.is_home as saved_location_is_home,
                             pc.plan_category_id,
                             pc.category_key,
                             pc.category_name,
@@ -340,6 +363,8 @@ def api_plan_items(start_date: date, end_date: date):
                             on pt.plan_template_id = pi.source_template_id
                         left join public.plan_batch pb
                             on pb.plan_batch_id = pi.plan_batch_id
+                        left join public.saved_location sl
+                            on sl.location_id = pi.saved_location_id
                         where pi.prescription_owner_kind = 'item'
                           and pi.planned_date >= %s
                           and pi.planned_date < %s

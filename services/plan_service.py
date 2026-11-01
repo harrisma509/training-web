@@ -13,6 +13,14 @@ class PlanCategoryNotFound(PlanServiceError):
     pass
 
 
+class PlanSavedLocationNotFound(PlanServiceError):
+    pass
+
+
+class PlanSavedLocationUnavailable(PlanServiceError):
+    pass
+
+
 class PlanTemplateNotFound(PlanServiceError):
     pass
 
@@ -56,6 +64,11 @@ def _detail_queries(cur, plan_template_id, *, active_only):
                 pt.sort_order,
                 pt.is_active,
                 pt.is_favorite,
+                pt.environment,
+                pt.saved_location_id,
+                sl.display_name as saved_location_name,
+                sl.lifecycle_state as saved_location_lifecycle_state,
+                sl.is_home as saved_location_is_home,
                 pc.plan_category_id,
                 pc.category_key,
                 pc.category_name,
@@ -81,6 +94,8 @@ def _detail_queries(cur, plan_template_id, *, active_only):
             join public.plan_prescription pp
                 on pp.plan_prescription_id = pt.plan_prescription_id
                and pp.owner_kind = 'template'
+            left join public.saved_location sl
+                on sl.location_id = pt.saved_location_id
             where pt.plan_template_id = %s
               {active_clause}
         """,
@@ -131,6 +146,37 @@ def _require_active_category(cur, category_id):
     )
     if cur.fetchone() is None:
         raise PlanCategoryNotFound()
+
+
+def _require_active_saved_location(cur, location_id, *, current_id=None):
+    if location_id is None or location_id == current_id:
+        return
+    cur.execute(
+        """
+            select lifecycle_state
+            from public.saved_location
+            where location_id = %s
+        """,
+        (location_id,),
+    )
+    row = cur.fetchone()
+    if row is None:
+        raise PlanSavedLocationNotFound()
+    if row["lifecycle_state"] != "active":
+        raise PlanSavedLocationUnavailable()
+
+
+def _home_location_id(cur):
+    cur.execute(
+        """
+            select location_id
+            from public.saved_location
+            where is_home = true
+              and lifecycle_state = 'active'
+        """
+    )
+    row = cur.fetchone()
+    return row["location_id"] if row is not None else None
 
 
 def _segment_value(segment, key):
@@ -214,6 +260,11 @@ def _load_item_detail(cur, plan_item_id):
                 pi.item_state,
                 pi.item_source,
                 pi.user_note,
+                pi.environment,
+                pi.saved_location_id,
+                sl.display_name as saved_location_name,
+                sl.lifecycle_state as saved_location_lifecycle_state,
+                sl.is_home as saved_location_is_home,
                 pc.plan_category_id,
                 pc.category_key,
                 pc.category_name,
@@ -248,6 +299,8 @@ def _load_item_detail(cur, plan_item_id):
                 on pt.plan_template_id = pi.source_template_id
             left join public.plan_batch pb
                 on pb.plan_batch_id = pi.plan_batch_id
+            left join public.saved_location sl
+                on sl.location_id = pi.saved_location_id
             where pi.plan_item_id = %s
               and pi.prescription_owner_kind = 'item'
         """,
@@ -285,6 +338,7 @@ def create_template(payload):
     with db_conn() as conn:
         with conn.cursor() as cur:
             _require_active_category(cur, payload.category_id)
+            _require_active_saved_location(cur, payload.saved_location_id)
             cur.execute(
                 """
                     insert into public.plan_prescription (
@@ -330,9 +384,11 @@ def create_template(payload):
                         template_description,
                         sort_order,
                         is_favorite,
-                        is_active
+                        is_active,
+                        environment,
+                        saved_location_id
                     )
-                    values (%s, %s, 'template', %s, %s, %s, %s, true)
+                    values (%s, %s, 'template', %s, %s, %s, %s, true, %s, %s)
                     returning plan_template_id
                 """,
                 (
@@ -342,6 +398,8 @@ def create_template(payload):
                     payload.template_description,
                     payload.sort_order,
                     payload.is_favorite,
+                    payload.environment,
+                    payload.saved_location_id,
                 ),
             )
             template_id = cur.fetchone()["plan_template_id"]
@@ -361,7 +419,8 @@ def update_template(plan_template_id, payload):
                         plan_template_id,
                         plan_prescription_id,
                         prescription_owner_kind,
-                        is_active
+                        is_active,
+                        saved_location_id
                     from public.plan_template
                     where plan_template_id = %s
                     for update
@@ -391,17 +450,26 @@ def update_template(plan_template_id, payload):
                 raise PlanOwnershipCorrupt()
 
             _require_active_category(cur, payload.category_id)
+            _require_active_saved_location(
+                cur,
+                payload.saved_location_id,
+                current_id=template["saved_location_id"],
+            )
             update_fields = [
                 "plan_category_id = %s",
                 "template_name = %s",
                 "template_description = %s",
                 "sort_order = %s",
+                "environment = %s",
+                "saved_location_id = %s",
             ]
             update_params = [
                 payload.category_id,
                 payload.template_name,
                 payload.template_description,
                 payload.sort_order,
+                payload.environment,
+                payload.saved_location_id,
             ]
             if "is_favorite" in getattr(payload, "model_fields_set", set()):
                 update_fields.append("is_favorite = %s")
@@ -546,6 +614,8 @@ def _insert_committed_item(
     prescription_id,
     item_source,
     source_template_id,
+    environment,
+    saved_location_id,
 ):
     cur.execute(
         """
@@ -560,6 +630,8 @@ def _insert_committed_item(
                 item_state,
                 item_source,
                 user_note,
+                environment,
+                saved_location_id,
                 committed_at
             )
             values (
@@ -571,6 +643,8 @@ def _insert_committed_item(
                 %s,
                 %s,
                 'committed',
+                %s,
+                %s,
                 %s,
                 %s,
                 now()
@@ -585,6 +659,8 @@ def _insert_committed_item(
             sort_order,
             item_source,
             user_note,
+            environment,
+            saved_location_id,
         ),
     )
     return cur.fetchone()["plan_item_id"]
@@ -600,7 +676,9 @@ def create_item_from_template(payload):
                         plan_category_id,
                         plan_prescription_id,
                         prescription_owner_kind,
-                        is_active
+                        is_active,
+                        environment,
+                        saved_location_id
                     from public.plan_template
                     where plan_template_id = %s
                     for update
@@ -676,6 +754,12 @@ def create_item_from_template(payload):
                 prescription_id=item_prescription_id,
                 item_source="template",
                 source_template_id=payload.plan_template_id,
+                environment=template["environment"],
+                saved_location_id=(
+                    template["saved_location_id"]
+                    if template["saved_location_id"] is not None
+                    else _home_location_id(cur)
+                ),
             )
             detail = _load_item_detail(cur, item_id)
             if detail is None:
@@ -688,6 +772,7 @@ def create_manual_item(payload):
     with db_conn() as conn:
         with conn.cursor() as cur:
             _require_active_category(cur, payload.category_id)
+            _require_active_saved_location(cur, payload.saved_location_id)
             _require_not_past_date(cur, payload.planned_date)
 
             item_prescription_id = _insert_item_prescription(
@@ -704,6 +789,8 @@ def create_manual_item(payload):
                 prescription_id=item_prescription_id,
                 item_source="manual",
                 source_template_id=None,
+                environment=payload.environment,
+                saved_location_id=payload.saved_location_id,
             )
             detail = _load_item_detail(cur, item_id)
             if detail is None:
@@ -722,6 +809,7 @@ def _lock_item_for_update(cur, plan_item_id):
                 plan_category_id,
                 plan_prescription_id,
                 prescription_owner_kind,
+                saved_location_id,
                 plan_batch_id
             from public.plan_item
             where plan_item_id = %s
@@ -749,6 +837,11 @@ def update_plan_item(plan_item_id, payload):
             item = _lock_item_for_update(cur, plan_item_id)
             _require_committed_manageable_item(cur, item)
             _require_active_category(cur, payload.category_id)
+            _require_active_saved_location(
+                cur,
+                payload.saved_location_id,
+                current_id=item["saved_location_id"],
+            )
             if payload.planned_date != item["planned_date"]:
                 _require_future_date(cur, payload.planned_date)
 
@@ -819,6 +912,8 @@ def update_plan_item(plan_item_id, payload):
                         plan_category_id = %s,
                         sort_order = %s,
                         user_note = %s,
+                        environment = %s,
+                        saved_location_id = %s,
                         updated_at = now()
                     where plan_item_id = %s
                 """,
@@ -827,6 +922,8 @@ def update_plan_item(plan_item_id, payload):
                     payload.category_id,
                     payload.sort_order,
                     payload.user_note,
+                    payload.environment,
+                    payload.saved_location_id,
                     plan_item_id,
                 ),
             )

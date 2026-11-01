@@ -29,6 +29,9 @@
     is_favorite: false,
     category: null,
     is_active: true,
+    environment: "",
+    saved_location_id: null,
+    saved_location: null,
     prescription: {
       title: "",
       description: null,
@@ -62,6 +65,8 @@
     categoriesGeneration: 0,
     templatesGeneration: 0,
     detailGeneration: 0,
+    savedLocationsGeneration: 0,
+    savedLocations: [],
     sharedFieldsChanged: { name: false, description: false },
     surface: null,
     initialized: false,
@@ -118,6 +123,44 @@
     return message
       ? `<div id="plan-template-error-${escapeHtml(field)}" class="plan-template-field-error" role="alert">${escapeHtml(message)}</div>`
       : "";
+  }
+
+  function environmentOptionMarkup(value) {
+    const choices = [
+      ["Outdoor", "outdoor"],
+      ["Indoor", "indoor"],
+      ["Either", "either"],
+      ["Not applicable", "not_applicable"],
+    ];
+    return [
+      `<option value="">Select an environment</option>`,
+      ...choices.map(([label, optionValue]) =>
+        `<option value="${optionValue}" ${value === optionValue ? "selected" : ""}>${label}</option>`),
+    ].join("");
+  }
+
+  function savedLocationOptionMarkup(selectedId, currentLocation) {
+    const selected = selectedId === null || selectedId === undefined ? "" : String(selectedId);
+    const options = [
+      `<option value="" ${selected === "" ? "selected" : ""}>No template default (Home if available)</option>`,
+    ];
+    for (const location of state.savedLocations) {
+      if (location.lifecycle_state !== "active") continue;
+      const locationId = String(location.location_id);
+      options.push(
+        `<option value="${escapeHtml(locationId)}" ${selected === locationId ? "selected" : ""}>${escapeHtml(location.display_name)}</option>`,
+      );
+    }
+    if (selected && !state.savedLocations.some(
+      location => location.lifecycle_state === "active" && String(location.location_id) === selected,
+    )) {
+      const name = currentLocation?.display_name || `Saved location ${selected}`;
+      const lifecycle = currentLocation?.lifecycle_state || "current";
+      options.push(
+        `<option value="${escapeHtml(selected)}" selected>Current: ${escapeHtml(name)} (${escapeHtml(lifecycle)})</option>`,
+      );
+    }
+    return options.join("");
   }
 
   function describedBy(field) {
@@ -317,6 +360,8 @@
           <h3 id="plan-template-details-heading">Template details</h3>
           ${inputMarkup({ field: "template_name", label: "Name", value: draft.template_name, required: true })}
           ${selectMarkup({ field: "category_id", label: "Category", value: draft.category?.plan_category_id || draft.category_id, options: categoryOptions(draft.category?.plan_category_id || draft.category_id), required: true })}
+          ${selectMarkup({ field: "environment", label: "Environment", value: draft.environment, options: environmentOptionMarkup(draft.environment), required: true })}
+          ${selectMarkup({ field: "saved_location_id", label: "Saved location", value: draft.saved_location_id, options: savedLocationOptionMarkup(draft.saved_location_id, draft.saved_location) })}
           <div class="plan-template-field plan-template-field-is-favorite">
             <label for="plan-template-is-favorite">
               <input id="plan-template-is-favorite" name="is_favorite" type="checkbox"
@@ -469,6 +514,22 @@
     }
   }
 
+  async function loadSavedLocations() {
+    const generation = ++state.savedLocationsGeneration;
+    try {
+      const payload = await window.api.fetchSavedLocations();
+      if (generation !== state.savedLocationsGeneration || !state.open) return;
+      if (!Array.isArray(payload?.locations)) {
+        throw new Error("Saved locations response is invalid.");
+      }
+      state.savedLocations = payload.locations;
+    } catch (error) {
+      if (generation !== state.savedLocationsGeneration || !state.open) return;
+      state.formMessage = "Saved locations are temporarily unavailable.";
+    }
+    render();
+  }
+
   function draftFromDetail(detail) {
     return {
       ...detail,
@@ -489,6 +550,7 @@
     state.sharedFieldsChanged = { name: false, description: false };
     const generation = ++state.detailGeneration;
     render();
+    loadSavedLocations();
     try {
       const detail = await window.api.fetchPlanTemplate(templateId);
       if (generation !== state.detailGeneration || !state.open) return;
@@ -515,6 +577,7 @@
     state.formMessage = "";
     state.sharedFieldsChanged = { name: false, description: false };
     render();
+    loadSavedLocations();
     focusSurface();
   }
 
@@ -558,6 +621,8 @@
       category_id: Number(draft.category_id),
       sort_order: confirmed?.sort_order ?? 0,
       is_favorite: draft.is_favorite === true,
+      environment: draft.environment,
+      saved_location_id: numberValue(draft.saved_location_id),
       prescription: {
         title: state.view === "create" || state.sharedFieldsChanged.name
           ? sharedName
@@ -587,6 +652,9 @@
     const errors = {};
     if (!String(draft?.template_name || "").trim()) errors.template_name = "Template name is required.";
     if (!draft?.category_id) errors.category_id = "Select a category.";
+    if (!["outdoor", "indoor", "either", "not_applicable"].includes(draft?.environment)) {
+      errors.environment = "Select an environment.";
+    }
     for (const field of ["target_duration_min", "target_load", "target_distance_mi", "target_elevation_ft"]) {
       if (prescription[field] !== null && prescription[field] !== undefined
         && (!Number.isFinite(Number(prescription[field])) || Number(prescription[field]) < 0)) {
