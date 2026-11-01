@@ -193,6 +193,11 @@
           <label>Category<select name="category_id" required>${categories}</select></label>
           <label>Environment<select name="environment" required><option value="">Select an environment</option>${environments}</select></label>
           <label>Saved location<select name="saved_location_id">${savedLocations}</select></label>
+          <div class="plan-item-location-add">
+            <button type="button" class="button-secondary" data-plan-item-editor-action="add-location"${state.saving ? " disabled" : ""}>
+              Add saved location
+            </button>
+          </div>
           <label>Sort order<input name="sort_order" type="number" min="0" step="1" value="${escape(item.sort_order ?? 0)}"></label>
           <label>Title<input name="title" maxlength="200" required value="${escape(prescription.title)}"></label>
           <label>Description<textarea name="description" maxlength="2000">${escape(prescription.description || "")}</textarea></label>
@@ -579,6 +584,33 @@
     panel.addEventListener("click", event => {
       const action = event.target.closest("[data-plan-item-editor-action]")?.dataset.planItemEditorAction;
       if (action === "close") close();
+      if (action === "add-location") {
+        window.TrainingApp?.savedLocations?.openSearch({
+          onSaved(location) {
+            if (!state.item || !location?.location_id) return;
+            state.savedLocationsGeneration += 1;
+            state.savedLocations = [
+              ...state.savedLocations.filter(
+                row => String(row.location_id) !== String(location.location_id),
+              ),
+              location,
+            ];
+            state.item = {
+              ...state.item,
+              saved_location_id: location.location_id,
+              saved_location: location,
+            };
+            const locationSelect = form?.elements?.namedItem("saved_location_id");
+            if (locationSelect) {
+              locationSelect.innerHTML = savedLocationOptionMarkup(state.item);
+              locationSelect.value = String(location.location_id);
+            }
+            if (status) {
+              status.textContent = "Saved location added and selected. Save changes to keep it.";
+            }
+          },
+        });
+      }
       if (action === "move") {
         state.mode = "moving";
         state.error = "";

@@ -4,11 +4,13 @@ from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from db import db_conn
+from services.geocoding_service import resolve_place, search_places
 
 
 LOCATION_TYPES = frozenset({"home", "work", "training", "other"})
 LIFECYCLE_STATES = frozenset({"active", "hidden", "archived"})
 COORDINATE_QUANTUM = Decimal("0.000001")
+MAX_DISPLAY_NAME_LENGTH = 120
 
 
 class SavedLocationNotFoundError(LookupError):
@@ -19,10 +21,19 @@ class SavedLocationConfigurationError(RuntimeError):
     """The persisted Home location is missing or inconsistent."""
 
 
+class SavedLocationInUseError(RuntimeError):
+    """A saved location is referenced by Plan history."""
+
+
 def _validate_name(display_name):
     if not isinstance(display_name, str) or not display_name.strip():
         raise ValueError("display_name must be a non-empty string.")
-    return display_name.strip()
+    normalized = display_name.strip()
+    if len(normalized) > MAX_DISPLAY_NAME_LENGTH:
+        raise ValueError(
+            f"display_name must be at most {MAX_DISPLAY_NAME_LENGTH} characters."
+        )
+    return normalized
 
 
 def _validate_coordinate(value, *, field_name, minimum, maximum):
@@ -134,6 +145,54 @@ def list_active_saved_locations():
             )
             rows = cur.fetchall()
     return [_location_summary(row) for row in rows]
+
+
+def list_saved_locations_for_management():
+    """Return lifecycle and reference metadata without exposing coordinates."""
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT
+                    sl.location_id,
+                    sl.display_name,
+                    sl.timezone_name,
+                    sl.location_type,
+                    sl.lifecycle_state,
+                    sl.is_home,
+                    (
+                        EXISTS (
+                            SELECT 1
+                            FROM public.plan_template pt
+                            WHERE pt.saved_location_id = sl.location_id
+                        )
+                        OR EXISTS (
+                            SELECT 1
+                            FROM public.plan_item pi
+                            WHERE pi.saved_location_id = sl.location_id
+                        )
+                    ) AS is_referenced
+                FROM public.saved_location sl
+                ORDER BY
+                    sl.is_home DESC,
+                    CASE sl.lifecycle_state
+                        WHEN 'active' THEN 0
+                        WHEN 'hidden' THEN 1
+                        ELSE 2
+                    END,
+                    sl.display_name,
+                    sl.location_id
+                """
+            )
+            rows = cur.fetchall()
+    return [
+        {**_location_summary(row), "is_referenced": bool(row["is_referenced"])}
+        for row in rows
+    ]
+
+
+def search_saved_locations(query):
+    return search_places(query)
 
 
 def resolve_home_location():
@@ -270,6 +329,142 @@ def create_saved_location(
             conn.rollback()
             raise
     return _location_summary(row)
+
+
+def create_saved_location_from_place(
+    *,
+    provider_place_id,
+    display_name,
+    location_type,
+):
+    """Resolve the selected place server-side before persisting its coordinates."""
+    resolved = resolve_place(provider_place_id)
+    return create_saved_location(
+        display_name=display_name,
+        latitude=resolved["latitude"],
+        longitude=resolved["longitude"],
+        timezone_name=resolved["timezone_name"],
+        location_type=location_type,
+    )
+
+
+def set_home_location(location_id):
+    """Move the Home/default designation atomically while retaining stable IDs."""
+    if type(location_id) is not int or location_id < 1:
+        raise ValueError("location_id must be a positive integer.")
+
+    with db_conn() as conn:
+        try:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "LOCK TABLE public.saved_location IN SHARE ROW EXCLUSIVE MODE"
+                )
+                cur.execute(
+                    """
+                    SELECT location_id, lifecycle_state
+                    FROM public.saved_location
+                    WHERE location_id = %s
+                    FOR UPDATE
+                    """,
+                    (location_id,),
+                )
+                target = cur.fetchone()
+                if target is None:
+                    raise SavedLocationNotFoundError()
+                if target["lifecycle_state"] != "active":
+                    raise ValueError("Only an active location can be Home.")
+
+                cur.execute(
+                    """
+                    UPDATE public.saved_location
+                    SET is_home = false,
+                        location_type = 'other',
+                        updated_at = now()
+                    WHERE is_home = true
+                      AND location_id <> %s
+                    """,
+                    (location_id,),
+                )
+                cur.execute(
+                    """
+                    UPDATE public.saved_location
+                    SET is_home = true,
+                        location_type = 'home',
+                        updated_at = now()
+                    WHERE location_id = %s
+                    RETURNING
+                        location_id,
+                        display_name,
+                        timezone_name,
+                        location_type,
+                        lifecycle_state,
+                        is_home
+                    """,
+                    (location_id,),
+                )
+                row = cur.fetchone()
+            if row is None:
+                raise SavedLocationNotFoundError()
+            conn.commit()
+        except Exception:
+            conn.rollback()
+            raise
+    return _location_summary(row)
+
+
+def delete_saved_location(location_id):
+    """Delete only an unreferenced location, checking under a row lock."""
+    if type(location_id) is not int or location_id < 1:
+        raise ValueError("location_id must be a positive integer.")
+
+    with db_conn() as conn:
+        try:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT location_id
+                    FROM public.saved_location
+                    WHERE location_id = %s
+                    FOR UPDATE
+                    """,
+                    (location_id,),
+                )
+                if cur.fetchone() is None:
+                    raise SavedLocationNotFoundError()
+                cur.execute(
+                    """
+                    SELECT
+                        EXISTS (
+                            SELECT 1
+                            FROM public.plan_template
+                            WHERE saved_location_id = %s
+                        )
+                        OR EXISTS (
+                            SELECT 1
+                            FROM public.plan_item
+                            WHERE saved_location_id = %s
+                        ) AS is_referenced
+                    """,
+                    (location_id, location_id),
+                )
+                if cur.fetchone()["is_referenced"]:
+                    raise SavedLocationInUseError()
+                cur.execute(
+                    """
+                    DELETE FROM public.saved_location
+                    WHERE location_id = %s
+                    RETURNING location_id
+                    """,
+                    (location_id,),
+                )
+                deleted = cur.fetchone()
+            if deleted is None:
+                raise SavedLocationNotFoundError()
+            conn.commit()
+        except Exception:
+            conn.rollback()
+            raise
+    return {"location_id": deleted["location_id"]}
 
 
 def update_saved_location(

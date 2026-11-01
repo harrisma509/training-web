@@ -362,6 +362,11 @@
           ${selectMarkup({ field: "category_id", label: "Category", value: draft.category?.plan_category_id || draft.category_id, options: categoryOptions(draft.category?.plan_category_id || draft.category_id), required: true })}
           ${selectMarkup({ field: "environment", label: "Environment", value: draft.environment, options: environmentOptionMarkup(draft.environment), required: true })}
           ${selectMarkup({ field: "saved_location_id", label: "Saved location", value: draft.saved_location_id, options: savedLocationOptionMarkup(draft.saved_location_id, draft.saved_location) })}
+          <div class="plan-template-location-add">
+            <button type="button" class="button-secondary" data-plan-template-action="add-location"${state.saving ? " disabled" : ""}>
+              Add saved location
+            </button>
+          </div>
           <div class="plan-template-field plan-template-field-is-favorite">
             <label for="plan-template-is-favorite">
               <input id="plan-template-is-favorite" name="is_favorite" type="checkbox"
@@ -773,6 +778,25 @@
       loadCategories();
     } else if (action === "retry-templates") {
       loadTemplates(state.templates.categoryId);
+    } else if (action === "add-location") {
+      window.TrainingApp?.savedLocations?.openSearch({
+        onSaved(location) {
+          if (!state.draft || !location?.location_id) return;
+          state.savedLocationsGeneration += 1;
+          state.savedLocations = [
+            ...state.savedLocations.filter(
+              row => String(row.location_id) !== String(location.location_id),
+            ),
+            location,
+          ];
+          state.draft.saved_location_id = location.location_id;
+          state.draft.saved_location = location;
+          state.dirty = true;
+          state.formMessage = "Saved location added and selected.";
+          render();
+          focusSurface();
+        },
+      });
     } else if (action === "deactivate") {
       deactivateTemplate();
     }

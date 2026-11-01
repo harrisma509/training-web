@@ -61,6 +61,13 @@ Typical model:
 
 This matters because local syntax checks are useful, but they do not validate the true production environment.
 
+Geoapify-backed saved-location search and revalidation require the server-side
+`GEOAPIFY_API_KEY` setting. The Docker Compose service loads
+`/etc/training/.env`; keep the key there rather than in source code or browser
+configuration. If the key is missing, location search and save return a
+bounded unavailable response while saved-location listing and other Plan
+operations remain available.
+
 ## Deployment and validation
 Use one of the repository's platform-native deployment scripts for runtime validation:
 

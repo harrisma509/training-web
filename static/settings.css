@@ -250,6 +250,54 @@
   flex-wrap: wrap;
 }
 
+.saved-location-management-list {
+  display: grid;
+  gap: 10px;
+}
+
+.saved-location-management-row {
+  display: grid;
+  gap: 8px;
+  border: 1px solid var(--input-border);
+  border-radius: 9px;
+  padding: 12px;
+  background: var(--panel);
+}
+
+.saved-location-management-row label {
+  display: grid;
+  gap: 5px;
+}
+
+.saved-location-management-row input {
+  width: 100%;
+  min-height: 38px;
+  box-sizing: border-box;
+  border: 1px solid var(--input-border);
+  border-radius: 7px;
+  padding: 7px 9px;
+  background: var(--input-bg);
+  color: var(--text);
+  font: inherit;
+}
+
+.saved-location-management-row p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.saved-location-management-actions {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  flex-wrap: wrap;
+}
+
+.saved-location-management-actions button {
+  min-height: 34px;
+}
+
 .settings-ai-coach-card {
   background: var(--input-bg);
   border: 1px solid var(--input-border);

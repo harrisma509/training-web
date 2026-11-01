@@ -786,6 +786,143 @@
     margin-left: auto;
 }
 
+.plan-template-location-add,
+.plan-item-location-add {
+    grid-column: 1 / -1;
+}
+
+.saved-location-search-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 1300;
+    display: grid;
+    place-items: center;
+    padding: 12px;
+    background: rgba(15, 23, 42, 0.62);
+}
+
+.saved-location-search-dialog {
+    width: min(560px, 100%);
+    max-height: min(760px, calc(100vh - 24px));
+    overflow-y: auto;
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 18px;
+    background: var(--panel);
+    color: var(--text);
+    box-shadow: 0 18px 48px rgba(0, 0, 0, 0.35);
+}
+
+.saved-location-search-header,
+.saved-location-search-controls,
+.saved-location-search-actions {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.saved-location-search-header {
+    justify-content: space-between;
+    margin-bottom: 14px;
+}
+
+.saved-location-search-header h2,
+.saved-location-save-form h3 {
+    margin: 0;
+    font-size: 16px;
+}
+
+.saved-location-search-header p {
+    margin: 5px 0 0;
+    color: var(--muted);
+    font-size: 12px;
+}
+
+.saved-location-search-form,
+.saved-location-save-form {
+    display: grid;
+    gap: 8px;
+}
+
+.saved-location-search-form label,
+.saved-location-save-form label {
+    color: var(--muted);
+    font-size: 12px;
+    font-weight: 700;
+}
+
+.saved-location-search-form input,
+.saved-location-save-form input,
+.saved-location-save-form select {
+    min-width: 0;
+    min-height: 40px;
+    box-sizing: border-box;
+    border: 1px solid var(--input-border, var(--line));
+    border-radius: 7px;
+    padding: 8px 10px;
+    background: var(--input-bg, var(--panel2));
+    color: var(--text);
+    font: inherit;
+}
+
+.saved-location-search-controls input {
+    flex: 1;
+}
+
+.saved-location-search-status {
+    min-height: 18px;
+    margin: 10px 0;
+    color: var(--muted);
+    font-size: 12px;
+}
+
+.saved-location-search-results {
+    display: grid;
+    gap: 7px;
+}
+
+.saved-location-search-result {
+    display: grid;
+    gap: 3px;
+    width: 100%;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 10px;
+    background: var(--panel2);
+    color: var(--text);
+    text-align: left;
+    cursor: pointer;
+}
+
+.saved-location-search-result:hover,
+.saved-location-search-result:focus-visible {
+    border-color: var(--blue);
+    outline: 2px solid var(--focus-ring, var(--blue));
+    outline-offset: 1px;
+}
+
+.saved-location-result-name {
+    font-size: 13px;
+    font-weight: 700;
+}
+
+.saved-location-result-address,
+.saved-location-type-help {
+    color: var(--muted);
+    font-size: 11px;
+}
+
+.saved-location-save-form {
+    margin-top: 16px;
+    border-top: 1px solid var(--line);
+    padding-top: 14px;
+}
+
+.saved-location-search-actions {
+    justify-content: flex-end;
+    margin-top: 4px;
+}
+
 .plan-item-day-target {
     width: 100%;
     min-height: 34px;

@@ -145,6 +145,40 @@
 
     {% include "partials/panes/yearly_pane.html" %}
 
+    <div id="savedLocationSearchOverlay" class="saved-location-search-overlay hidden" aria-hidden="true">
+      <section id="savedLocationSearchDialog" class="saved-location-search-dialog" role="dialog"
+        aria-modal="true" aria-labelledby="savedLocationSearchTitle">
+        <header class="saved-location-search-header">
+          <div>
+            <h2 id="savedLocationSearchTitle">Add saved location</h2>
+            <p>Search for a place, venue, city, postal code, or address.</p>
+          </div>
+          <button type="button" class="drawer-close-button" data-saved-location-search-action="close"
+            aria-label="Close location search">×</button>
+        </header>
+        <form id="savedLocationSearchForm" class="saved-location-search-form">
+          <label for="savedLocationSearchQuery">Search</label>
+          <div class="saved-location-search-controls">
+            <input id="savedLocationSearchQuery" type="search" maxlength="160" autocomplete="off" required>
+            <button type="submit" class="button-primary">Search</button>
+          </div>
+        </form>
+        <div id="savedLocationSearchStatus" class="saved-location-search-status" role="status" aria-live="polite"></div>
+        <div id="savedLocationSearchResults" class="saved-location-search-results"></div>
+        <form id="savedLocationSaveForm" class="saved-location-save-form" hidden>
+          <h3>Save selected place</h3>
+          <label for="savedLocationDisplayName">Display name</label>
+          <input id="savedLocationDisplayName" maxlength="120" required>
+          <label for="savedLocationType">Location type</label>
+          <select id="savedLocationType" required></select>
+          <div id="savedLocationTypeHelp" class="settings-help-text"></div>
+          <div class="saved-location-search-actions">
+            <button type="submit" class="button-primary">Save and use location</button>
+          </div>
+        </form>
+      </section>
+    </div>
+
     {% include "partials/panes/coach_pane.html" %}
 
     {% include "partials/dialogs/coach_delete_dialog.html" %}
@@ -158,6 +192,7 @@
   <script src="/static/activity-presentation.js?v={{ asset_version }}"></script>
   <script src="/static/transient-surface.js?v={{ asset_version }}"></script>
   <script src="/static/api.js?v={{ asset_version }}"></script>
+  <script src="/static/saved_locations.js?v={{ asset_version }}"></script>
   <script src="/static/weekly.js?v={{ asset_version }}"></script>
   <script src="/static/zones.js?v={{ asset_version }}"></script>
   <script src="/static/gear.js?v={{ asset_version }}"></script>

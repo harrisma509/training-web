@@ -177,6 +177,7 @@ def test_stylesheet_and_synchronous_script_order_is_stable() -> None:
         "/static/activity-presentation.js",
         "/static/transient-surface.js",
         "/static/api.js",
+        "/static/saved_locations.js",
         "/static/weekly.js",
         "/static/zones.js",
         "/static/gear.js",

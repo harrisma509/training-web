@@ -946,6 +946,7 @@
     settingsDrawer?.classList.remove("hidden");
     settingsDrawer?.setAttribute("aria-hidden", "false");
     loadSystemStatus();
+    window.TrainingApp?.savedLocations?.activateManagement();
     if (selectedSettingsTab === "ai-coach") {
       loadAiCoachSettings(true).catch(() => { });
       loadCustomInstructions(true).catch(() => { });

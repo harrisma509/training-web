@@ -38,6 +38,7 @@ EXPECTED_ASSET_ORDER = [
     "activity-presentation.js",
     "transient-surface.js",
     "api.js",
+    "saved_locations.js",
     "weekly.js",
     "zones.js",
     "gear.js",

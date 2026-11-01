@@ -133,6 +133,45 @@
       return fetchJson("/api/saved-locations");
     },
 
+    async searchSavedLocations(query) {
+      const params = new URLSearchParams({ q: String(query || "") });
+      return fetchJson(`/api/saved-locations/search?${params.toString()}`);
+    },
+
+    async fetchSavedLocationsForManagement() {
+      return fetchJson("/api/saved-locations/manage");
+    },
+
+    async createSavedLocation(payload) {
+      return fetchJson("/api/saved-locations", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Accept: "application/json" },
+        body: JSON.stringify(payload),
+      });
+    },
+
+    async updateSavedLocation(locationId, payload) {
+      return fetchJson(`/api/saved-locations/${encodeURIComponent(locationId)}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", Accept: "application/json" },
+        body: JSON.stringify(payload),
+      });
+    },
+
+    async setSavedLocationHome(locationId) {
+      return fetchJson(`/api/saved-locations/${encodeURIComponent(locationId)}/home`, {
+        method: "PUT",
+        headers: { Accept: "application/json" },
+      });
+    },
+
+    async deleteSavedLocation(locationId) {
+      return fetchJson(`/api/saved-locations/${encodeURIComponent(locationId)}`, {
+        method: "DELETE",
+        headers: { Accept: "application/json" },
+      });
+    },
+
     async fetchPlanPreferences() {
       return fetchJson("/api/plan/preferences");
     },

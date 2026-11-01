@@ -114,6 +114,20 @@
               </div>
             </div>
 
+            <div id="savedLocationManagement" class="settings-section settings-general-tile settings-general-span-2">
+              <div class="settings-label">Saved locations</div>
+              <div class="settings-help-text">
+                Manage your saved places, choose Home, and keep locations used by Plans.
+              </div>
+              <div class="settings-actions">
+                <button type="button" class="button-primary" data-saved-location-action="add">
+                  Add saved location
+                </button>
+              </div>
+              <div id="savedLocationManagementStatus" class="settings-status-message" aria-live="polite"></div>
+              <div id="savedLocationManagementList" class="saved-location-management-list"></div>
+            </div>
+
             <div class="settings-section settings-general-tile settings-general-span-2">
               <div class="settings-label">System status</div>
               <div id="settingsStatusSummary" class="settings-status-summary" aria-live="polite">Loading...</div>
@@ -440,4 +454,3 @@
       </div>
     </div>
   </div>
-
