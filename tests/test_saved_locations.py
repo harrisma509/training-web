@@ -397,6 +397,40 @@ class SavedLocationTests(unittest.TestCase):
         self.assertNotIn("lat", results[0])
         self.assertNotIn("lon", results[0])
 
+    def test_geoapify_place_resolution_accepts_documented_returned_place_id(self):
+        details = {
+            "type": "FeatureCollection",
+            "features": [
+                {
+                    "type": "Feature",
+                    "properties": {
+                        "place_id": "canonical-place-id",
+                        "lat": 39.7392,
+                        "lon": -104.9903,
+                        "timezone": {"name": "America/Denver"},
+                    },
+                }
+            ],
+        }
+        with patch(
+            "services.geocoding_service._request_json",
+            return_value=details,
+        ) as request:
+            resolved = resolve_place("selected-place-id")
+
+        self.assertEqual(
+            resolved,
+            {
+                "latitude": Decimal("39.7392"),
+                "longitude": Decimal("-104.9903"),
+                "timezone_name": "America/Denver",
+            },
+        )
+        request.assert_called_once_with(
+            "/v2/place-details",
+            {"id": "selected-place-id", "features": "details"},
+        )
+
     def test_geoapify_place_resolution_validates_timezone_with_reverse_lookup(self):
         details = {
             "features": [

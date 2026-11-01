@@ -173,9 +173,6 @@ def resolve_place(place_id):
     if not properties_list:
         raise GeoapifyPlaceNotFoundError()
     properties = properties_list[0]
-    returned_id = properties.get("place_id")
-    if returned_id is not None and returned_id != place_id:
-        raise GeoapifyPlaceNotFoundError()
 
     latitude = _coordinate(properties.get("lat"), Decimal("-90"), Decimal("90"))
     longitude = _coordinate(properties.get("lon"), Decimal("-180"), Decimal("180"))
