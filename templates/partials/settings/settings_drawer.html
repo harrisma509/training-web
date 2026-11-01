@@ -12,6 +12,8 @@
         <div class="settings-tab-list" role="tablist" aria-label="Settings tabs">
           <button class="settings-tab active" type="button" data-settings-tab="general" role="tab" aria-selected="true"
             aria-controls="settingsGeneralTab">General</button>
+          <button class="settings-tab" type="button" data-settings-tab="locations" role="tab" aria-selected="false"
+            aria-controls="settingsLocationsTab">Locations</button>
           <button class="settings-tab" type="button" data-settings-tab="yearly" role="tab" aria-selected="false"
             aria-controls="settingsYearlyTab">Yearly</button>
           <button class="settings-tab" type="button" data-settings-tab="ai-coach" role="tab" aria-selected="false"
@@ -114,6 +116,19 @@
               </div>
             </div>
 
+            <div class="settings-section settings-general-tile settings-general-span-2">
+              <div class="settings-label">System status</div>
+              <div id="settingsStatusSummary" class="settings-status-summary" aria-live="polite">Loading...</div>
+              <div class="settings-actions">
+                <button id="refreshStatusBtn" type="button" class="button-secondary">Refresh Status</button>
+                <button id="copyDiagnosticsBtn" type="button" class="button-primary">Copy Diagnostics</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div id="settingsLocationsTab" class="settings-tab-panel hidden">
+          <div class="settings-general-grid">
             <div id="savedLocationManagement" class="settings-section settings-general-tile settings-general-span-2">
               <div class="settings-label">Saved locations</div>
               <div class="settings-help-text">
@@ -126,15 +141,6 @@
               </div>
               <div id="savedLocationManagementStatus" class="settings-status-message" aria-live="polite"></div>
               <div id="savedLocationManagementList" class="saved-location-management-list"></div>
-            </div>
-
-            <div class="settings-section settings-general-tile settings-general-span-2">
-              <div class="settings-label">System status</div>
-              <div id="settingsStatusSummary" class="settings-status-summary" aria-live="polite">Loading...</div>
-              <div class="settings-actions">
-                <button id="refreshStatusBtn" type="button" class="button-secondary">Refresh Status</button>
-                <button id="copyDiagnosticsBtn" type="button" class="button-primary">Copy Diagnostics</button>
-              </div>
             </div>
           </div>
         </div>

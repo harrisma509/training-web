@@ -298,13 +298,17 @@ def test_navigation_panes_and_default_tab_states_are_stable() -> None:
     ]
     assert [element.attributes.get("data-settings-tab") for element in settings_tabs] == [
         "general",
+        "locations",
         "yearly",
         "ai-coach",
     ]
     assert settings_tabs[0].attributes.get("aria-selected") == "true"
     assert "active" in classes(settings_tabs[0])
     assert "hidden" not in classes(by_id(document, "settingsGeneralTab"))
-    for tab, panel_id in zip(settings_tabs[1:], ("settingsYearlyTab", "settingsAiCoachTab")):
+    for tab, panel_id in zip(
+        settings_tabs[1:],
+        ("settingsLocationsTab", "settingsYearlyTab", "settingsAiCoachTab"),
+    ):
         assert tab.attributes.get("aria-selected") == "false"
         assert "hidden" in classes(by_id(document, panel_id))
     assert "hidden" in classes(by_id(document, "settingsDrawer"))
@@ -342,6 +346,59 @@ def test_navigation_panes_and_default_tab_states_are_stable() -> None:
     assert service_tabs[1].attributes.get("tabindex") == "-1"
     assert "hidden" not in classes(by_id(document, "componentsPane"))
     assert "hidden" in classes(by_id(document, "gearPane"))
+
+
+def test_locations_settings_tab_owns_saved_locations_and_uses_existing_controller() -> None:
+    source, document = parse_index()
+    settings_drawer = by_id(document, "settingsDrawer")
+    settings_tabs = [
+        element
+        for element in all_elements(settings_drawer)
+        if element.attributes.get("role") == "tab"
+    ]
+    assert [
+        element.attributes.get("data-settings-tab") for element in settings_tabs
+    ] == ["general", "locations", "yearly", "ai-coach"]
+    assert [
+        element.attributes.get("aria-controls") for element in settings_tabs
+    ] == [
+        "settingsGeneralTab",
+        "settingsLocationsTab",
+        "settingsYearlyTab",
+        "settingsAiCoachTab",
+    ]
+    assert "Locations</button>" in source
+
+    locations_tab = by_id(document, "settingsLocationsTab")
+    saved_location_sections = [
+        element
+        for element in all_elements(settings_drawer)
+        if element.attributes.get("id") == "savedLocationManagement"
+    ]
+    assert len(saved_location_sections) == 1
+    saved_locations = saved_location_sections[0]
+    assert has_ancestor(saved_locations, "settingsLocationsTab")
+    assert not has_ancestor(saved_locations, "settingsGeneralTab")
+    assert "settings-general-grid" in classes(saved_locations.parent)
+    assert "settings-general-span-2" in classes(saved_locations)
+    assert settings_tabs[1].attributes.get("aria-selected") == "false"
+    assert "hidden" in classes(locations_tab)
+
+    settings_source = (REPO_ROOT / "static" / "settings.js").read_text(encoding="utf-8")
+    assert 'locations: document.getElementById("settingsLocationsTab")' in settings_source
+    set_tab_source = settings_source.split(
+        "function setSettingsTab(selectedTab)", 1
+    )[1].split("function attachSettingsEventListeners()", 1)[0]
+    assert "const validTabs = Object.keys(settingsTabPanels);" in set_tab_source
+    assert 'tabButton.setAttribute("aria-selected", String(isActive));' in set_tab_source
+    assert "tabButton.tabIndex = isActive ? 0 : -1;" in set_tab_source
+    assert "panel.classList.toggle(\"hidden\", !isVisible);" in set_tab_source
+    assert 'panel.setAttribute("aria-hidden", String(!isVisible));' in set_tab_source
+
+    open_settings_source = settings_source.split(
+        "function openSettingsDrawer()", 1
+    )[1].split("function closeSettingsDrawer()", 1)[0]
+    assert "window.TrainingApp?.savedLocations?.activateManagement();" in open_settings_source
 
 
 def test_settings_service_forms_and_overlays_keep_their_boundaries() -> None:

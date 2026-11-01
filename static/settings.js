@@ -27,6 +27,7 @@
   const settingsTabButtons = Array.from(document.querySelectorAll(".settings-tab"));
   const settingsTabPanels = {
     general: document.getElementById("settingsGeneralTab"),
+    locations: document.getElementById("settingsLocationsTab"),
     yearly: document.getElementById("settingsYearlyTab"),
     "ai-coach": document.getElementById("settingsAiCoachTab"),
   };
