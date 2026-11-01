@@ -195,6 +195,7 @@ def test_stylesheet_and_synchronous_script_order_is_stable() -> None:
         "/static/plan_options.js",
         "/static/plan_items.js",
         "/static/plan_item_editor.js",
+        "/static/plan_weather.js",
         "/static/plan.js",
         "/static/goals.js",
         "/static/kpis.js",

@@ -226,6 +226,21 @@
       });
     },
 
+    async fetchWeatherForecast(locationId, options = {}) {
+      return fetchJson(
+        `/api/weather/locations/${encodeURIComponent(locationId)}/forecast`,
+        { signal: options.signal },
+      );
+    },
+
+    async fetchWeatherHourly(locationId, date, options = {}) {
+      const params = new URLSearchParams({ date: String(date) });
+      return fetchJson(
+        `/api/weather/locations/${encodeURIComponent(locationId)}/hourly?${params.toString()}`,
+        { signal: options.signal },
+      );
+    },
+
     async updatePlanItem(planItemId, payload) {
       return fetchJson(`/api/plan/items/${encodeURIComponent(planItemId)}`, {
         method: "PUT",

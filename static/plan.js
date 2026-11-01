@@ -932,6 +932,12 @@
     const plannedItems = plannedController?.getVisibleItemsForDate?.(dayKey)
       || plannedController?.getItemsForDate?.(dayKey)
       || [];
+    const weatherHtml = window.PlanWeatherController?.renderDay?.({
+      dateKey: dayKey,
+      todayKey: getDenverTodayKey(),
+      items: plannedItems,
+      itemsReady: plannedState.status === "success",
+    }) || "";
     const plannedHtml = plannedController?.renderDaySection?.(dayKey) || "";
     const paletteTargetHtml = window.PlanPaletteController?.targetMarkup?.(
       dayKey,
@@ -1003,6 +1009,7 @@
       <div class="plan-day ${isWeekCollapsed ? "is-collapsed" : ""}${paletteDropClass}${itemMoveClass}" data-plan-date="${escapeHtml(dayKey)}">
         <div class="plan-day-header${isCurrentWeek ? " is-current-week" : ""}${isCurrentDay ? " is-current-day" : ""}"${isCurrentDay ? ' aria-current="date"' : ""}>
           <span class="plan-weekday">${escapeHtml(label.weekday || "")}</span>
+          ${weatherHtml}
           <span class="plan-day-load" aria-label="${escapeHtml(loadLabel)}" title="${escapeHtml(loadLabel)}">${escapeHtml(loadDisplay)}</span>
           <span class="plan-date">${escapeHtml(label.month || "")} ${escapeHtml(label.date || "")}</span>
         </div>
@@ -1244,6 +1251,7 @@
     const requestId = ++PLAN_LOAD_REQUESTS.current;
     const range = getPlanRange();
 
+    window.PlanWeatherController?.resetForPlanLoad?.();
     strip.innerHTML = '<div class="plan-empty-state">Loading plan…</div>';
     const planItemsPromise = window.PlanItemsController?.load?.(range, { force });
 
@@ -1317,6 +1325,7 @@
     window.PlanOptionsController?.init?.({ onChange: renderPlanStrip });
     window.PlanItemsController?.init?.({ onChange: renderPlanStrip });
     window.PlanPaletteController?.init?.({ onChange: renderPlanStrip });
+    window.PlanWeatherController?.init?.({ onChange: renderPlanStrip });
     window.PlanItemEditor?.bind?.();
     window.PlanTemplateLibraryController?.init?.();
     const dateInput = document.getElementById("planDateJump");
@@ -1348,6 +1357,7 @@
       canDeactivate: context => window.PlanTemplateLibraryController?.canDeactivate?.(context) ?? true,
       deactivate: context => {
         window.PlanPaletteController?.deactivate?.(context);
+        window.PlanWeatherController?.deactivate?.();
         return window.PlanTemplateLibraryController?.deactivate?.(context);
       },
     };

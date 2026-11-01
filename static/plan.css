@@ -185,6 +185,10 @@
     overflow: hidden;
 }
 
+.plan-weather-dialog-panel {
+    width: min(900px, 96vw);
+}
+
 .plan-template-library-content {
     display: flex;
     flex-direction: column;
@@ -1583,6 +1587,176 @@
     color: rgb(37, 99, 235);
     flex: 0 0 auto;
     white-space: nowrap;
+}
+
+.plan-day-header > .plan-weekday {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.plan-weather-trigger {
+    appearance: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    flex: 0 1 auto;
+    min-width: 0;
+    max-width: 48%;
+    overflow: hidden;
+    padding: 2px 3px;
+    border: 0;
+    border-radius: 4px;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    font-size: 10px;
+    font-weight: 700;
+    line-height: 1.2;
+    white-space: nowrap;
+    cursor: pointer;
+}
+
+.plan-weather-trigger:focus-visible,
+.plan-weather-dialog button:focus-visible {
+    outline: 2px solid var(--focus-ring, rgba(96, 165, 250, 0.9));
+    outline-offset: 2px;
+}
+
+.plan-weather-trigger.is-unavailable,
+.plan-weather-unavailable,
+.plan-weather-loading {
+    color: var(--muted);
+}
+
+.plan-weather-trigger.is-unavailable {
+    font-weight: 500;
+    text-overflow: ellipsis;
+}
+
+.plan-weather-icon {
+    flex: 0 0 auto;
+    font-size: 12px;
+}
+
+.plan-weather-temperature,
+.plan-weather-wind,
+.plan-weather-gust,
+.plan-weather-more {
+    flex: 0 0 auto;
+    font-variant-numeric: tabular-nums;
+}
+
+.plan-weather-more {
+    color: var(--muted);
+}
+
+.plan-weather-loading,
+.plan-weather-unavailable {
+    flex: 0 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    font-size: 9px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.plan-weather-dialog {
+    z-index: 42;
+}
+
+.plan-weather-dialog-body {
+    gap: 18px;
+}
+
+.plan-weather-location {
+    display: grid;
+    gap: 8px;
+    min-width: 0;
+    padding-bottom: 14px;
+    border-bottom: 1px solid var(--line);
+}
+
+.plan-weather-location h3,
+.plan-weather-location-summary,
+.plan-weather-sun-times,
+.plan-weather-stale,
+.plan-weather-detail-status {
+    margin: 0;
+}
+
+.plan-weather-location h3 {
+    font-size: 15px;
+}
+
+.plan-weather-location-summary,
+.plan-weather-sun-times,
+.plan-weather-stale,
+.plan-weather-detail-status {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    color: var(--muted);
+    font-size: 12px;
+}
+
+.plan-weather-stale {
+    color: var(--muted);
+    font-weight: 700;
+}
+
+.plan-weather-hour-list {
+    display: grid;
+    gap: 4px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.plan-weather-hour {
+    display: grid;
+    grid-template-columns: 58px minmax(100px, 1fr) minmax(100px, 1fr) minmax(130px, 1.2fr) minmax(100px, 1fr) auto;
+    align-items: center;
+    gap: 8px;
+    padding: 7px 8px;
+    border-radius: 6px;
+    background: var(--panel2);
+    font-size: 12px;
+    font-variant-numeric: tabular-nums;
+}
+
+.plan-weather-hour-condition {
+    color: var(--muted);
+}
+
+.plan-weather-hour-snow {
+    color: var(--muted);
+}
+
+@media (min-width: 981px) and (max-width: 1450px) {
+    .plan-weather-wind,
+    .plan-weather-gust {
+        display: none;
+    }
+}
+
+@media (max-width: 980px) {
+    .plan-weather-dialog-panel {
+        width: 100%;
+        max-height: calc(100vh - 16px);
+        border-radius: 16px 16px 0 0;
+    }
+
+    .plan-weather-wind,
+    .plan-weather-gust {
+        display: none;
+    }
+
+    .plan-weather-hour {
+        grid-template-columns: 54px minmax(90px, 1fr) minmax(90px, 1fr);
+    }
 }
 
 .plan-day.is-collapsed {
