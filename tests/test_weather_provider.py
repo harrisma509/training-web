@@ -144,6 +144,7 @@ def test_request_contract_and_normalized_local_forecast():
     assert forecast.daily[0].condition == "clear"
     assert forecast.daily[1].condition == "storm"
     assert forecast.daily[0].temperature_high_f == 30.0
+    assert forecast.daily[0].temperature_low_f == 10.0
     assert forecast.daily[0].sunrise_local == "2026-01-01T07:10"
     assert forecast.hourly_by_date["2026-01-01"][0].timestamp_local == "2026-01-01T00:00"
     assert forecast.hourly_by_date["2026-01-02"][0].condition == "snow"
@@ -152,6 +153,19 @@ def test_request_contract_and_normalized_local_forecast():
     assert "weather_code" not in normalized_text
     assert "latitude" not in normalized_text
     assert "longitude" not in normalized_text
+
+
+def test_missing_daily_temperature_extremes_are_preserved_as_null():
+    payload = provider_payload()
+    payload["daily"]["temperature_2m_max"][1] = None
+    payload["daily"]["temperature_2m_min"][1] = None
+    forecast, _ = call_with_payload(payload)
+
+    daily = forecast.daily[1].to_dict()
+    assert daily["temperature_high_f"] is None
+    assert daily["temperature_low_f"] is None
+    assert daily["condition"] == "storm"
+    assert daily["precipitation_in"] == 0.2
 
 
 def test_weather_code_families_map_to_ti_conditions_only():
@@ -175,6 +189,7 @@ def test_weather_code_families_map_to_ti_conditions_only():
         lambda value: value["daily"].__setitem__("time", ["not-a-date", "2026-01-02"]),
         lambda value: value["daily"]["snowfall_sum"].__setitem__(0, float("nan")),
         lambda value: value["daily"]["temperature_2m_max"].__setitem__(0, float("inf")),
+        lambda value: value["daily"]["precipitation_sum"].__setitem__(0, None),
         lambda value: value["hourly"]["temperature_2m"].__setitem__(0, "10"),
         lambda value: value["hourly"]["temperature_2m"].pop(),
         lambda value: value["hourly"]["time"].__setitem__(0, "not-a-timestamp"),

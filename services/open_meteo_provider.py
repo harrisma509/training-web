@@ -189,6 +189,17 @@ def _number(
     return number
 
 
+def _optional_number(
+    value: object,
+    *,
+    minimum: float | None = None,
+    maximum: float | None = None,
+) -> float | None:
+    if value is None:
+        return None
+    return _number(value, minimum=minimum, maximum=maximum)
+
+
 def _condition(value: object) -> WeatherCondition:
     if type(value) is not int:
         raise _invalid_response("weather_code_type")
@@ -257,8 +268,12 @@ def _normalize_payload(
             DailyWeather(
                 date=local_day.isoformat(),
                 condition=_condition(daily_arrays["weather_code"][index]),
-                temperature_high_f=_number(daily_arrays["temperature_2m_max"][index]),
-                temperature_low_f=_number(daily_arrays["temperature_2m_min"][index]),
+                temperature_high_f=_optional_number(
+                    daily_arrays["temperature_2m_max"][index]
+                ),
+                temperature_low_f=_optional_number(
+                    daily_arrays["temperature_2m_min"][index]
+                ),
                 precipitation_probability_max_pct=_number(
                     daily_arrays["precipitation_probability_max"][index],
                     minimum=0,

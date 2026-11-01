@@ -23,8 +23,8 @@ WeatherFreshness = Literal["fresh", "stale", "unavailable"]
 class DailyWeather:
     date: str
     condition: WeatherCondition
-    temperature_high_f: float
-    temperature_low_f: float
+    temperature_high_f: float | None
+    temperature_low_f: float | None
     precipitation_probability_max_pct: float
     precipitation_in: float
     snowfall_in: float
@@ -34,7 +34,7 @@ class DailyWeather:
     sunrise_local: str
     sunset_local: str
 
-    def to_dict(self) -> dict[str, str | float]:
+    def to_dict(self) -> dict[str, str | float | None]:
         return {
             "date": self.date,
             "condition": self.condition,
