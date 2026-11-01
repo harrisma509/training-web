@@ -146,6 +146,21 @@ It owns:
 The service must not import browser or FastAPI concepts. Routes must not
 duplicate service transaction behavior.
 
+## Environment and saved-location snapshots
+
+Templates require an Environment and may reference a saved location. Scheduling
+copies both values to the new Plan item; item overrides change only the item,
+and later template edits do not rewrite scheduled items. Existing records were
+backfilled to `not_applicable` with no saved location. Hidden or archived
+locations remain readable through existing references but are unavailable for
+new selection.
+
+When a template has no location, scheduling uses active Home when available;
+otherwise the item location remains null. Manually created items retain their
+explicit optional location. Automatic per-day Weather-location selection is
+deferred to Slice 5. The implemented Locations and Weather boundary is
+documented in [WEATHER.md](../WEATHER.md).
+
 ## PostgreSQL responsibilities
 
 PostgreSQL owns:

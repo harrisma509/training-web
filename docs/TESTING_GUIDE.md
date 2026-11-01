@@ -150,6 +150,13 @@ context, disposable test data, fake database objects, or patched network
 boundaries. Tests must prove call prevention, request construction, response
 handling, and error mapping without making real provider or production calls.
 
+Weather and geocoding provider tests use synthetic payloads and patched network
+boundaries; default suites make zero external provider calls. A live provider
+contract probe may be used only when explicitly authorized, with sanitized
+metadata and no full payloads, coordinates, or secrets in output. See
+[WEATHER.md](WEATHER.md) for the Weather-specific contract and validation
+boundaries.
+
 Unexpected external network access must fail the test rather than silently
 falling through to a real service.
 

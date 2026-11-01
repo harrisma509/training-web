@@ -75,6 +75,13 @@ The ownership rule is:
 - `training-etl` owns ingestion, schema meaning, writes, and authoritative calculations.
 - Tests preserve behavior and architecture contracts.
 
+Saved-location management is presented in the dedicated Locations Settings
+tab and implemented by the shared saved-location feature, not by a Settings
+fork. Plan and template location controls consume coordinate-free saved-location
+metadata. Future Plan Weather UI consumes the TI Weather API; provider requests
+and cache logic remain server-side. See [WEATHER.md](WEATHER.md) for the
+implemented Locations and Weather contract.
+
 ### CSV export ownership
 
 Browser-facing CSV delivery is owned by `training-web`: `csv_export.py` is the
