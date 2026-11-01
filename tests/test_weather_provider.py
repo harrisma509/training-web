@@ -206,6 +206,17 @@ def test_provider_error_and_malformed_json_are_rejected_without_raw_details():
             fetch_forecast(39.7392, -104.9903, "America/Denver")
 
 
+def test_missing_required_array_has_a_sanitized_diagnostic_category():
+    payload = provider_payload()
+    payload["hourly"].pop("temperature_2m")
+    response = FakeResponse(json.dumps(payload).encode("utf-8"))
+    with patch("services.open_meteo_provider.urlopen", return_value=response):
+        with pytest.raises(OpenMeteoInvalidResponseError) as error:
+            fetch_forecast(39.7392, -104.9903, "America/Denver")
+
+    assert error.value.category == "array_missing_or_misaligned:temperature_2m"
+
+
 def test_http_and_url_failures_are_sanitized_and_not_retried():
     failures = (
         HTTPError(OPEN_METEO_URL, 503, "synthetic provider failure", {}, None),

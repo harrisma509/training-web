@@ -89,9 +89,13 @@ class OpenMeteoUnavailableError(OpenMeteoError):
 class OpenMeteoInvalidResponseError(OpenMeteoError):
     category = "invalid_provider_response"
 
+    def __init__(self, category: str = "invalid_provider_response"):
+        super().__init__(category)
+        self.category = category
 
-def _invalid_response() -> OpenMeteoInvalidResponseError:
-    return OpenMeteoInvalidResponseError()
+
+def _invalid_response(category: str = "invalid_provider_response") -> OpenMeteoInvalidResponseError:
+    return OpenMeteoInvalidResponseError(category)
 
 
 def _request_params(latitude: Decimal, longitude: Decimal, timezone_name: str) -> dict[str, str]:
@@ -125,9 +129,11 @@ def _request_json(params: dict[str, str]) -> dict[str, object]:
     try:
         payload = json.loads(response_body)
     except (UnicodeDecodeError, json.JSONDecodeError):
-        raise _invalid_response() from None
-    if not isinstance(payload, dict) or payload.get("error"):
-        raise _invalid_response()
+        raise _invalid_response("json_decode") from None
+    if not isinstance(payload, dict):
+        raise _invalid_response("json_root_shape")
+    if payload.get("error"):
+        raise _invalid_response("provider_error_body")
     return payload
 
 
@@ -155,10 +161,10 @@ def _validate_location_inputs(
 
 def _array(container: object, key: str, expected_length: int) -> list[object]:
     if not isinstance(container, dict):
-        raise _invalid_response()
+        raise _invalid_response(f"array_container_shape:{key}")
     values = container.get(key)
     if not isinstance(values, list) or len(values) != expected_length:
-        raise _invalid_response()
+        raise _invalid_response(f"array_missing_or_misaligned:{key}")
     return values
 
 
@@ -169,52 +175,55 @@ def _number(
     maximum: float | None = None,
 ) -> float:
     if type(value) not in (int, float):
-        raise _invalid_response()
-    number = float(value)
+        raise _invalid_response("numeric_type")
+    try:
+        number = float(value)
+    except (OverflowError, ValueError):
+        raise _invalid_response("numeric_conversion") from None
     if not math.isfinite(number):
-        raise _invalid_response()
+        raise _invalid_response("numeric_non_finite")
     if minimum is not None and number < minimum:
-        raise _invalid_response()
+        raise _invalid_response("numeric_below_range")
     if maximum is not None and number > maximum:
-        raise _invalid_response()
+        raise _invalid_response("numeric_above_range")
     return number
 
 
 def _condition(value: object) -> WeatherCondition:
     if type(value) is not int:
-        raise _invalid_response()
+        raise _invalid_response("weather_code_type")
     return CONDITION_BY_CODE.get(value, "unknown")
 
 
 def _local_date(value: object) -> date:
     if not isinstance(value, str):
-        raise _invalid_response()
+        raise _invalid_response("date_type")
     try:
         parsed = date.fromisoformat(value)
     except ValueError:
-        raise _invalid_response() from None
+        raise _invalid_response("date_format") from None
     if parsed.isoformat() != value:
-        raise _invalid_response()
+        raise _invalid_response("date_normalization")
     return parsed
 
 
 def _local_datetime(value: object) -> datetime:
     if not isinstance(value, str):
-        raise _invalid_response()
+        raise _invalid_response("timestamp_type")
     try:
         return datetime.fromisoformat(value.replace("Z", "+00:00"))
     except ValueError:
-        raise _invalid_response() from None
+        raise _invalid_response("timestamp_format") from None
 
 
 def _validate_time_order(times: list[datetime]) -> None:
     if not times:
-        raise _invalid_response()
+        raise _invalid_response("timestamp_array_empty")
     awareness = times[0].tzinfo is not None
     if any((value.tzinfo is not None) != awareness for value in times):
-        raise _invalid_response()
+        raise _invalid_response("timestamp_awareness_mismatch")
     if any(current <= previous for previous, current in zip(times, times[1:])):
-        raise _invalid_response()
+        raise _invalid_response("timestamp_order")
 
 
 def _normalize_payload(
@@ -222,17 +231,17 @@ def _normalize_payload(
     timezone_name: str,
 ) -> NormalizedWeather:
     if payload.get("timezone") != timezone_name:
-        raise _invalid_response()
+        raise _invalid_response("timezone_response_mismatch")
 
     daily_raw = payload.get("daily")
     if not isinstance(daily_raw, dict):
-        raise _invalid_response()
+        raise _invalid_response("daily_shape")
     raw_dates = daily_raw.get("time")
     if not isinstance(raw_dates, list) or not 1 <= len(raw_dates) <= 16:
-        raise _invalid_response()
+        raise _invalid_response("daily_date_array_shape")
     parsed_dates = [_local_date(value) for value in raw_dates]
     if any(current <= previous for previous, current in zip(parsed_dates, parsed_dates[1:])):
-        raise _invalid_response()
+        raise _invalid_response("daily_date_order")
     daily_arrays = {
         field: _array(daily_raw, field, len(parsed_dates))
         for field in DAILY_FIELDS
@@ -243,7 +252,7 @@ def _normalize_payload(
         sunrise = _local_datetime(daily_arrays["sunrise"][index])
         sunset = _local_datetime(daily_arrays["sunset"][index])
         if sunrise.date() != local_day or sunset.date() != local_day:
-            raise _invalid_response()
+            raise _invalid_response("daily_sunrise_sunset_date_mismatch")
         daily.append(
             DailyWeather(
                 date=local_day.isoformat(),
@@ -272,7 +281,7 @@ def _normalize_payload(
     hourly_raw = payload.get("hourly")
     raw_hourly_times = hourly_raw.get("time") if isinstance(hourly_raw, dict) else None
     if not isinstance(raw_hourly_times, list) or not raw_hourly_times:
-        raise _invalid_response()
+        raise _invalid_response("hourly_time_array_shape")
     parsed_hourly_times = [_local_datetime(value) for value in raw_hourly_times]
     _validate_time_order(parsed_hourly_times)
     hourly_arrays = {
@@ -309,7 +318,7 @@ def _normalize_payload(
 
     expected_dates = {value.isoformat() for value in parsed_dates}
     if set(hourly_by_date) != expected_dates:
-        raise _invalid_response()
+        raise _invalid_response("hourly_date_coverage")
     return NormalizedWeather(
         daily=tuple(daily),
         hourly_by_date={
@@ -323,7 +332,7 @@ def _normalize_payload(
 
 def _daylight_value(value: object) -> bool:
     if type(value) is not int or value not in (0, 1):
-        raise _invalid_response()
+        raise _invalid_response("is_day_value")
     return value == 1
 
 
