@@ -44,6 +44,7 @@ from routes.coach_memories import router as coach_memories_router
 from routes.coach_context_receipt import router as coach_context_receipt_router
 from routes.plan import router as plan_router
 from routes.plan_items import router as plan_items_router
+from routes.saved_locations import router as saved_locations_router
 from asset_version import load_asset_version
 
 configure_logging("training-web")
@@ -74,6 +75,7 @@ app.include_router(coach_memories_router)
 app.include_router(coach_context_receipt_router)
 app.include_router(plan_router)
 app.include_router(plan_items_router)
+app.include_router(saved_locations_router)
 
 app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")
 templates = Jinja2Templates(directory=BASE_DIR / "templates")
