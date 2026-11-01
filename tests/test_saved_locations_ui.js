@@ -94,14 +94,28 @@ async function testSearchAndSaveFlow(homeAvailable) {
     lifecycle_state: "active",
     is_home: false,
   };
-  const api = {
-    async fetchSavedLocations() {
-      return {
+  const requests = [];
+  const fetch = async (url, options = {}) => {
+    requests.push({ url, options });
+    let response;
+    if (url === "/api/saved-locations" && options.method === "POST") {
+      response = { location: selectedLocation };
+    } else if (url === "/api/saved-locations") {
+      response = {
         locations: homeAvailable ? [{ location_id: 1, is_home: true }] : [],
       };
-    },
-    async fetchSavedLocationsForManagement() {
-      return {
+    } else if (url.startsWith("/api/saved-locations/search?")) {
+      response = {
+        results: [
+          {
+            place_id: "synthetic-geoapify-place-id",
+            display_name: "Sample Venue <img>",
+            subtitle: "Example City",
+          },
+        ],
+      };
+    } else if (url === "/api/saved-locations/manage") {
+      response = {
         locations: [
           {
             location_id: 41,
@@ -113,26 +127,12 @@ async function testSearchAndSaveFlow(homeAvailable) {
           },
         ],
       };
-    },
-    async searchSavedLocations(query) {
-      calls.push(["search", query]);
-      return {
-        results: [
-          {
-            place_id: "geoapify-place-1",
-            display_name: "Central Park <img>",
-            subtitle: "Example City",
-          },
-        ],
-      };
-    },
-    async createSavedLocation(payload) {
-      calls.push(["create", payload]);
-      return { location: selectedLocation };
-    },
+    } else {
+      throw new Error("Unexpected saved-location API request.");
+    }
+    return { ok: true, json: async () => response };
   };
   const app = {
-    api,
     TransientSurface: {
       create({ onBeforeClose, onAfterClose }) {
         return {
@@ -152,8 +152,10 @@ async function testSearchAndSaveFlow(homeAvailable) {
       return elements.get(id) || null;
     },
   };
-  const window = { TrainingApp: app, api, confirm: () => true };
-  vm.runInNewContext(moduleSource, { window, document, URLSearchParams });
+  const window = { TrainingApp: app, confirm: () => true };
+  const browserContext = { window, document, URLSearchParams, fetch };
+  vm.runInNewContext(apiSource, browserContext);
+  vm.runInNewContext(moduleSource, browserContext);
 
   let assignedLocation = null;
   await app.savedLocations.openSearch({
@@ -163,45 +165,44 @@ async function testSearchAndSaveFlow(homeAvailable) {
   });
   const searchForm = elements.get("savedLocationSearchForm");
   const searchQuery = elements.get("savedLocationSearchQuery");
-  searchQuery.value = "Central Park";
+  searchQuery.value = "Sample Venue";
   await searchForm.dispatch("submit", { preventDefault() {} });
   await flushTasks();
 
   const results = elements.get("savedLocationSearchResults");
-  assert.match(results.innerHTML, /Central Park &lt;img&gt;/);
+  assert.match(results.innerHTML, /Sample Venue &lt;img&gt;/);
   assert.doesNotMatch(results.innerHTML, /<img>/);
   await results.dispatch("click", {
     target: {
       closest(selector) {
         return selector === "[data-saved-location-place-id]"
-          ? { dataset: { savedLocationPlaceId: "geoapify-place-1" } }
+          ? { dataset: { savedLocationPlaceId: "synthetic-geoapify-place-id" } }
           : null;
       },
     },
   });
-  assert.equal(elements.get("savedLocationDisplayName").value, "Central Park <img>");
+  assert.equal(elements.get("savedLocationDisplayName").value, "Sample Venue <img>");
   assert.equal(
     elements.get("savedLocationType").value,
     homeAvailable ? "training" : "home",
   );
   assert.equal(elements.get("savedLocationType").disabled, false);
-  elements.get("savedLocationDisplayName").value = "Central Park";
+  elements.get("savedLocationDisplayName").value = "Sample Venue";
   await elements.get("savedLocationDisplayName").dispatch("input");
 
   await elements.get("savedLocationSaveForm").dispatch("submit", {
     preventDefault() {},
   });
-  assert.deepEqual(JSON.parse(JSON.stringify(calls)), [
-    ["search", "Central Park"],
-    [
-      "create",
-      {
-        provider_place_id: "geoapify-place-1",
-        display_name: "Central Park",
-        location_type: homeAvailable ? "training" : "home",
-      },
-    ],
-  ]);
+  const saveRequest = requests.find(
+    ({ url, options }) => url === "/api/saved-locations" && options.method === "POST",
+  );
+  assert.ok(saveRequest);
+  const requestBody = JSON.parse(saveRequest.options.body);
+  assert.equal(requestBody.provider_place_id, "synthetic-geoapify-place-id");
+  assert.equal(requestBody.display_name, "Sample Venue");
+  assert.equal(requestBody.location_type, homeAvailable ? "training" : "home");
+  assert.equal("latitude" in requestBody, false);
+  assert.equal("longitude" in requestBody, false);
   assert.equal(assignedLocation, selectedLocation);
   assert.equal(elements.get("savedLocationSearchOverlay").attributes["aria-hidden"], "true");
 
