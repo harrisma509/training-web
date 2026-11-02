@@ -135,8 +135,9 @@ unavailable. Provider failure does not extend the stale lifetime. Malformed
 provider responses fail safely.
 
 Weather unavailability does not block Plan, Locations, or training-data
-workflows. The approved nullable daily high/low values remain null; required
-weather values are not replaced with zero.
+workflows. Nullable daily temperature extremes and daily/hourly wind-gust
+values remain null when Open-Meteo reports them unavailable; required weather
+values are not replaced with zero.
 
 ## 10. Privacy and security boundaries
 

@@ -16,7 +16,7 @@ from services.weather_service import (
 )
 
 
-def sample_forecast(freshness="fresh", stale_age_minutes=None):
+def sample_forecast(freshness="fresh", stale_age_minutes=None, optional_gusts=False):
     daily = DailyWeather(
         date="2026-01-01",
         condition="clear",
@@ -27,7 +27,7 @@ def sample_forecast(freshness="fresh", stale_age_minutes=None):
         snowfall_in=0.0,
         wind_speed_max_mph=5.0,
         wind_direction_dominant_deg=180.0,
-        wind_gust_max_mph=8.0,
+        wind_gust_max_mph=None if optional_gusts else 8.0,
         sunrise_local="2026-01-01T07:10",
         sunset_local="2026-01-01T16:40",
     )
@@ -41,7 +41,7 @@ def sample_forecast(freshness="fresh", stale_age_minutes=None):
         snowfall_in=0.0,
         wind_speed_mph=2.0,
         wind_direction_deg=180.0,
-        wind_gust_mph=3.0,
+        wind_gust_mph=None if optional_gusts else 3.0,
         is_day=False,
     )
     return WeatherForecast(
@@ -102,6 +102,27 @@ class TestWeatherRoutes:
         assert "longitude" not in response.text
         assert "weather_code" not in response.text
         assert "temperature_2m" not in response.text
+
+    def test_optional_gusts_are_serialized_as_null(self):
+        forecast = sample_forecast(optional_gusts=True)
+        with patch(
+            "routes.weather.weather_service.get_forecast",
+            return_value=forecast,
+        ):
+            daily_response = self.client.get("/api/weather/locations/7/forecast")
+        with patch(
+            "routes.weather.weather_service.get_hourly_forecast",
+            return_value=forecast,
+        ):
+            hourly_response = self.client.get(
+                "/api/weather/locations/7/hourly",
+                params={"date": "2026-01-01"},
+            )
+
+        assert daily_response.status_code == 200
+        assert daily_response.json()["daily"][0]["wind_gust_max_mph"] is None
+        assert hourly_response.status_code == 200
+        assert hourly_response.json()["hourly"][0]["wind_gust_mph"] is None
 
     def test_stale_forecast_remains_http_success(self):
         with patch(

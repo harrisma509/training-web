@@ -1,5 +1,6 @@
 import copy
 import json
+from datetime import date, timedelta
 from decimal import Decimal
 from urllib.error import HTTPError, URLError
 from urllib.parse import parse_qs, urlsplit
@@ -54,6 +55,46 @@ def provider_payload():
             "is_day": [0, 0, 1, 1],
         },
     }
+
+
+def november_horizon_payload():
+    payload = provider_payload()
+    dates = [date(2026, 11, 2) + timedelta(days=offset) for offset in range(16)]
+    date_values = [value.isoformat() for value in dates]
+    hourly_times = [
+        f"{day.isoformat()}T{hour:02d}:00"
+        for day in dates
+        for hour in range(24)
+    ]
+
+    payload["daily"] = {
+        "time": date_values,
+        "weather_code": [0] * 16,
+        "temperature_2m_max": [30] * 15 + [None],
+        "temperature_2m_min": [10] * 15 + [None],
+        "precipitation_probability_max": [5] * 16,
+        "precipitation_sum": [0.0] * 16,
+        "snowfall_sum": [0.0] * 16,
+        "wind_speed_10m_max": [5.0] * 16,
+        "wind_direction_10m_dominant": [180] * 16,
+        "wind_gusts_10m_max": [8.0] * 15 + [None],
+        "sunrise": [f"{value}T07:00" for value in date_values],
+        "sunset": [f"{value}T17:00" for value in date_values],
+    }
+    payload["hourly"] = {
+        "time": hourly_times,
+        "weather_code": [0] * 384,
+        "temperature_2m": [10.0] * 384,
+        "apparent_temperature": [8.0] * 384,
+        "precipitation_probability": [0] * 384,
+        "precipitation": [0.0] * 384,
+        "snowfall": [0.0] * 384,
+        "wind_speed_10m": [2.0] * 384,
+        "wind_direction_10m": [180] * 384,
+        "wind_gusts_10m": [3.0] * 378 + [None] * 6,
+        "is_day": [0] * 384,
+    }
+    return payload
 
 
 class FakeResponse:
@@ -168,6 +209,24 @@ def test_missing_daily_temperature_extremes_are_preserved_as_null():
     assert daily["precipitation_in"] == 0.2
 
 
+def test_november_horizon_preserves_unavailable_gusts_as_null():
+    forecast, _ = call_with_payload(november_horizon_payload())
+
+    assert forecast.available_start_date == "2026-11-02"
+    assert forecast.available_end_date == "2026-11-17"
+    assert len(forecast.daily) == 16
+    assert forecast.daily[0].temperature_high_f == 30.0
+    assert type(forecast.daily[0].temperature_high_f) is float
+    assert forecast.daily[-1].temperature_high_f is None
+    assert forecast.daily[-1].temperature_low_f is None
+    assert forecast.daily[-1].wind_gust_max_mph is None
+    final_day_hours = forecast.hourly_by_date["2026-11-17"]
+    assert len(final_day_hours) == 24
+    assert all(hour.wind_gust_mph is None for hour in final_day_hours[18:])
+    assert final_day_hours[17].wind_gust_mph == 3.0
+    assert type(final_day_hours[0].precipitation_probability_pct) is float
+
+
 def test_weather_code_families_map_to_ti_conditions_only():
     representatives = {
         0: "clear",
@@ -191,6 +250,7 @@ def test_weather_code_families_map_to_ti_conditions_only():
         lambda value: value["daily"]["temperature_2m_max"].__setitem__(0, float("inf")),
         lambda value: value["daily"]["precipitation_sum"].__setitem__(0, None),
         lambda value: value["hourly"]["temperature_2m"].__setitem__(0, "10"),
+        lambda value: value["hourly"]["wind_gusts_10m"].__setitem__(0, True),
         lambda value: value["hourly"]["temperature_2m"].pop(),
         lambda value: value["hourly"]["time"].__setitem__(0, "not-a-timestamp"),
         lambda value: value["hourly"].__setitem__("is_day", [0, 2, 1, 1]),

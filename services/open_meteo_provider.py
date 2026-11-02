@@ -287,7 +287,10 @@ def _normalize_payload(
                     minimum=0,
                     maximum=360,
                 ),
-                wind_gust_max_mph=_number(daily_arrays["wind_gusts_10m_max"][index], minimum=0),
+                wind_gust_max_mph=_optional_number(
+                    daily_arrays["wind_gusts_10m_max"][index],
+                    minimum=0,
+                ),
                 sunrise_local=str(daily_arrays["sunrise"][index]),
                 sunset_local=str(daily_arrays["sunset"][index]),
             )
@@ -326,7 +329,10 @@ def _normalize_payload(
                     minimum=0,
                     maximum=360,
                 ),
-                wind_gust_mph=_number(hourly_arrays["wind_gusts_10m"][index], minimum=0),
+                wind_gust_mph=_optional_number(
+                    hourly_arrays["wind_gusts_10m"][index],
+                    minimum=0,
+                ),
                 is_day=_daylight_value(hourly_arrays["is_day"][index]),
             )
         )

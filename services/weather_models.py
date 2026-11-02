@@ -30,7 +30,7 @@ class DailyWeather:
     snowfall_in: float
     wind_speed_max_mph: float
     wind_direction_dominant_deg: float
-    wind_gust_max_mph: float
+    wind_gust_max_mph: float | None
     sunrise_local: str
     sunset_local: str
 
@@ -62,10 +62,10 @@ class HourlyWeather:
     snowfall_in: float
     wind_speed_mph: float
     wind_direction_deg: float
-    wind_gust_mph: float
+    wind_gust_mph: float | None
     is_day: bool
 
-    def to_dict(self) -> dict[str, str | float | bool]:
+    def to_dict(self) -> dict[str, str | float | bool | None]:
         return {
             "timestamp_local": self.timestamp_local,
             "condition": self.condition,
