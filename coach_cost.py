@@ -7,11 +7,22 @@ from zoneinfo import ZoneInfo
 INPUT_RATE = Decimal("0.20") / Decimal(1_000_000)
 CACHED_INPUT_RATE = Decimal("0.02") / Decimal(1_000_000)
 OUTPUT_RATE = Decimal("1.20") / Decimal(1_000_000)
+GPT_6_LUNA_STANDARD_INPUT_RATE = Decimal("0.10") / Decimal(1_000_000)
+GPT_6_LUNA_STANDARD_CACHED_INPUT_RATE = Decimal("0.01") / Decimal(1_000_000)
+GPT_6_LUNA_STANDARD_OUTPUT_RATE = Decimal("0.50") / Decimal(1_000_000)
+GPT_6_LUNA_LONG_CONTEXT_TOKEN_THRESHOLD = 272_000
+GPT_6_LUNA_LONG_CONTEXT_INPUT_MULTIPLIER = Decimal("2")
+GPT_6_LUNA_LONG_CONTEXT_OUTPUT_MULTIPLIER = Decimal("1.5")
 DEFAULT_MAX_TURN_COST = Decimal("0.25")
 DEFAULT_MONTHLY_COST_LIMIT = Decimal("5.00")
 MODEL_PRICING = {
     "gpt-5.6-luna": (INPUT_RATE, CACHED_INPUT_RATE, OUTPUT_RATE),
     "gpt-5.6-luna-standard": (INPUT_RATE, CACHED_INPUT_RATE, OUTPUT_RATE),
+    "gpt-6-luna": (
+        GPT_6_LUNA_STANDARD_INPUT_RATE,
+        GPT_6_LUNA_STANDARD_CACHED_INPUT_RATE,
+        GPT_6_LUNA_STANDARD_OUTPUT_RATE,
+    ),
 }
 
 
@@ -41,6 +52,15 @@ def pricing_for_model(model):
     return MODEL_PRICING.get((model or "").strip().lower())
 
 
+def _long_context_multipliers(model, input_tokens):
+    if (
+        (model or "").strip().lower() == "gpt-6-luna"
+        and input_tokens > GPT_6_LUNA_LONG_CONTEXT_TOKEN_THRESHOLD
+    ):
+        return GPT_6_LUNA_LONG_CONTEXT_INPUT_MULTIPLIER, GPT_6_LUNA_LONG_CONTEXT_OUTPUT_MULTIPLIER
+    return Decimal(1), Decimal(1)
+
+
 def estimated_cost(model, input_tokens, cached_input_tokens, output_tokens):
     rates = pricing_for_model(model)
     if rates is None or input_tokens is None or output_tokens is None:
@@ -48,10 +68,11 @@ def estimated_cost(model, input_tokens, cached_input_tokens, output_tokens):
     if cached_input_tokens is None or cached_input_tokens > input_tokens:
         return None
     uncached = input_tokens - cached_input_tokens
+    input_multiplier, output_multiplier = _long_context_multipliers(model, input_tokens)
     return (
-        Decimal(uncached) * rates[0]
-        + Decimal(cached_input_tokens) * rates[1]
-        + Decimal(output_tokens) * rates[2]
+        Decimal(uncached) * rates[0] * input_multiplier
+        + Decimal(cached_input_tokens) * rates[1] * input_multiplier
+        + Decimal(output_tokens) * rates[2] * output_multiplier
     ).quantize(Decimal("0.000001"))
 
 
@@ -59,8 +80,12 @@ def preflight_cost(model, input_characters, max_output_tokens, max_turn_cost):
     rates = pricing_for_model(model)
     if rates is None:
         raise BudgetUnavailableError()
+    input_multiplier, output_multiplier = _long_context_multipliers(model, input_characters)
     # One character per input token is intentionally conservative for the bound.
-    estimate = Decimal(input_characters) * rates[0] + Decimal(max_output_tokens) * rates[2]
+    estimate = (
+        Decimal(input_characters) * rates[0] * input_multiplier
+        + Decimal(max_output_tokens) * rates[2] * output_multiplier
+    )
     if estimate > Decimal(str(max_turn_cost)):
         raise TurnCostLimitError()
     return estimate

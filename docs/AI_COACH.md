@@ -695,7 +695,7 @@ Provider SDK types must not escape the provider adapter.
 
 - Provider: OpenAI
 - API: Responses API
-- Model: `gpt-5.6-luna`
+- Model: `gpt-6-luna`
 - Reasoning effort: loaded from persisted Settings and validated for each paid turn (`none`, `low`, `medium`, or `high`); application and database default: `low`
 - Maximum output tokens: loaded from persisted Settings for each paid turn; default: 1,200
 - Provider timeout: 120 seconds, set by the code-level `PROVIDER_TIMEOUT_SECONDS` constant
@@ -708,7 +708,7 @@ The runtime configuration is provided to `training-web` through the server envir
 
 ```env
 TRAINING_AI_PROVIDER=openai
-TRAINING_AI_MODEL=gpt-5.6-luna
+TRAINING_AI_MODEL=gpt-6-luna
 OPENAI_API_KEY=<secret>
 TRAINING_API_BASE_URL=http://training-api:8090
 TRAINING_API_TOKEN=<secret>

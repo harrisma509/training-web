@@ -195,12 +195,13 @@ class FakeContextResponse:
 class FakeResponsesClient:
     def __init__(self):
         self.calls = []
+        self.model = "gpt-5.6-luna"
 
     def create(self, **kwargs):
         self.calls.append(kwargs)
         return SimpleNamespace(
             output_text="Coach response",
-            model="gpt-5.6-luna",
+            model=self.model,
             id="resp-1",
             status="completed",
             usage=None,
@@ -230,6 +231,44 @@ class OpenAIAdapterTests(unittest.TestCase):
 
         self.assertEqual(response.text, "Coach response")
         self.assertEqual(provider._client.responses.calls[0]["store"], False)
+
+    def test_complete_passes_gpt6_model_and_falls_back_when_response_model_is_missing(self):
+        provider = OpenAIProvider.__new__(OpenAIProvider)
+        provider._client = FakeOpenAIClient()
+        provider._client.responses.model = None
+        provider.model = "gpt-6-luna"
+
+        response = provider.complete(
+            AIRequest(
+                model="gpt-6-luna",
+                instructions="Be concise.",
+                input_text="Question",
+                max_output_tokens=100,
+                timeout_seconds=5.0,
+            )
+        )
+
+        self.assertEqual(provider._client.responses.calls[0]["model"], "gpt-6-luna")
+        self.assertEqual(response.model, "gpt-6-luna")
+
+    def test_complete_prefers_provider_reported_model_when_present(self):
+        provider = OpenAIProvider.__new__(OpenAIProvider)
+        provider._client = FakeOpenAIClient()
+        provider._client.responses.model = "provider-reported-model"
+        provider.model = "gpt-6-luna"
+
+        response = provider.complete(
+            AIRequest(
+                model="gpt-6-luna",
+                instructions="Be concise.",
+                input_text="Question",
+                max_output_tokens=100,
+                timeout_seconds=5.0,
+            )
+        )
+
+        self.assertEqual(provider._client.responses.calls[0]["model"], "gpt-6-luna")
+        self.assertEqual(response.model, "provider-reported-model")
 
 
 class CoachPolicyTests(unittest.TestCase):
@@ -600,6 +639,55 @@ class CoachOrchestrationTests(unittest.TestCase):
         self.assertEqual(request.reasoning_effort, "high")
         preflight.assert_called_once_with("gpt-5.6-luna", unittest.mock.ANY, 8000, Decimal("1.00"))
         monthly.assert_called_once_with(Decimal("0.10"), Decimal("10.00"))
+
+    def test_gpt6_request_runs_after_preflight_and_persists_provider_model(self):
+        events = []
+        response = AIResponse(
+            text="Coach response",
+            provider="fake",
+            model="gpt-6-luna",
+            provider_response_id="resp-gpt6",
+            input_tokens=1000,
+            cached_input_tokens=200,
+            output_tokens=300,
+            reasoning_tokens=0,
+            total_tokens=1300,
+            elapsed_ms=42,
+            finish_status="completed",
+        )
+
+        class TracedProvider(FakeProvider):
+            def complete(self, request):
+                events.append("provider")
+                return super().complete(request)
+
+        provider = TracedProvider(response)
+        provider.model = "gpt-6-luna"
+
+        def traced_preflight(*args):
+            events.append("preflight")
+            return preflight_cost(*args)
+
+        with patch("coach_orchestrator._start_coach_turn", return_value=({}, self.user_message, self.started)), \
+             patch("coach_orchestrator._recent_coach_messages", return_value=[]), \
+             patch("coach_orchestrator._complete_coach_turn", return_value=({"coach_message_id": 11}, self.completed)) as complete, \
+             patch("coach_orchestrator._coach_session_snapshot", return_value={"total_tokens": 1300}), \
+             patch("coach_orchestrator.preflight_cost", side_effect=traced_preflight), \
+             patch("coach_orchestrator.enforce_monthly_budget"), \
+             patch("coach_orchestrator._fail_coach_turn") as fail:
+            respond_to_coach(
+                3,
+                "Question",
+                context_loader=lambda daily_days, weekly_rows: CONTEXT,
+                provider_factory=lambda: provider,
+            )
+
+        self.assertEqual(events, ["preflight", "provider"])
+        self.assertEqual(provider.requests[0].model, "gpt-6-luna")
+        complete.assert_called_once()
+        self.assertEqual(complete.call_args.kwargs["model"], "gpt-6-luna")
+        self.assertEqual(complete.call_args.kwargs["estimated_cost_usd"], Decimal("0.000232"))
+        fail.assert_not_called()
 
     def test_custom_instructions_reach_provider_after_policy_and_cost_accounting(self):
         instructions = CustomInstructions(
@@ -1067,6 +1155,36 @@ class CoachOrchestrationTests(unittest.TestCase):
         self.assertEqual(preflight_cost("gpt-5.6-luna", 1000, 300, Decimal("0.25")), Decimal("0.000560"))
         with self.assertRaises(BudgetUnavailableError):
             preflight_cost("other-model", 1000, 300, Decimal("0.25"))
+
+    def test_gpt6_standard_pricing_and_token_cost_estimate(self):
+        self.assertEqual(
+            pricing_for_model("gpt-6-luna"),
+            (
+                Decimal("0.0000001"),
+                Decimal("0.00000001"),
+                Decimal("0.0000005"),
+            ),
+        )
+        self.assertEqual(
+            estimated_cost("gpt-6-luna", 1000, 200, 300),
+            Decimal("0.000232"),
+        )
+        self.assertEqual(
+            estimated_cost("gpt-6-luna", 300_000, 100_000, 1000),
+            Decimal("0.042750"),
+        )
+
+    def test_gpt6_preflight_accepts_under_budget_and_blocks_over_budget(self):
+        self.assertEqual(
+            preflight_cost("gpt-6-luna", 10_000, 1200, Decimal("0.25")),
+            Decimal("0.001600"),
+        )
+        self.assertEqual(
+            preflight_cost("gpt-6-luna", 300_000, 1200, Decimal("0.25")),
+            Decimal("0.060900"),
+        )
+        with self.assertRaises(TurnCostLimitError):
+            preflight_cost("gpt-6-luna", 3_000_000, 1200, Decimal("0.25"))
 
     def test_monthly_budget_rejects_unknown_historical_costs(self):
         with patch("coach_cost.check_monthly_budget", lambda: (Decimal("1.00"), 1)):
