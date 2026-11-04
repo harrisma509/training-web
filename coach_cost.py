@@ -76,14 +76,13 @@ def estimated_cost(model, input_tokens, cached_input_tokens, output_tokens):
     ).quantize(Decimal("0.000001"))
 
 
-def preflight_cost(model, input_characters, max_output_tokens, max_turn_cost):
+def preflight_cost(model, estimated_input_tokens, max_output_tokens, max_turn_cost):
     rates = pricing_for_model(model)
     if rates is None:
         raise BudgetUnavailableError()
-    input_multiplier, output_multiplier = _long_context_multipliers(model, input_characters)
-    # One character per input token is intentionally conservative for the bound.
+    input_multiplier, output_multiplier = _long_context_multipliers(model, estimated_input_tokens)
     estimate = (
-        Decimal(input_characters) * rates[0] * input_multiplier
+        Decimal(estimated_input_tokens) * rates[0] * input_multiplier
         + Decimal(max_output_tokens) * rates[2] * output_multiplier
     )
     if estimate > Decimal(str(max_turn_cost)):

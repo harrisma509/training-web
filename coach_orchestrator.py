@@ -232,9 +232,11 @@ def respond_to_coach(
             provider_instructions += "\n\n" + compiled_memories
         provider = provider_factory()
         model = provider.model
+        # One character per input token is intentionally conservative for preflight.
+        estimated_input_tokens = len(input_text) + len(provider_instructions)
         proposed_cost = preflight_cost(
             model,
-            len(input_text) + len(provider_instructions),
+            estimated_input_tokens,
             settings.max_output_tokens,
             settings.max_turn_cost_usd,
         )

@@ -1176,15 +1176,48 @@ class CoachOrchestrationTests(unittest.TestCase):
 
     def test_gpt6_preflight_accepts_under_budget_and_blocks_over_budget(self):
         self.assertEqual(
-            preflight_cost("gpt-6-luna", 10_000, 1200, Decimal("0.25")),
+            preflight_cost(
+                "gpt-6-luna",
+                estimated_input_tokens=10_000,
+                max_output_tokens=1200,
+                max_turn_cost=Decimal("0.25"),
+            ),
             Decimal("0.001600"),
         )
         self.assertEqual(
-            preflight_cost("gpt-6-luna", 300_000, 1200, Decimal("0.25")),
+            preflight_cost(
+                "gpt-6-luna",
+                estimated_input_tokens=300_000,
+                max_output_tokens=1200,
+                max_turn_cost=Decimal("0.25"),
+            ),
             Decimal("0.060900"),
         )
+        self.assertEqual(
+            preflight_cost(
+                "gpt-6-luna",
+                estimated_input_tokens=272_000,
+                max_output_tokens=1200,
+                max_turn_cost=Decimal("0.25"),
+            ),
+            Decimal("0.027800"),
+        )
+        self.assertEqual(
+            preflight_cost(
+                "gpt-6-luna",
+                estimated_input_tokens=272_001,
+                max_output_tokens=1200,
+                max_turn_cost=Decimal("0.25"),
+            ),
+            Decimal("0.05530020"),
+        )
         with self.assertRaises(TurnCostLimitError):
-            preflight_cost("gpt-6-luna", 3_000_000, 1200, Decimal("0.25"))
+            preflight_cost(
+                "gpt-6-luna",
+                estimated_input_tokens=3_000_000,
+                max_output_tokens=1200,
+                max_turn_cost=Decimal("0.25"),
+            )
 
     def test_monthly_budget_rejects_unknown_historical_costs(self):
         with patch("coach_cost.check_monthly_budget", lambda: (Decimal("1.00"), 1)):
