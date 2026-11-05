@@ -113,22 +113,26 @@ def model_status(
 ) -> dict:
     normalized_model = configured_model.strip().lower() if isinstance(configured_model, str) else ""
     configured = model_for_id(normalized_model)
-    checked = provider_model_ids is not None
-    configured_available = (
-        normalized_model in provider_model_ids if checked else None
-    )
-    newer = (
-        newer_available_approved_model(normalized_model, provider_model_ids)
-        if checked
-        else None
-    )
+    configured_available = normalized_model in provider_model_ids if provider_model_ids is not None else None
+    newer = None
+    if provider_model_ids is None:
+        status = "status_unavailable"
+    elif configured is None or not configured.approved or not configured.has_pricing:
+        status = "pricing_unavailable"
+    elif not configured_available:
+        status = "configured_model_unavailable"
+    else:
+        newer = newer_available_approved_model(normalized_model, provider_model_ids)
+        status = "update_available" if newer else "current"
     return {
         "configured_model": normalized_model,
-        "configured_model_name": configured.display_name if configured else None,
+        "configured_display_name": (
+            configured.display_name if configured else normalized_model or "Model unavailable"
+        ),
+        "configured_model_known": configured is not None,
+        "available_to_provider": configured_available,
         "pricing_supported": bool(configured and configured.has_pricing),
-        "availability_status": "checked" if checked else "unavailable",
-        "configured_model_available": configured_available,
+        "status": status,
         "newer_approved_model": newer.model_id if newer else None,
-        "newer_approved_model_name": newer.display_name if newer else None,
-        "newer_approved_model_available": newer is not None,
+        "newer_approved_display_name": newer.display_name if newer else None,
     }

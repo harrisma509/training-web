@@ -65,13 +65,18 @@
     }
 
     .coach-session-info-toggle {
-        width: 40px;
+        max-width: 190px;
         height: 40px;
         min-height: 0;
     }
 
     .coach-model-update-notice {
         max-width: 130px;
+    }
+
+    .coach-configured-model-status {
+        align-items: flex-start;
+        flex-wrap: wrap;
     }
 
     .coach-main-header .coach-mobile-only {

@@ -68,28 +68,39 @@ def _long_context_multipliers(model, input_tokens):
 
 
 def estimated_cost(model, input_tokens, cached_input_tokens, output_tokens):
-    rates = pricing_for_model(model)
-    if rates is None or input_tokens is None or output_tokens is None:
+    definition = model_for_id(model)
+    if (
+        definition is None
+        or input_tokens is None
+        or output_tokens is None
+        or definition.input_rate is None
+        or definition.cached_input_rate is None
+        or definition.output_rate is None
+    ):
         return None
     if cached_input_tokens is None or cached_input_tokens > input_tokens:
         return None
     uncached = input_tokens - cached_input_tokens
     input_multiplier, output_multiplier = _long_context_multipliers(model, input_tokens)
     return (
-        Decimal(uncached) * rates[0] * input_multiplier
-        + Decimal(cached_input_tokens) * rates[1] * input_multiplier
-        + Decimal(output_tokens) * rates[2] * output_multiplier
+        Decimal(uncached) * definition.input_rate * input_multiplier
+        + Decimal(cached_input_tokens) * definition.cached_input_rate * input_multiplier
+        + Decimal(output_tokens) * definition.output_rate * output_multiplier
     ).quantize(Decimal("0.000001"))
 
 
 def preflight_cost(model, estimated_input_tokens, max_output_tokens, max_turn_cost):
-    rates = pricing_for_model(model)
-    if rates is None:
+    definition = model_for_id(model)
+    if (
+        definition is None
+        or definition.input_rate is None
+        or definition.output_rate is None
+    ):
         raise BudgetUnavailableError()
     input_multiplier, output_multiplier = _long_context_multipliers(model, estimated_input_tokens)
     estimate = (
-        Decimal(estimated_input_tokens) * rates[0] * input_multiplier
-        + Decimal(max_output_tokens) * rates[2] * output_multiplier
+        Decimal(estimated_input_tokens) * definition.input_rate * input_multiplier
+        + Decimal(max_output_tokens) * definition.output_rate * output_multiplier
     )
     if estimate > Decimal(str(max_turn_cost)):
         raise TurnCostLimitError()

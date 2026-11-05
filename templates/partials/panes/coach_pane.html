@@ -41,15 +41,15 @@
                 </button>
                 <div class="coach-header-actions">
                     <button id="coachUsageToggle" type="button" class="coach-session-info-toggle"
-                        aria-label="Show session info" aria-expanded="false" aria-controls="coachUsagePanel"
-                        title="Show session info">
+                        aria-label="Session info" aria-expanded="false" aria-controls="coachUsagePanel"
+                        title="Session info">
                         <svg class="coach-ai-sparkle" viewBox="0 0 20 20" aria-hidden="true" focusable="false">
                             <path d="m10 2 1.25 5.75L17 9l-5.75 1.25L10 16l-1.25-5.75L3 9l5.75-1.25L10 2Z"></path>
                             <path d="m16 13 .5 2.5L19 16l-2.5.5L16 19l-.5-2.5L13 16l2.5-.5L16 13Z"></path>
                         </svg>
+                        <span id="coachModelUpdateNotice" class="coach-model-update-notice hidden"
+                            aria-live="polite"></span>
                     </button>
-                    <span id="coachModelUpdateNotice" class="coach-model-update-notice hidden" role="status"
-                        aria-live="polite"></span>
                 </div>
             </header>
             <div id="coachUsagePanel" class="coach-usage-panel hidden" aria-labelledby="coachUsageHeading"
@@ -58,6 +58,18 @@
                     <h2 id="coachUsageHeading">Session info</h2>
                     <button id="coachUsageClose" class="coach-usage-close" type="button" aria-label="Close session info"
                         title="Close session info">×</button>
+                </div>
+                <div class="coach-configured-model-status" aria-live="polite">
+                    <div class="coach-configured-model-copy">
+                        <span class="coach-usage-label">Configured model</span>
+                        <span id="coachConfiguredModel" class="coach-usage-value">Model unavailable</span>
+                        <span id="coachConfiguredModelMessage" class="coach-model-status-message">
+                            Model update status unavailable
+                        </span>
+                    </div>
+                    <button id="coachModelStatusRefresh" class="coach-model-status-refresh" type="button">
+                        Refresh model status
+                    </button>
                 </div>
                 <div id="coachUsageItems" class="coach-usage-items"></div>
             </div>

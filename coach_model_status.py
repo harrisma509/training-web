@@ -2,6 +2,7 @@
 
 import time
 from collections.abc import Callable, Iterable
+from concurrent.futures import Future
 from threading import Lock
 
 from ai_provider import AIProviderError
@@ -24,28 +25,48 @@ class ModelListCache:
         self._lock = Lock()
         self._model_ids: frozenset[str] | None = None
         self._expires_at = 0.0
-        self._failed = False
+        self._failure_until = 0.0
+        self._inflight: Future[frozenset[str]] | None = None
 
-    def get(self, fetch_model_ids: Callable[[], Iterable[str]]) -> frozenset[str]:
+    def get(
+        self,
+        fetch_model_ids: Callable[[], Iterable[str]],
+        force_refresh: bool = False,
+    ) -> frozenset[str]:
         with self._lock:
             now = time.monotonic()
-            if now < self._expires_at:
-                if self._failed:
-                    raise AIProviderError("Model availability could not be checked.")
-                return self._model_ids or frozenset()
+            if not force_refresh and self._model_ids is not None and now < self._expires_at:
+                return self._model_ids
+            if not force_refresh and now < self._failure_until:
+                raise AIProviderError("Model availability could not be checked.")
+            refresh = self._inflight
+            if refresh is None:
+                refresh = Future()
+                self._inflight = refresh
+                is_owner = True
+            else:
+                is_owner = False
 
-            try:
-                model_ids = frozenset(fetch_model_ids())
-            except AIProviderError:
-                self._model_ids = None
-                self._failed = True
-                self._expires_at = now + self._failure_ttl_seconds
-                raise AIProviderError("Model availability could not be checked.") from None
+        if not is_owner:
+            return refresh.result()
 
+        try:
+            model_ids = frozenset(fetch_model_ids())
+        except Exception:
+            error = AIProviderError("Model availability could not be checked.")
+            with self._lock:
+                self._failure_until = time.monotonic() + self._failure_ttl_seconds
+                self._inflight = None
+                refresh.set_exception(error)
+            raise error from None
+
+        with self._lock:
             self._model_ids = model_ids
-            self._failed = False
-            self._expires_at = now + self._ttl_seconds
-            return model_ids
+            self._expires_at = time.monotonic() + self._ttl_seconds
+            self._failure_until = 0.0
+            self._inflight = None
+            refresh.set_result(model_ids)
+        return model_ids
 
 
 _model_list_cache = ModelListCache()
@@ -56,9 +77,12 @@ def _fetch_provider_model_ids() -> frozenset[str]:
     return provider.list_available_model_ids(MODEL_LIST_TIMEOUT_SECONDS)
 
 
-def get_model_status(configured_model: str | None) -> dict:
+def get_model_status(configured_model: str | None, force_refresh: bool = False) -> dict:
     try:
-        provider_model_ids = _model_list_cache.get(_fetch_provider_model_ids)
+        provider_model_ids = _model_list_cache.get(
+            _fetch_provider_model_ids,
+            force_refresh=force_refresh,
+        )
     except AIProviderError:
         provider_model_ids = None
     return model_status(configured_model, provider_model_ids)

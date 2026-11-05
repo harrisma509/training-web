@@ -727,12 +727,23 @@ TRAINING_API_TOKEN=<secret>
 The Coach performs a read-only OpenAI Models API check to determine whether
 the configured model and a newer approved same-family model are accessible.
 The model list is cached in process for 24 hours, refreshes are serialized,
-and each provider check has a four-second timeout. The check makes no paid
-generation request and writes no database state. Availability-check failures
-are sanitized and do not block Coach use. The green sparkle opens Session info;
-an amber notice appears only when a newer approved same-family model is
-provider-accessible. The notice does not change `TRAINING_AI_MODEL` or switch
-models automatically.
+and each provider check has a four-second timeout. `GET /api/coach/model-status`
+uses the cache. Session info also provides
+`POST /api/coach/model-status/refresh` to bypass it once. Concurrent refresh
+requests share the in-flight lookup, and a failed refresh preserves the last
+good cache.
+The check makes no paid generation request and writes no database state.
+Availability-check failures are sanitized and do not block Coach use. The green
+sparkle opens Session info; an amber notice appears only when a newer approved
+same-family model is provider-accessible. Session info reports whether the
+configured model is current, has an available approved update, is unavailable
+to the provider, lacks pricing, or could not be checked. The refresh action
+does not change `TRAINING_AI_MODEL` or switch models automatically.
+
+Adding another approved model requires confirming authoritative pricing,
+adding its typed catalog entry and explicit same-family approval order, and
+adding pricing, availability, and display tests. Provider model-list results
+alone never approve a model.
 
 Completed turns retain the actual model used. Existing sessions may therefore
 display their session model and latest historical turn model separately from

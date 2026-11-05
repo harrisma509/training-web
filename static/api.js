@@ -336,6 +336,13 @@
       return fetchJson("/api/coach/model-status");
     },
 
+    async refreshCoachModelStatus() {
+      return fetchJson("/api/coach/model-status/refresh", {
+        method: "POST",
+        headers: { Accept: "application/json" },
+      });
+    },
+
     async createCoachSession() {
       return fetchJson("/api/coach/sessions", {
         method: "POST",

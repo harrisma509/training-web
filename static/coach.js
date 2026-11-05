@@ -31,6 +31,7 @@
             formatContextCoverage,
             humanModel,
             coachModelUpdateNotice,
+            configuredModelStatusMessage,
             reasoningEffortLabel,
             formatTurnMetadata,
         };
@@ -60,6 +61,8 @@
         session: null,
         usage: null,
         modelStatus: null,
+        modelStatusLoading: false,
+        modelStatusRequest: null,
         initialized: false,
         sessionsLoading: false,
         conversationLoading: false,
@@ -109,6 +112,9 @@
         usagePanel: document.getElementById("coachUsagePanel"),
         usageItems: document.getElementById("coachUsageItems"),
         usageClose: document.getElementById("coachUsageClose"),
+        configuredModel: document.getElementById("coachConfiguredModel"),
+        configuredModelMessage: document.getElementById("coachConfiguredModelMessage"),
+        modelStatusRefresh: document.getElementById("coachModelStatusRefresh"),
         modelUpdateNotice: document.getElementById("coachModelUpdateNotice"),
         conversation: document.getElementById("coachConversation"),
         error: document.getElementById("coachError"),
@@ -278,14 +284,20 @@
     }
 
     function coachModelUpdateNotice(modelStatus) {
+        if (!modelStatus || modelStatus.status !== "update_available") return "";
+        const name = humanModel(modelStatus.newer_approved_model);
+        return name === "Model unavailable" ? "" : `⚠ ${name} is available`;
+    }
+
+    function configuredModelStatusMessage(modelStatus) {
+        if (!modelStatus) return "Checking...";
+        if (modelStatus.status === "current") return "✓ Current approved model";
+        if (modelStatus.status === "update_available") return coachModelUpdateNotice(modelStatus);
         if (
-            !modelStatus
-            || modelStatus.availability_status !== "checked"
-            || modelStatus.newer_approved_model_available !== true
-        ) return "";
-        const name = text(modelStatus.newer_approved_model_name).trim()
-            || humanModel(modelStatus.newer_approved_model);
-        return name === "Model unavailable" ? "" : `${name} available`;
+            modelStatus.status === "configured_model_unavailable"
+            || modelStatus.status === "pricing_unavailable"
+        ) return "✕ Configured model needs review";
+        return "Model update status unavailable";
     }
 
     function reasoningEffortLabel(value) {
@@ -364,20 +376,9 @@
     function renderUsage() {
         clearNode(refs.usageItems);
         const usage = sessionSummaryUsage(state.usage);
-        const modelStatus = state.modelStatus;
         const turns = state.session && Array.isArray(state.session.turns) ? state.session.turns : [];
         const latestTurn = turns.length ? turns[turns.length - 1] : null;
-        const availability = !modelStatus
-            ? "Checking..."
-            : modelStatus.availability_status !== "checked"
-                ? "Unable to check"
-                : modelStatus.configured_model_available === true
-                    ? "Available"
-                    : "Not available";
         const items = [
-            ["Configured model", humanModel(modelStatus && modelStatus.configured_model)],
-            ["Provider availability", availability],
-            ["Local pricing", !modelStatus ? "Checking..." : modelStatus.pricing_supported ? "Configured" : "Not configured"],
             ["Session model", humanModel(usage.default_model || usage.model)],
             ["Latest turn model", humanModel(latestTurn && latestTurn.model)],
             ["Messages", usage.message_count == null ? "Unavailable" : text(usage.message_count)],
@@ -396,16 +397,52 @@
         const notice = coachModelUpdateNotice(state.modelStatus);
         refs.modelUpdateNotice.textContent = notice;
         refs.modelUpdateNotice.classList.toggle("hidden", !notice);
+        const label = notice ? `Session info. ${notice}` : "Session info";
+        refs.usageToggle.setAttribute("aria-label", label);
+        refs.usageToggle.title = label;
     }
 
-    async function loadCoachModelStatus() {
-        try {
-            state.modelStatus = await window.api.fetchCoachModelStatus();
-        } catch (error) {
-            state.modelStatus = { availability_status: "unavailable" };
-        }
-        renderModelUpdateNotice();
-        renderUsage();
+    function renderConfiguredModelStatus() {
+        const status = state.modelStatus;
+        const statusName = status && status.status ? status.status : "status_unavailable";
+        refs.configuredModel.textContent = humanModel(status && status.configured_model);
+        refs.configuredModelMessage.textContent = configuredModelStatusMessage(status);
+        refs.configuredModelMessage.classList.toggle(
+            "is-warning",
+            statusName === "configured_model_unavailable" || statusName === "pricing_unavailable",
+        );
+        refs.configuredModelMessage.classList.toggle("is-update", statusName === "update_available");
+        refs.configuredModelMessage.classList.toggle("is-current", statusName === "current");
+        refs.modelStatusRefresh.disabled = state.modelStatusLoading;
+        refs.modelStatusRefresh.textContent = state.modelStatusLoading
+            ? "Checking…"
+            : "Refresh model status";
+    }
+
+    function loadCoachModelStatus(forceRefresh = false) {
+        if (state.modelStatusRequest) return state.modelStatusRequest;
+        state.modelStatusLoading = true;
+        renderConfiguredModelStatus();
+        const request = (async () => {
+            try {
+                state.modelStatus = forceRefresh
+                    ? await window.api.refreshCoachModelStatus()
+                    : await window.api.fetchCoachModelStatus();
+            } catch (error) {
+                state.modelStatus = {
+                    ...(state.modelStatus || {}),
+                    status: "status_unavailable",
+                    newer_approved_model: null,
+                };
+            } finally {
+                state.modelStatusLoading = false;
+                state.modelStatusRequest = null;
+                renderConfiguredModelStatus();
+                renderModelUpdateNotice();
+            }
+        })();
+        state.modelStatusRequest = request;
+        return request;
     }
 
     function renderSessions() {
@@ -1290,6 +1327,7 @@
             const expanded = refs.usageToggle.getAttribute("aria-expanded") === "true";
             setUsagePanelOpen(!expanded);
         });
+        refs.modelStatusRefresh.addEventListener("click", () => loadCoachModelStatus(true));
         refs.usageClose.addEventListener("click", () => setUsagePanelOpen(false, true));
         refs.drawerOpen.addEventListener("click", openDrawer);
         refs.drawerClose.addEventListener("click", closeDrawer);

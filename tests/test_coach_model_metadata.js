@@ -4,6 +4,7 @@ const {
     formatTurnMetadata,
     humanModel,
     coachModelUpdateNotice,
+    configuredModelStatusMessage,
     reasoningEffortLabel,
 } = require("../static/coach.js");
 
@@ -15,20 +16,32 @@ assert.equal(humanModel("  "), "Model unavailable");
 
 assert.equal(
     coachModelUpdateNotice({
-        availability_status: "checked",
-        newer_approved_model_available: true,
+        status: "update_available",
         newer_approved_model: "gpt-6-luna",
-        newer_approved_model_name: "GPT-6 Luna",
     }),
-    "GPT-6 Luna available",
+    "⚠ GPT-6 Luna is available",
 );
-assert.equal(coachModelUpdateNotice({ availability_status: "unavailable" }), "");
+assert.equal(coachModelUpdateNotice({ status: "current" }), "");
+assert.equal(coachModelUpdateNotice({ status: "status_unavailable" }), "");
+assert.equal(configuredModelStatusMessage({ status: "current" }), "✓ Current approved model");
 assert.equal(
-    coachModelUpdateNotice({
-        availability_status: "checked",
-        newer_approved_model_available: false,
+    configuredModelStatusMessage({
+        status: "update_available",
+        newer_approved_model: "gpt-6-luna",
     }),
-    "",
+    "⚠ GPT-6 Luna is available",
+);
+assert.equal(
+    configuredModelStatusMessage({ status: "configured_model_unavailable" }),
+    "✕ Configured model needs review",
+);
+assert.equal(
+    configuredModelStatusMessage({ status: "pricing_unavailable" }),
+    "✕ Configured model needs review",
+);
+assert.equal(
+    configuredModelStatusMessage({ status: "status_unavailable" }),
+    "Model update status unavailable",
 );
 
 assert.equal(reasoningEffortLabel("high"), "High Reasoning");
@@ -54,9 +67,11 @@ assert.match(coachDocumentation, /TRAINING_AI_MODEL=<supported-model-id>/);
 assert.match(coachDocumentation, /immutable application catalog currently approves/);
 assert.match(coachDocumentation, /cached in process for 24 hours/);
 assert.match(coachDocumentation, /four-second timeout/);
+assert.match(coachDocumentation, /`POST \/api\/coach\/model-status\/refresh`/);
 assert.match(coachDocumentation, /unknown pricing fails closed before a paid request/);
 assert.match(coachDocumentation, /Completed turns retain the actual model used/);
 assert.match(coachDocumentation, /does not change `TRAINING_AI_MODEL` or switch/);
+assert.match(coachDocumentation, /Provider model-list results\s+alone never approve a model/);
 assert.match(coachDocumentation, /docker restart training-web` does not reload Compose environment/);
 assert.match(coachDocumentation, /docker compose up -d --force-recreate training-web/);
 assert.doesNotMatch(coachDocumentation, /- Model: `gpt-(?:5\.6|6)-luna`/);

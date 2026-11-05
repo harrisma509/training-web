@@ -35,6 +35,11 @@ require("../static/api.js");
     assert.equal(requests.length, 3);
     assert.equal(requests[2].url, "/api/coach/model-status");
 
+    await window.api.refreshCoachModelStatus();
+    assert.equal(requests.length, 4);
+    assert.equal(requests[3].url, "/api/coach/model-status/refresh");
+    assert.equal(requests[3].options.method, "POST");
+
     const coachSource = fs.readFileSync("static/coach.js", "utf8");
     const coachPaneSource = fs.readFileSync("templates/partials/panes/coach_pane.html", "utf8");
     const deleteDialogSource = fs.readFileSync("templates/partials/dialogs/coach_delete_dialog.html", "utf8");
@@ -51,9 +56,15 @@ require("../static/api.js");
     assert.equal(reasoningEffortLabel(null), "");
     assert.match(coachSource, /state\.modePending/);
     assert.match(coachSource, /fetchCoachModelStatus/);
-    assert.match(coachPaneSource, /aria-label="Show session info"/);
+    assert.match(coachPaneSource, /aria-label="Session info"/);
+    assert.match(coachPaneSource, /id="coachModelStatusRefresh"[\s\S]*?Refresh model status/);
     assert.match(coachPaneSource, /coachModelUpdateNotice/);
     assert.doesNotMatch(coachPaneSource, /coachOverflowToggle|coachOverflowMenu/);
+    assert.match(coachSource, /if \(state\.modelStatusRequest\) return state\.modelStatusRequest/);
+    assert.match(coachSource, /refs\.modelStatusRefresh\.disabled = state\.modelStatusLoading/);
+    assert.match(coachSource, /"Checking…"/);
+    assert.match(coachSource, /loadCoachModelStatus\(true\)/);
+    assert.match(coachSource, /refs\.usageToggle\.setAttribute\("aria-label", label\)/);
     assert.match(coachSource, /placeSessionMenu\(id\)/);
     assert.match(coachSource, /is-upward/);
     assert.match(deleteDialogSource, /Permanently delete this chat\?/);
