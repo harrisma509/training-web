@@ -415,8 +415,8 @@
         refs.configuredModelMessage.classList.toggle("is-current", statusName === "current");
         refs.modelStatusRefresh.disabled = state.modelStatusLoading;
         refs.modelStatusRefresh.textContent = state.modelStatusLoading
-            ? "Checking…"
-            : "Refresh model status";
+            ? "↻ Checking…"
+            : "↻ Refresh";
     }
 
     function loadCoachModelStatus(forceRefresh = false) {

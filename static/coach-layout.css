@@ -171,16 +171,20 @@
 }
 
 .coach-configured-model-status {
-    display: flex;
+    display: block;
     grid-column: 1 / -1;
-    align-items: center;
-    justify-content: space-between;
-    gap: 12px;
 }
 
 .coach-configured-model-copy {
     display: grid;
     gap: 3px;
+}
+
+.coach-model-status-line {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
 }
 
 .coach-model-status-message {
@@ -198,21 +202,25 @@
 }
 
 .coach-model-status-refresh {
-    min-height: 30px;
-    padding: 4px 9px;
-    border: 1px solid var(--input-border);
-    border-radius: 6px;
-    background: var(--button-secondary-bg);
-    color: var(--text);
+    display: inline-flex;
+    align-items: center;
+    min-height: 28px;
+    padding: 4px 3px;
+    border: 0;
+    border-radius: 3px;
+    background: transparent;
+    color: var(--muted);
     cursor: pointer;
     font: inherit;
     font-size: 11px;
+    line-height: 1.2;
     white-space: nowrap;
 }
 
 .coach-model-status-refresh:hover,
 .coach-model-status-refresh:focus-visible {
-    border-color: var(--green);
+    color: var(--text);
+    text-decoration: underline;
 }
 
 .coach-model-status-refresh:focus-visible {
@@ -228,9 +236,9 @@
 .coach-usage-panel {
     grid-row: 2;
     display: grid;
-    grid-template-columns: repeat(5, minmax(0, 1fr));
+    grid-template-columns: minmax(0, 1fr);
     gap: 12px;
-    padding: 12px 24px;
+    padding: 14px 26px;
     border-bottom: 1px solid var(--line);
     background: var(--panel-surface);
 }
@@ -276,8 +284,8 @@
 .coach-usage-items {
     display: grid;
     grid-column: 1 / -1;
-    grid-template-columns: repeat(5, minmax(0, 1fr));
-    gap: 12px;
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+    gap: 24px;
 }
 
 .coach-usage-item {

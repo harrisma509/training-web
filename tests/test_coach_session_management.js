@@ -42,6 +42,8 @@ require("../static/api.js");
 
     const coachSource = fs.readFileSync("static/coach.js", "utf8");
     const coachPaneSource = fs.readFileSync("templates/partials/panes/coach_pane.html", "utf8");
+    const coachLayoutSource = fs.readFileSync("static/coach-layout.css", "utf8");
+    const coachResponsiveSource = fs.readFileSync("static/coach-responsive.css", "utf8");
     const deleteDialogSource = fs.readFileSync("templates/partials/dialogs/coach_delete_dialog.html", "utf8");
     assert.match(coachSource, /Chat actions for \$\{title\}/);
     assert.match(coachSource, /Delete chat/);
@@ -57,14 +59,47 @@ require("../static/api.js");
     assert.match(coachSource, /state\.modePending/);
     assert.match(coachSource, /fetchCoachModelStatus/);
     assert.match(coachPaneSource, /aria-label="Session info"/);
-    assert.match(coachPaneSource, /id="coachModelStatusRefresh"[\s\S]*?Refresh model status/);
+    assert.match(coachPaneSource, /<button id="coachModelStatusRefresh" class="coach-model-status-refresh" type="button"\s+aria-label="Refresh model availability">↻ Refresh<\/button>/);
     assert.match(coachPaneSource, /coachModelUpdateNotice/);
     assert.doesNotMatch(coachPaneSource, /coachOverflowToggle|coachOverflowMenu/);
     assert.match(coachSource, /if \(state\.modelStatusRequest\) return state\.modelStatusRequest/);
     assert.match(coachSource, /refs\.modelStatusRefresh\.disabled = state\.modelStatusLoading/);
-    assert.match(coachSource, /"Checking…"/);
+    assert.match(coachSource, /state\.modelStatusLoading\s*\?\s*"↻ Checking…"\s*:\s*"↻ Refresh"/);
     assert.match(coachSource, /loadCoachModelStatus\(true\)/);
     assert.match(coachSource, /refs\.usageToggle\.setAttribute\("aria-label", label\)/);
+    assert.match(coachSource, /refs\.modelStatusRefresh\.addEventListener\("click", \(\) => loadCoachModelStatus\(true\)\)/);
+    const refreshFlow = coachSource.match(/function loadCoachModelStatus\(forceRefresh = false\) \{[\s\S]*?\n    \}/)[0];
+    assert.match(refreshFlow, /if \(state\.modelStatusRequest\) return state\.modelStatusRequest/);
+    assert.match(refreshFlow, /await window\.api\.refreshCoachModelStatus\(\)/);
+    assert.match(refreshFlow, /renderModelUpdateNotice\(\)/);
+    assert.doesNotMatch(refreshFlow, /setUsagePanelOpen/);
+    assert.match(coachPaneSource, /class="coach-configured-model-status"[\s\S]*?class="coach-configured-model-copy"[\s\S]*?class="coach-model-status-line"/);
+    assert.match(coachPaneSource, /<div class="coach-model-status-line">[\s\S]*?id="coachConfiguredModelMessage"[\s\S]*?<button id="coachModelStatusRefresh"/);
+    assert.doesNotMatch(coachPaneSource, /Refresh model status|Provider Availability|Local Pricing/);
+    assert.match(coachPaneSource, /id="coachUsageClose"[^>]*type="button"[^>]*aria-label="Close session info"/);
+    assert.match(coachPaneSource, /class="coach-ai-sparkle"/);
+    assert.match(coachSource, /refs\.usageClose\.addEventListener\("click", \(\) => setUsagePanelOpen\(false, true\)\)/);
+    assert.match(coachLayoutSource, /\.coach-ai-sparkle\s*\{[^}]*color:\s*var\(--green\)/);
+    const refreshStyle = coachLayoutSource.match(/\.coach-model-status-refresh \{[^}]*\}/)[0];
+    assert.match(refreshStyle, /font-size:\s*11px/);
+    assert.match(refreshStyle, /border:\s*0/);
+    assert.match(refreshStyle, /background:\s*transparent/);
+    assert.doesNotMatch(refreshStyle, /border:\s*1px|background:\s*var\(/);
+    assert.match(coachLayoutSource, /\.coach-model-status-refresh:focus-visible\s*\{[^}]*outline:\s*2px solid var\(--green\)/);
+    assert.match(coachLayoutSource, /\.coach-usage-items\s*\{[^}]*grid-template-columns:\s*repeat\(6,\s*minmax\(0,\s*1fr\)\)/);
+    assert.match(coachLayoutSource, /\.coach-usage-panel\s*\{[^}]*padding:\s*14px 26px/);
+    assert.match(coachResponsiveSource, /@media \(max-width: 760px\)[\s\S]*?\.coach-usage-items\s*\{[^}]*grid-template-columns:\s*repeat\(2,\s*minmax\(0,\s*1fr\)\)/);
+    assert.match(coachResponsiveSource, /\.coach-usage-panel\s*\{[^}]*padding:\s*12px 14px/);
+    const usageItems = coachSource.match(/const items = \[([\s\S]*?)\n        \];/)[1];
+    const metricLabels = [...usageItems.matchAll(/\["([^"]+)",/g)].map(match => match[1]);
+    assert.deepEqual(metricLabels, [
+        "Session model",
+        "Latest turn model",
+        "Messages",
+        "Turns",
+        "Tokens",
+        "Estimated cost",
+    ]);
     assert.match(coachSource, /placeSessionMenu\(id\)/);
     assert.match(coachSource, /is-upward/);
     assert.match(deleteDialogSource, /Permanently delete this chat\?/);

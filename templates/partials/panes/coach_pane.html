@@ -63,13 +63,14 @@
                     <div class="coach-configured-model-copy">
                         <span class="coach-usage-label">Configured model</span>
                         <span id="coachConfiguredModel" class="coach-usage-value">Model unavailable</span>
-                        <span id="coachConfiguredModelMessage" class="coach-model-status-message">
-                            Model update status unavailable
-                        </span>
+                        <div class="coach-model-status-line">
+                            <span id="coachConfiguredModelMessage" class="coach-model-status-message">
+                                Model update status unavailable
+                            </span>
+                            <button id="coachModelStatusRefresh" class="coach-model-status-refresh" type="button"
+                                aria-label="Refresh model availability">↻ Refresh</button>
+                        </div>
                     </div>
-                    <button id="coachModelStatusRefresh" class="coach-model-status-refresh" type="button">
-                        Refresh model status
-                    </button>
                 </div>
                 <div id="coachUsageItems" class="coach-usage-items"></div>
             </div>
