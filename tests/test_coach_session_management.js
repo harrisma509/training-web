@@ -100,7 +100,7 @@ require("../static/api.js");
     assert.match(coachLayoutSource, /\.coach-usage-items > \.coach-usage-item:nth-child\(4\)\s*\{[^}]*grid-column:\s*4 \/ span 3;[^}]*grid-row:\s*2/);
     assert.match(coachLayoutSource, /\.coach-usage-items > \.coach-usage-item:nth-child\(5\)\s*\{[^}]*grid-column:\s*7 \/ span 3;[^}]*grid-row:\s*2/);
     assert.match(coachLayoutSource, /\.coach-usage-items > \.coach-usage-item:nth-child\(6\)\s*\{[^}]*grid-column:\s*10 \/ span 3;[^}]*grid-row:\s*2/);
-    assert.match(coachLayoutSource, /\.coach-usage-panel\s*\{[^}]*padding:\s*14px 26px/);
+    assert.match(coachLayoutSource, /\.coach-usage-panel\s*\{[^}]*padding:\s*12px 24px/);
     assert.match(coachResponsiveSource, /@media \(max-width: 760px\)[\s\S]*?\.coach-usage-content\s*\{[^}]*grid-template-columns:\s*repeat\(2,\s*minmax\(0,\s*1fr\)\)/);
     assert.match(coachResponsiveSource, /\.coach-configured-model-status,[\s\S]*?\.coach-usage-items > \.coach-usage-item:nth-child\(1\),[\s\S]*?grid-column:\s*1 \/ -1/);
     assert.match(coachResponsiveSource, /\.coach-usage-items > \.coach-usage-item:nth-child\(3\),[\s\S]*?\.coach-usage-items > \.coach-usage-item:nth-child\(6\)[\s\S]*?grid-column:\s*span 1/);
