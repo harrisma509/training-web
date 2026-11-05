@@ -239,8 +239,10 @@
     grid-row: 2;
     display: grid;
     grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto auto;
+    align-content: start;
     gap: 12px;
-    padding: 14px 26px;
+    padding: 12px 24px;
     border-bottom: 1px solid var(--line);
     background: var(--panel-surface);
 }
@@ -268,8 +270,10 @@
     margin-right: auto;
     margin-left: 0;
     grid-template-columns: repeat(12, minmax(0, 1fr));
+    grid-template-rows: repeat(2, auto);
+    align-content: start;
     column-gap: 32px;
-    row-gap: 14px;
+    row-gap: 8px;
 }
 
 .coach-usage-items {
@@ -330,11 +334,16 @@
 }
 
 .coach-usage-item {
-    display: grid;
-    gap: 3px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    height: auto;
+    min-height: 0;
 }
 
 .coach-usage-label {
+    height: auto;
+    line-height: 1.2;
     color: var(--muted);
     font-size: 10px;
     text-transform: uppercase;
@@ -342,6 +351,8 @@
 }
 
 .coach-usage-value {
+    height: auto;
+    line-height: 1.2;
     font-size: 13px;
     font-weight: 750;
 }
