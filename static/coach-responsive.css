@@ -87,8 +87,25 @@
         padding: 12px 14px;
     }
 
-    .coach-usage-items {
+    .coach-usage-content {
         grid-template-columns: repeat(2, minmax(0, 1fr));
+        column-gap: 16px;
+        row-gap: 10px;
+    }
+
+    .coach-configured-model-status,
+    .coach-usage-items > .coach-usage-item:nth-child(1),
+    .coach-usage-items > .coach-usage-item:nth-child(2) {
+        grid-column: 1 / -1;
+        grid-row: auto;
+    }
+
+    .coach-usage-items > .coach-usage-item:nth-child(3),
+    .coach-usage-items > .coach-usage-item:nth-child(4),
+    .coach-usage-items > .coach-usage-item:nth-child(5),
+    .coach-usage-items > .coach-usage-item:nth-child(6) {
+        grid-column: span 1;
+        grid-row: auto;
     }
 
     .coach-conversation {
