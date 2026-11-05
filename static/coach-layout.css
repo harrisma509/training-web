@@ -183,9 +183,9 @@
 }
 
 .coach-model-status-line {
-    display: grid;
-    justify-items: start;
-    gap: 3px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
 }
 
 .coach-model-status-message {
