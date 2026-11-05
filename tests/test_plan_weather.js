@@ -386,6 +386,20 @@ async function testGustAlertThresholdsAndCompactHeaderStyles() {
   assert.match(planCssSource, /\.plan-weather-alert\.is-warning/);
   assert.doesNotMatch(planCssSource, /\.plan-weather-wind|\.plan-weather-gust/);
 
+  const cssRules = [...planCssSource.matchAll(/([^{}]+)\{([^{}]*)\}/g)];
+  const fontSizesFor = className => cssRules
+    .filter(([, selector]) => new RegExp(`\\.${className}(?![\\w-])`).test(selector))
+    .flatMap(([, , declarations]) => [...declarations.matchAll(/font-size:\s*([^;]+);/g)])
+    .map(([, fontSize]) => fontSize.trim());
+  for (const className of [
+    "plan-date",
+    "plan-weather-trigger",
+    "plan-weather-icon",
+    "plan-weather-temperature",
+  ]) {
+    assert.deepEqual(fontSizesFor(className), ["11px"], `${className} should use 11px throughout the stylesheet`);
+  }
+
   const nullableLow = await renderHeaderForGust(null, { high: 64, low: null });
   assert.match(nullableLow, /H 64°/);
   assert.doesNotMatch(nullableLow, /\/null°|L null/);
