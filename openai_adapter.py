@@ -43,6 +43,18 @@ class OpenAIProvider:
         self._client = OpenAI(api_key=api_key, max_retries=0)
         self.model = model
 
+    def list_available_model_ids(self, timeout_seconds: float) -> frozenset[str]:
+        try:
+            models = self._client.models.list(timeout=timeout_seconds)
+            return frozenset(
+                model_id
+                for model in models
+                if isinstance((model_id := getattr(model, "id", None)), str)
+                and model_id.strip()
+            )
+        except Exception as exc:
+            raise AIProviderError("AI provider model availability check failed.") from exc
+
     def complete(self, request: AIRequest) -> AIResponse:
         started = time.perf_counter()
         try:

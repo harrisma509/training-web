@@ -40,28 +40,16 @@
                     </svg>
                 </button>
                 <div class="coach-header-actions">
-                    <svg class="coach-ai-sparkle" viewBox="0 0 20 20" aria-hidden="true" focusable="false">
-                        <path d="m10 2 1.25 5.75L17 9l-5.75 1.25L10 16l-1.25-5.75L3 9l5.75-1.25L10 2Z"></path>
-                        <path d="m16 13 .5 2.5L19 16l-2.5.5L16 19l-.5-2.5L13 16l2.5-.5L16 13Z"></path>
-                    </svg>
-                    <div class="coach-overflow-wrap">
-                        <button id="coachOverflowToggle" type="button" class="coach-overflow-toggle"
-                            aria-label="Coach menu" aria-haspopup="menu" aria-expanded="false"
-                            aria-controls="coachUsagePanel" title="Coach menu">
-                            <svg class="coach-overflow-icon" viewBox="0 0 20 20" aria-hidden="true" focusable="false">
-                                <circle cx="4" cy="10" r="1.35"></circle>
-                                <circle cx="10" cy="10" r="1.35"></circle>
-                                <circle cx="16" cy="10" r="1.35"></circle>
-                            </svg>
-                        </button>
-                        <div id="coachOverflowMenu" class="coach-overflow-menu hidden" role="menu"
-                            aria-label="Coach menu">
-                            <button id="coachUsageToggle" type="button" class="coach-overflow-menu-item"
-                                role="menuitem">
-                                Session info
-                            </button>
-                        </div>
-                    </div>
+                    <button id="coachUsageToggle" type="button" class="coach-session-info-toggle"
+                        aria-label="Show session info" aria-expanded="false" aria-controls="coachUsagePanel"
+                        title="Show session info">
+                        <svg class="coach-ai-sparkle" viewBox="0 0 20 20" aria-hidden="true" focusable="false">
+                            <path d="m10 2 1.25 5.75L17 9l-5.75 1.25L10 16l-1.25-5.75L3 9l5.75-1.25L10 2Z"></path>
+                            <path d="m16 13 .5 2.5L19 16l-2.5.5L16 19l-.5-2.5L13 16l2.5-.5L16 13Z"></path>
+                        </svg>
+                    </button>
+                    <span id="coachModelUpdateNotice" class="coach-model-update-notice hidden" role="status"
+                        aria-live="polite"></span>
                 </div>
             </header>
             <div id="coachUsagePanel" class="coach-usage-panel hidden" aria-labelledby="coachUsageHeading"

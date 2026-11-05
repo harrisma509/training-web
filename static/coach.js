@@ -30,6 +30,7 @@
             hasNewPersistedUserMessage,
             formatContextCoverage,
             humanModel,
+            coachModelUpdateNotice,
             reasoningEffortLabel,
             formatTurnMetadata,
         };
@@ -58,6 +59,7 @@
         selectedSessionId: "",
         session: null,
         usage: null,
+        modelStatus: null,
         initialized: false,
         sessionsLoading: false,
         conversationLoading: false,
@@ -85,7 +87,6 @@
         deletePreviousFocus: null,
         sessionStatusMessage: "",
         historyRailCollapsed: false,
-        overflowMenuOpen: false,
         sessionsLoadPromise: null,
         sessionsLoaded: false,
         activated: false,
@@ -104,12 +105,11 @@
         historyCollapse: document.getElementById("coachHistoryCollapse"),
         historyRestore: document.getElementById("coachHistoryRestore"),
         drawerBackdrop: document.getElementById("coachDrawerBackdrop"),
-        overflowToggle: document.getElementById("coachOverflowToggle"),
-        overflowMenu: document.getElementById("coachOverflowMenu"),
         usageToggle: document.getElementById("coachUsageToggle"),
         usagePanel: document.getElementById("coachUsagePanel"),
         usageItems: document.getElementById("coachUsageItems"),
         usageClose: document.getElementById("coachUsageClose"),
+        modelUpdateNotice: document.getElementById("coachModelUpdateNotice"),
         conversation: document.getElementById("coachConversation"),
         error: document.getElementById("coachError"),
         loading: document.getElementById("coachLoadingStatus"),
@@ -150,28 +150,10 @@
         }
     }
 
-    function closeOverflowMenu(restoreFocus = false) {
-        if (!state.overflowMenuOpen) return;
-        state.overflowMenuOpen = false;
-        refs.overflowMenu.classList.add("hidden");
-        refs.overflowToggle.setAttribute("aria-expanded", "false");
-        if (restoreFocus) refs.overflowToggle.focus();
-    }
-
-    function toggleOverflowMenu() {
-        if (state.overflowMenuOpen) {
-            closeOverflowMenu();
-            return;
-        }
-        state.overflowMenuOpen = true;
-        refs.overflowMenu.classList.remove("hidden");
-        refs.overflowToggle.setAttribute("aria-expanded", "true");
-    }
-
     function setUsagePanelOpen(open, restoreFocus = false) {
         refs.usageToggle.setAttribute("aria-expanded", String(open));
         refs.usagePanel.classList.toggle("hidden", !open);
-        if (!open && restoreFocus) refs.overflowToggle.focus();
+        if (!open && restoreFocus) refs.usageToggle.focus();
     }
 
     function validSessionId(value) {
@@ -295,6 +277,17 @@
         return words.join(" ");
     }
 
+    function coachModelUpdateNotice(modelStatus) {
+        if (
+            !modelStatus
+            || modelStatus.availability_status !== "checked"
+            || modelStatus.newer_approved_model_available !== true
+        ) return "";
+        const name = text(modelStatus.newer_approved_model_name).trim()
+            || humanModel(modelStatus.newer_approved_model);
+        return name === "Model unavailable" ? "" : `${name} available`;
+    }
+
     function reasoningEffortLabel(value) {
         const labels = {
             none: "None",
@@ -371,8 +364,22 @@
     function renderUsage() {
         clearNode(refs.usageItems);
         const usage = sessionSummaryUsage(state.usage);
+        const modelStatus = state.modelStatus;
+        const turns = state.session && Array.isArray(state.session.turns) ? state.session.turns : [];
+        const latestTurn = turns.length ? turns[turns.length - 1] : null;
+        const availability = !modelStatus
+            ? "Checking..."
+            : modelStatus.availability_status !== "checked"
+                ? "Unable to check"
+                : modelStatus.configured_model_available === true
+                    ? "Available"
+                    : "Not available";
         const items = [
-            ["Model", humanModel(usage.default_model || usage.model)],
+            ["Configured model", humanModel(modelStatus && modelStatus.configured_model)],
+            ["Provider availability", availability],
+            ["Local pricing", !modelStatus ? "Checking..." : modelStatus.pricing_supported ? "Configured" : "Not configured"],
+            ["Session model", humanModel(usage.default_model || usage.model)],
+            ["Latest turn model", humanModel(latestTurn && latestTurn.model)],
             ["Messages", usage.message_count == null ? "Unavailable" : text(usage.message_count)],
             ["Turns", usage.turn_count == null ? "Unavailable" : text(usage.turn_count)],
             ["Tokens", formatTokens(usage.total_tokens)],
@@ -383,6 +390,22 @@
             item.append(makeElement("span", "coach-usage-label", label), makeElement("span", "coach-usage-value", value));
             refs.usageItems.appendChild(item);
         });
+    }
+
+    function renderModelUpdateNotice() {
+        const notice = coachModelUpdateNotice(state.modelStatus);
+        refs.modelUpdateNotice.textContent = notice;
+        refs.modelUpdateNotice.classList.toggle("hidden", !notice);
+    }
+
+    async function loadCoachModelStatus() {
+        try {
+            state.modelStatus = await window.api.fetchCoachModelStatus();
+        } catch (error) {
+            state.modelStatus = { availability_status: "unavailable" };
+        }
+        renderModelUpdateNotice();
+        renderUsage();
     }
 
     function renderSessions() {
@@ -1129,7 +1152,6 @@
         state.selectedSessionId = text(id);
         window.AppState.coachSessionId = state.selectedSessionId;
         window.persistPreferences();
-        closeOverflowMenu();
         closeDrawer();
         state.conversationLoading = true;
         state.session = null;
@@ -1265,7 +1287,6 @@
             }
         });
         refs.usageToggle.addEventListener("click", () => {
-            closeOverflowMenu();
             const expanded = refs.usageToggle.getAttribute("aria-expanded") === "true";
             setUsagePanelOpen(!expanded);
         });
@@ -1275,7 +1296,6 @@
         refs.drawerBackdrop.addEventListener("click", closeDrawer);
         refs.historyCollapse.addEventListener("click", () => setHistoryRailCollapsed(true));
         refs.historyRestore.addEventListener("click", () => setHistoryRailCollapsed(false));
-        refs.overflowToggle.addEventListener("click", toggleOverflowMenu);
         refs.deleteCancel.addEventListener("click", () => closeDeleteDialog(true));
         refs.deleteConfirm.addEventListener("click", confirmDelete);
         refs.deleteDialog.addEventListener("click", event => {
@@ -1293,10 +1313,6 @@
             focusable[next].focus();
         });
         document.addEventListener("keydown", event => {
-            if (event.key === "Escape" && state.overflowMenuOpen) {
-                closeOverflowMenu(true);
-                return;
-            }
             if (event.key !== "Escape") return;
             if (refs.usageToggle.getAttribute("aria-expanded") === "true") {
                 setUsagePanelOpen(false, true);
@@ -1316,7 +1332,6 @@
             if (state.drawerOpen) closeDrawer();
         });
         document.addEventListener("click", event => {
-            if (state.overflowMenuOpen && !event.target.closest(".coach-overflow-wrap")) closeOverflowMenu();
             if (state.sessionMenuId && !event.target.closest(".coach-session-actions")) {
                 state.sessionMenuId = "";
                 renderSessions();
@@ -1333,6 +1348,7 @@
             initializeCoachFeature();
             if (state.activated) return Promise.resolve(true);
             state.activated = true;
+            loadCoachModelStatus();
             return loadSessions(context.sessionId || "");
         },
         refresh() {

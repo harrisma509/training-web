@@ -37,6 +37,7 @@ from routes.sync import router as sync_router
 from routes.components import router as components_router
 from routes.charts import router as charts_router
 from routes.coach import router as coach_router
+from routes.coach_model_status import router as coach_model_status_router
 from routes.coach_respond import router as coach_respond_router
 from routes.coach_settings import router as coach_settings_router
 from routes.coach_custom_instructions import router as coach_custom_instructions_router
@@ -69,6 +70,7 @@ app.include_router(sync_router)
 app.include_router(components_router)
 app.include_router(charts_router)
 app.include_router(coach_router)
+app.include_router(coach_model_status_router)
 app.include_router(coach_respond_router)
 app.include_router(coach_settings_router)
 app.include_router(coach_custom_instructions_router)

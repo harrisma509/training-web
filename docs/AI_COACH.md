@@ -710,6 +710,12 @@ configured provider and have an application pricing entry for cost preflight;
 unknown pricing fails closed before a paid request. Pricing is maintained in
 application code, not supplied through an environment rate override.
 
+The immutable application catalog currently approves `gpt-5.6-luna`,
+`gpt-5.6-luna-standard`, and `gpt-6-luna`, with model-specific pricing and
+explicit same-family approval order. The environment selector remains
+independent of this catalog; adding or approving a model requires a separate
+application change and pricing review.
+
 ```env
 TRAINING_AI_PROVIDER=openai
 TRAINING_AI_MODEL=<supported-model-id>
@@ -718,15 +724,19 @@ TRAINING_API_BASE_URL=http://training-api:8090
 TRAINING_API_TOKEN=<secret>
 ```
 
-For reference, the current production model is:
-
-```env
-TRAINING_AI_MODEL=gpt-6-luna
-```
+The Coach performs a read-only OpenAI Models API check to determine whether
+the configured model and a newer approved same-family model are accessible.
+The model list is cached in process for 24 hours, refreshes are serialized,
+and each provider check has a four-second timeout. The check makes no paid
+generation request and writes no database state. Availability-check failures
+are sanitized and do not block Coach use. The green sparkle opens Session info;
+an amber notice appears only when a newer approved same-family model is
+provider-accessible. The notice does not change `TRAINING_AI_MODEL` or switch
+models automatically.
 
 Completed turns retain the actual model used. Existing sessions may therefore
-display their last successful historical model after the environment selection
-changes.
+display their session model and latest historical turn model separately from
+the current `TRAINING_AI_MODEL` selection.
 
 The runtime values are supplied through the server environment file referenced
 by Docker Compose. Changing `/etc/training/.env` requires recreating the

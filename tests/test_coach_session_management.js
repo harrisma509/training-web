@@ -31,7 +31,12 @@ require("../static/api.js");
     assert.equal(requests[1].options.method, "PATCH");
     assert.deepEqual(JSON.parse(requests[1].options.body), { mode: "conversational" });
 
+    await window.api.fetchCoachModelStatus();
+    assert.equal(requests.length, 3);
+    assert.equal(requests[2].url, "/api/coach/model-status");
+
     const coachSource = fs.readFileSync("static/coach.js", "utf8");
+    const coachPaneSource = fs.readFileSync("templates/partials/panes/coach_pane.html", "utf8");
     const deleteDialogSource = fs.readFileSync("templates/partials/dialogs/coach_delete_dialog.html", "utf8");
     assert.match(coachSource, /Chat actions for \$\{title\}/);
     assert.match(coachSource, /Delete chat/);
@@ -45,6 +50,10 @@ require("../static/api.js");
     assert.equal(reasoningEffortLabel("high"), "High Reasoning");
     assert.equal(reasoningEffortLabel(null), "");
     assert.match(coachSource, /state\.modePending/);
+    assert.match(coachSource, /fetchCoachModelStatus/);
+    assert.match(coachPaneSource, /aria-label="Show session info"/);
+    assert.match(coachPaneSource, /coachModelUpdateNotice/);
+    assert.doesNotMatch(coachPaneSource, /coachOverflowToggle|coachOverflowMenu/);
     assert.match(coachSource, /placeSessionMenu\(id\)/);
     assert.match(coachSource, /is-upward/);
     assert.match(deleteDialogSource, /Permanently delete this chat\?/);

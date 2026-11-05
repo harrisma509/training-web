@@ -212,9 +212,41 @@ class FakeResponsesClient:
 class FakeOpenAIClient:
     def __init__(self):
         self.responses = FakeResponsesClient()
+        self.models = FakeModelsClient()
+
+
+class FakeModelsClient:
+    def __init__(self):
+        self.calls = []
+        self.result = [SimpleNamespace(id="gpt-6-luna"), SimpleNamespace(id=None)]
+
+    def list(self, **kwargs):
+        self.calls.append(kwargs)
+        return self.result
 
 
 class OpenAIAdapterTests(unittest.TestCase):
+    def test_model_availability_uses_read_only_models_api_with_timeout(self):
+        provider = OpenAIProvider.__new__(OpenAIProvider)
+        provider._client = FakeOpenAIClient()
+
+        model_ids = provider.list_available_model_ids(timeout_seconds=4.0)
+
+        self.assertEqual(model_ids, frozenset({"gpt-6-luna"}))
+        self.assertEqual(provider._client.models.calls, [{"timeout": 4.0}])
+
+    def test_model_availability_errors_are_sanitized(self):
+        provider = OpenAIProvider.__new__(OpenAIProvider)
+        provider._client = FakeOpenAIClient()
+        provider._client.models.list = lambda **kwargs: (_ for _ in ()).throw(
+            RuntimeError("sensitive provider response")
+        )
+
+        with self.assertRaises(AIProviderError) as raised:
+            provider.list_available_model_ids(timeout_seconds=4.0)
+
+        self.assertEqual(str(raised.exception), "AI provider model availability check failed.")
+
     def test_complete_disables_provider_managed_storage_without_network_call(self):
         provider = OpenAIProvider.__new__(OpenAIProvider)
         provider._client = FakeOpenAIClient()

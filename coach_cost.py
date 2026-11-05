@@ -4,25 +4,25 @@ from datetime import datetime
 from decimal import Decimal
 from zoneinfo import ZoneInfo
 
-INPUT_RATE = Decimal("0.20") / Decimal(1_000_000)
-CACHED_INPUT_RATE = Decimal("0.02") / Decimal(1_000_000)
-OUTPUT_RATE = Decimal("1.20") / Decimal(1_000_000)
-GPT_6_LUNA_STANDARD_INPUT_RATE = Decimal("0.10") / Decimal(1_000_000)
-GPT_6_LUNA_STANDARD_CACHED_INPUT_RATE = Decimal("0.01") / Decimal(1_000_000)
-GPT_6_LUNA_STANDARD_OUTPUT_RATE = Decimal("0.50") / Decimal(1_000_000)
-GPT_6_LUNA_LONG_CONTEXT_TOKEN_THRESHOLD = 272_000
-GPT_6_LUNA_LONG_CONTEXT_INPUT_MULTIPLIER = Decimal("2")
-GPT_6_LUNA_LONG_CONTEXT_OUTPUT_MULTIPLIER = Decimal("1.5")
+from coach_model_catalog import MODEL_CATALOG, model_for_id
+
+_GPT_5_6_PRICING = MODEL_CATALOG["gpt-5.6-luna"]
+_GPT_6_PRICING = MODEL_CATALOG["gpt-6-luna"]
+INPUT_RATE = _GPT_5_6_PRICING.input_rate
+CACHED_INPUT_RATE = _GPT_5_6_PRICING.cached_input_rate
+OUTPUT_RATE = _GPT_5_6_PRICING.output_rate
+GPT_6_LUNA_STANDARD_INPUT_RATE = _GPT_6_PRICING.input_rate
+GPT_6_LUNA_STANDARD_CACHED_INPUT_RATE = _GPT_6_PRICING.cached_input_rate
+GPT_6_LUNA_STANDARD_OUTPUT_RATE = _GPT_6_PRICING.output_rate
+GPT_6_LUNA_LONG_CONTEXT_TOKEN_THRESHOLD = _GPT_6_PRICING.long_context_token_threshold
+GPT_6_LUNA_LONG_CONTEXT_INPUT_MULTIPLIER = _GPT_6_PRICING.long_context_input_multiplier
+GPT_6_LUNA_LONG_CONTEXT_OUTPUT_MULTIPLIER = _GPT_6_PRICING.long_context_output_multiplier
 DEFAULT_MAX_TURN_COST = Decimal("0.25")
 DEFAULT_MONTHLY_COST_LIMIT = Decimal("5.00")
 MODEL_PRICING = {
-    "gpt-5.6-luna": (INPUT_RATE, CACHED_INPUT_RATE, OUTPUT_RATE),
-    "gpt-5.6-luna-standard": (INPUT_RATE, CACHED_INPUT_RATE, OUTPUT_RATE),
-    "gpt-6-luna": (
-        GPT_6_LUNA_STANDARD_INPUT_RATE,
-        GPT_6_LUNA_STANDARD_CACHED_INPUT_RATE,
-        GPT_6_LUNA_STANDARD_OUTPUT_RATE,
-    ),
+    model.model_id: model.pricing_rates()
+    for model in MODEL_CATALOG.values()
+    if model.has_pricing
 }
 
 
@@ -49,15 +49,21 @@ class BudgetUnavailableError(Exception):
 
 
 def pricing_for_model(model):
-    return MODEL_PRICING.get((model or "").strip().lower())
+    catalog_model = model_for_id(model)
+    return catalog_model.pricing_rates() if catalog_model else None
 
 
 def _long_context_multipliers(model, input_tokens):
+    catalog_model = model_for_id(model)
     if (
-        (model or "").strip().lower() == "gpt-6-luna"
-        and input_tokens > GPT_6_LUNA_LONG_CONTEXT_TOKEN_THRESHOLD
+        catalog_model
+        and catalog_model.long_context_token_threshold is not None
+        and input_tokens > catalog_model.long_context_token_threshold
     ):
-        return GPT_6_LUNA_LONG_CONTEXT_INPUT_MULTIPLIER, GPT_6_LUNA_LONG_CONTEXT_OUTPUT_MULTIPLIER
+        return (
+            catalog_model.long_context_input_multiplier,
+            catalog_model.long_context_output_multiplier,
+        )
     return Decimal(1), Decimal(1)
 
 

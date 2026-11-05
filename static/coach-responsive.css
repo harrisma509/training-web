@@ -64,13 +64,14 @@
         height: 40px;
     }
 
-    .coach-overflow-wrap {
-        height: 40px;
-    }
-
-    .coach-overflow-toggle {
+    .coach-session-info-toggle {
+        width: 40px;
         height: 40px;
         min-height: 0;
+    }
+
+    .coach-model-update-notice {
+        max-width: 130px;
     }
 
     .coach-main-header .coach-mobile-only {

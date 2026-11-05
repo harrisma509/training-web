@@ -332,6 +332,10 @@
       return fetchJson(`/api/coach/sessions/${encodeURIComponent(sessionId)}/usage`);
     },
 
+    async fetchCoachModelStatus() {
+      return fetchJson("/api/coach/model-status");
+    },
+
     async createCoachSession() {
       return fetchJson("/api/coach/sessions", {
         method: "POST",
