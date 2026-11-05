@@ -296,13 +296,20 @@
   function renderTrigger(dateKey, selection, daily) {
     const presentation = conditionPresentation(daily.condition);
     const temperature = dailyTemperature(daily);
-    const direction = compassDirection(daily.wind_direction_dominant_deg);
-    const speed = rounded(daily.wind_speed_max_mph);
-    const gust = rounded(daily.wind_gust_max_mph);
-    const wind = [direction, speed ? `${speed} mph` : ""].filter(Boolean).join(" ");
-    const gustText = gust ? `G${gust}` : "";
-    const accessibleLabel = triggerLabel(selection, dateKey);
-    return `<button type="button" class="plan-weather-trigger" data-plan-weather-trigger="${dateKey}" aria-label="${escapeHtml(accessibleLabel)}" title="${escapeHtml(accessibleLabel)}"><span class="plan-weather-icon" aria-hidden="true">${presentation.icon}</span>${temperature ? `<span class="plan-weather-temperature" aria-hidden="true">${escapeHtml(temperature)}</span>` : ""}${wind ? `<span class="plan-weather-wind" aria-hidden="true">${escapeHtml(wind)}</span>` : ""}${gustText ? `<span class="plan-weather-gust" aria-hidden="true">${escapeHtml(gustText)}</span>` : ""}${selection.additionalCount ? `<span class="plan-weather-more" aria-hidden="true">+${selection.additionalCount}</span>` : ""}</button>`;
+    const gust = daily.wind_gust_max_mph;
+    const gustAlert = finiteNumber(gust) && gust >= 25
+      ? {
+        className: gust >= 35 ? "is-warning" : "is-caution",
+        label: gust >= 35
+          ? `High wind: maximum gust ${gust} mph`
+          : `Gusty: maximum gust ${gust} mph`,
+      }
+      : null;
+    const accessibleLabel = [
+      triggerLabel(selection, dateKey),
+      gustAlert?.label,
+    ].filter(Boolean).join(". ");
+    return `<button type="button" class="plan-weather-trigger" data-plan-weather-trigger="${dateKey}" aria-label="${escapeHtml(accessibleLabel)}" title="${escapeHtml(accessibleLabel)}"><span class="plan-weather-icon" aria-hidden="true">${presentation.icon}</span>${temperature ? `<span class="plan-weather-temperature" aria-hidden="true">${escapeHtml(temperature)}</span>` : ""}${gustAlert ? `<span class="plan-weather-alert ${gustAlert.className}" aria-hidden="true">💨</span>` : ""}${selection.additionalCount ? `<span class="plan-weather-more" aria-hidden="true">+${selection.additionalCount}</span>` : ""}</button>`;
   }
 
   function renderUnavailableTrigger(dateKey, selection) {

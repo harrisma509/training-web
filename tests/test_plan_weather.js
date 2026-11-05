@@ -4,6 +4,7 @@ const vm = require("node:vm");
 
 const apiSource = fs.readFileSync("static/api.js", "utf8");
 const weatherSource = fs.readFileSync("static/plan_weather.js", "utf8");
+const planCssSource = fs.readFileSync("static/plan.css", "utf8");
 
 class FakeElement {
   constructor(document, name = "") {
@@ -190,7 +191,7 @@ function forecast(date, options = {}) {
       temperature_low_f: Object.hasOwn(options, "low") ? options.low : 39,
       wind_speed_max_mph: 12,
       wind_direction_dominant_deg: 225,
-      wind_gust_max_mph: 24,
+      wind_gust_max_mph: Object.hasOwn(options, "gust") ? options.gust : 24,
       sunrise_local: `${date}T06:30`,
       sunset_local: `${date}T17:45`,
     }],
@@ -304,7 +305,7 @@ async function testHeaderDeduplicatesForecastsAndFormatsNullableValues() {
   const { controller } = createWeatherController({
     fetchWeatherForecast: async locationId => {
       forecastCalls.push(locationId);
-      return forecast("2026-10-20", { high: null, low: 39 });
+      return forecast("2026-10-20", { high: null, low: 39, gust: 41 });
     },
   });
   const items = [
@@ -327,7 +328,67 @@ async function testHeaderDeduplicatesForecastsAndFormatsNullableValues() {
   assert.match(html, /<button[^>]+data-plan-weather-trigger="2026-10-20"/);
   assert.match(html, /L 39°/);
   assert.match(html, /\+1/);
+  const trigger = html.match(/<button\b([^>]*)>(.*?)<\/button>/s);
+  assert.ok(trigger);
+  assert.match(trigger[1], /aria-label="[^"]*High wind: maximum gust 41 mph/);
+  assert.match(trigger[1], /title="[^"]*High wind: maximum gust 41 mph/);
+  assert.match(trigger[2], /plan-weather-alert is-warning/);
+  assert.doesNotMatch(trigger[2], /SW|mph|G\d|gust/i);
   assert.doesNotMatch(html, /null|undefined|NaN|0°|latitude|longitude|weather_code|Open-Meteo|Geoapify/);
+}
+
+async function renderHeaderForGust(gust, forecastOptions = {}) {
+  const { controller } = createWeatherController({
+    fetchWeatherForecast: async () => forecast("2026-10-20", {
+      ...forecastOptions,
+      gust,
+    }),
+  });
+  const items = [item({ id: 1, locationId: 7, duration: 30 })];
+  controller.renderDay({
+    dateKey: "2026-10-20",
+    todayKey: "2026-10-20",
+    items,
+    itemsReady: true,
+  });
+  await settle();
+  return controller.renderDay({
+    dateKey: "2026-10-20",
+    todayKey: "2026-10-20",
+    items,
+    itemsReady: true,
+  });
+}
+
+async function testGustAlertThresholdsAndCompactHeaderStyles() {
+  for (const [gust, alertClass, label] of [
+    [null, null, null],
+    [24.9, null, null],
+    [25, "is-caution", "Gusty: maximum gust 25 mph"],
+    [34.9, "is-caution", "Gusty: maximum gust 34.9 mph"],
+    [35, "is-warning", "High wind: maximum gust 35 mph"],
+  ]) {
+    const html = await renderHeaderForGust(gust);
+    const trigger = html.match(/<button\b([^>]*)>(.*?)<\/button>/s);
+    assert.ok(trigger);
+    if (!alertClass) {
+      assert.doesNotMatch(trigger[2], /plan-weather-alert/);
+      assert.doesNotMatch(trigger[1], /maximum gust/);
+    } else {
+      assert.match(trigger[2], new RegExp(`plan-weather-alert ${alertClass}`));
+      assert.ok(trigger[1].includes(label));
+    }
+    assert.doesNotMatch(trigger[2], /SW|mph|G\d|gust/i);
+  }
+
+  assert.match(planCssSource, /\.plan-weather-trigger\s*\{[^}]*max-width:\s*none;[^}]*overflow:\s*visible;/s);
+  assert.match(planCssSource, /\.plan-weather-alert\.is-caution/);
+  assert.match(planCssSource, /\.plan-weather-alert\.is-warning/);
+  assert.doesNotMatch(planCssSource, /\.plan-weather-wind|\.plan-weather-gust/);
+
+  const nullableLow = await renderHeaderForGust(null, { high: 64, low: null });
+  assert.match(nullableLow, /H 64°/);
+  assert.doesNotMatch(nullableLow, /\/null°|L null/);
 }
 
 async function testHomeFallbackAndNoHomeAreDistinct() {
@@ -419,6 +480,17 @@ async function testUnavailableAndStaleLocationsRemainIndependentInDetails() {
           precipitation_probability_pct: 10,
           precipitation_in: 0.01,
           snowfall_in: 0,
+        }, {
+          timestamp_local: "2026-10-20T10:00",
+          condition: "cloudy",
+          temperature_f: 48,
+          apparent_temperature_f: 46,
+          wind_direction_deg: 270,
+          wind_speed_mph: 6,
+          wind_gust_mph: null,
+          precipitation_probability_pct: 0,
+          precipitation_in: 0,
+          snowfall_in: 0,
         }],
       };
     },
@@ -459,6 +531,10 @@ async function testUnavailableAndStaleLocationsRemainIndependentInDetails() {
   assert.match(detail, /Stale forecast/);
   assert.match(detail, /Hourly forecast unavailable/);
   assert.match(detail, /8:00 AM/);
+  assert.match(detail, /SW 8 mph · gust 14 mph/);
+  assert.match(detail, /10:00 AM/);
+  assert.match(detail, /W 6 mph/);
+  assert.doesNotMatch(detail, /gust 6 mph/);
   assert.doesNotMatch(detail, /latitude|longitude|weather_code|Open-Meteo|Geoapify|NaN|undefined/);
   assert.equal(mutationCalls, 0);
 
@@ -476,6 +552,7 @@ async function run() {
   testMissingDurationsPreserveFirstAndHomeIsOnlyFallback();
   await testPastAndBeyondRangeDoNotFetchWeather();
   await testHeaderDeduplicatesForecastsAndFormatsNullableValues();
+  await testGustAlertThresholdsAndCompactHeaderStyles();
   await testHomeFallbackAndNoHomeAreDistinct();
   await testUnavailableAndStaleLocationsRemainIndependentInDetails();
   console.log("Plan Weather UI contract tests passed.");
