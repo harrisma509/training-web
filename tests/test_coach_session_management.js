@@ -42,7 +42,7 @@ require("../static/api.js");
     assert.match(coachSource, /What's on your mind\?/);
     assert.match(coachSource, /coach_mode/);
     assert.match(coachSource, /reasoning_effort_requested/);
-    assert.equal(reasoningEffortLabel("high"), "High reasoning");
+    assert.equal(reasoningEffortLabel("high"), "High Reasoning");
     assert.equal(reasoningEffortLabel(null), "");
     assert.match(coachSource, /state\.modePending/);
     assert.match(coachSource, /placeSessionMenu\(id\)/);

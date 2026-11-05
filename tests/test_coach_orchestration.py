@@ -6,6 +6,7 @@ import os
 import socket
 import sys
 import types
+from dataclasses import replace
 from datetime import timedelta, timezone
 from urllib.error import HTTPError, URLError
 from unittest.mock import patch
@@ -195,7 +196,7 @@ class FakeContextResponse:
 class FakeResponsesClient:
     def __init__(self):
         self.calls = []
-        self.model = "gpt-5.6-luna"
+        self.model = "synthetic-response-model"
 
     def create(self, **kwargs):
         self.calls.append(kwargs)
@@ -217,11 +218,11 @@ class OpenAIAdapterTests(unittest.TestCase):
     def test_complete_disables_provider_managed_storage_without_network_call(self):
         provider = OpenAIProvider.__new__(OpenAIProvider)
         provider._client = FakeOpenAIClient()
-        provider.model = "gpt-5.6-luna"
+        provider.model = "synthetic-luna-model"
 
         response = provider.complete(
             AIRequest(
-                model="gpt-5.6-luna",
+                model="synthetic-luna-model",
                 instructions="Be concise.",
                 input_text="Question",
                 max_output_tokens=100,
@@ -232,15 +233,15 @@ class OpenAIAdapterTests(unittest.TestCase):
         self.assertEqual(response.text, "Coach response")
         self.assertEqual(provider._client.responses.calls[0]["store"], False)
 
-    def test_complete_passes_gpt6_model_and_falls_back_when_response_model_is_missing(self):
+    def test_complete_passes_configured_model_and_falls_back_when_response_model_is_missing(self):
         provider = OpenAIProvider.__new__(OpenAIProvider)
         provider._client = FakeOpenAIClient()
         provider._client.responses.model = None
-        provider.model = "gpt-6-luna"
+        provider.model = "synthetic-luna-model"
 
         response = provider.complete(
             AIRequest(
-                model="gpt-6-luna",
+                model="synthetic-luna-model",
                 instructions="Be concise.",
                 input_text="Question",
                 max_output_tokens=100,
@@ -248,18 +249,18 @@ class OpenAIAdapterTests(unittest.TestCase):
             )
         )
 
-        self.assertEqual(provider._client.responses.calls[0]["model"], "gpt-6-luna")
-        self.assertEqual(response.model, "gpt-6-luna")
+        self.assertEqual(provider._client.responses.calls[0]["model"], "synthetic-luna-model")
+        self.assertEqual(response.model, "synthetic-luna-model")
 
     def test_complete_prefers_provider_reported_model_when_present(self):
         provider = OpenAIProvider.__new__(OpenAIProvider)
         provider._client = FakeOpenAIClient()
-        provider._client.responses.model = "provider-reported-model"
-        provider.model = "gpt-6-luna"
+        provider._client.responses.model = "synthetic-response-model"
+        provider.model = "synthetic-luna-model"
 
         response = provider.complete(
             AIRequest(
-                model="gpt-6-luna",
+                model="synthetic-luna-model",
                 instructions="Be concise.",
                 input_text="Question",
                 max_output_tokens=100,
@@ -267,8 +268,8 @@ class OpenAIAdapterTests(unittest.TestCase):
             )
         )
 
-        self.assertEqual(provider._client.responses.calls[0]["model"], "gpt-6-luna")
-        self.assertEqual(response.model, "provider-reported-model")
+        self.assertEqual(provider._client.responses.calls[0]["model"], "synthetic-luna-model")
+        self.assertEqual(response.model, "synthetic-response-model")
 
 
 class CoachPolicyTests(unittest.TestCase):
@@ -612,6 +613,8 @@ class CoachOrchestrationTests(unittest.TestCase):
         self.assertEqual(received, [(28, 26)])
 
     def test_persisted_settings_reach_request_and_cost_guards(self):
+        self.provider.model = "synthetic-luna-model"
+        self.provider.response = replace(self.response, model="synthetic-response-model")
         settings = CoachSettings(
             monthly_cost_limit_usd=Decimal("10.00"),
             max_turn_cost_usd=Decimal("1.00"),
@@ -621,7 +624,7 @@ class CoachOrchestrationTests(unittest.TestCase):
         )
         with patch("coach_orchestrator._start_coach_turn", return_value=({}, self.user_message, self.started)), \
              patch("coach_orchestrator._recent_coach_messages", return_value=[]), \
-             patch("coach_orchestrator._complete_coach_turn", return_value=({"coach_message_id": 11}, self.completed)), \
+             patch("coach_orchestrator._complete_coach_turn", return_value=({"coach_message_id": 11}, self.completed)) as complete, \
              patch("coach_orchestrator._coach_session_snapshot", return_value={"total_tokens": 130}), \
              patch("coach_orchestrator.preflight_cost", return_value=Decimal("0.10")) as preflight, \
              patch("coach_orchestrator.enforce_monthly_budget", return_value={"recorded_cost_usd": Decimal("0"), "unknown_cost_count": 0}) as monthly, \
@@ -637,8 +640,10 @@ class CoachOrchestrationTests(unittest.TestCase):
         request = self.provider.requests[0]
         self.assertEqual(request.max_output_tokens, 8000)
         self.assertEqual(request.reasoning_effort, "high")
-        preflight.assert_called_once_with("gpt-5.6-luna", unittest.mock.ANY, 8000, Decimal("1.00"))
+        self.assertEqual(request.model, "synthetic-luna-model")
+        preflight.assert_called_once_with("synthetic-luna-model", unittest.mock.ANY, 8000, Decimal("1.00"))
         monthly.assert_called_once_with(Decimal("0.10"), Decimal("10.00"))
+        self.assertEqual(complete.call_args.kwargs["model"], "synthetic-response-model")
 
     def test_gpt6_request_runs_after_preflight_and_persists_provider_model(self):
         events = []
@@ -729,10 +734,13 @@ class CoachOrchestrationTests(unittest.TestCase):
 
     def test_conversational_mode_selects_conversational_strategy_and_preserves_provider_settings(self):
         self.started["coach_mode"] = "conversational"
+        self.provider.model = "synthetic-luna-model"
+        self.provider.response = replace(self.response, model="synthetic-luna-model")
         with patch("coach_orchestrator._start_coach_turn", return_value=({}, self.user_message, self.started)), \
              patch("coach_orchestrator._recent_coach_messages", return_value=[]), \
              patch("coach_orchestrator._complete_coach_turn", return_value=({"coach_message_id": 11}, self.completed)), \
              patch("coach_orchestrator._coach_session_snapshot", return_value={}), \
+             patch("coach_orchestrator.preflight_cost", return_value=Decimal("0.10")), \
              patch("coach_orchestrator.enforce_monthly_budget"), \
              patch("coach_orchestrator._fail_coach_turn"):
             respond_to_coach(3, "What do I need to hear today?", context_loader=lambda daily_days, weekly_rows: CONTEXT, provider_factory=lambda: self.provider)
@@ -740,7 +748,7 @@ class CoachOrchestrationTests(unittest.TestCase):
         request = self.provider.requests[0]
         self.assertEqual(request.instructions.count(CONVERSATIONAL_COACH_STRATEGY), 1)
         self.assertNotIn(TRAINING_COACH_STRATEGY, request.instructions)
-        self.assertEqual(request.model, "gpt-5.6-luna")
+        self.assertEqual(request.model, "synthetic-luna-model")
         self.assertEqual(request.max_output_tokens, 1200)
         self.assertEqual(request.reasoning_effort, "low")
 
@@ -1451,7 +1459,7 @@ class CoachOrchestrationTests(unittest.TestCase):
             "title": "Injury check-in",
             "status": "active",
             "provider": "fake",
-            "default_model": "gpt-5.6-luna",
+            "default_model": "synthetic-response-model",
             "coaching_policy_version": "coach-v1",
             "summary": None,
             "summary_through_message_id": None,
@@ -1474,7 +1482,7 @@ class CoachOrchestrationTests(unittest.TestCase):
         turns = [{
             "assistant_message_id": 11,
             "provider": "fake",
-            "model": "gpt-5.6-luna",
+            "model": "synthetic-response-model",
             "status": "completed",
             "reasoning_effort_requested": "high",
             "elapsed_ms": 9900,
@@ -1543,7 +1551,7 @@ class CoachOrchestrationTests(unittest.TestCase):
         self.assertEqual(result["turns"], [{
             "assistant_message_id": 11,
             "provider": "fake",
-            "model": "gpt-5.6-luna",
+            "model": "synthetic-response-model",
             "status": "completed",
             "reasoning_effort_requested": "high",
             "elapsed_ms": 9900,

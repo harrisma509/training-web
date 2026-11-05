@@ -25,7 +25,14 @@
     }
 
     if (typeof document === "undefined" && typeof module !== "undefined") {
-        module.exports = { chooseSessionMenuPlacement, hasNewPersistedUserMessage, formatContextCoverage, reasoningEffortLabel };
+        module.exports = {
+            chooseSessionMenuPlacement,
+            hasNewPersistedUserMessage,
+            formatContextCoverage,
+            humanModel,
+            reasoningEffortLabel,
+            formatTurnMetadata,
+        };
         return;
     }
 
@@ -263,14 +270,51 @@
     }
 
     function humanModel(value) {
-        const model = text(value);
+        const model = text(value).trim();
         if (!model) return "Model unavailable";
-        return model.toLowerCase().includes("gpt-5.6") ? "GPT-5.6 Luna" : model;
+        const parts = model.split("-").filter(Boolean);
+        const words = [];
+        for (let index = 0; index < parts.length; index += 1) {
+            const part = parts[index];
+            if (part.toLowerCase() === "gpt") {
+                const version = parts[index + 1];
+                if (version && /^\d+(?:\.\d+)*$/.test(version)) {
+                    words.push(`GPT-${version}`);
+                    index += 1;
+                } else {
+                    words.push("GPT");
+                }
+                continue;
+            }
+            if (/^\d+(?:\.\d+)+$/.test(part)) {
+                words.push(part);
+                continue;
+            }
+            words.push(`${part.charAt(0).toUpperCase()}${part.slice(1).toLowerCase()}`);
+        }
+        return words.join(" ");
     }
 
     function reasoningEffortLabel(value) {
-        const labels = { none: "None reasoning", low: "Low reasoning", medium: "Medium reasoning", high: "High reasoning" };
-        return labels[text(value).toLowerCase()] || "";
+        const labels = {
+            none: "None",
+            low: "Low Reasoning",
+            medium: "Medium Reasoning",
+            high: "High Reasoning",
+            xhigh: "XHigh Reasoning",
+            max: "Max Reasoning",
+        };
+        return labels[text(value).trim().toLowerCase()] || "";
+    }
+
+    function formatTurnMetadata(model, reasoning, elapsedMs, totalTokens, estimatedCost) {
+        return [
+            humanModel(model),
+            reasoningEffortLabel(reasoning),
+            formatLatency(elapsedMs),
+            `${formatTokens(totalTokens)} tokens`,
+            formatCost(estimatedCost),
+        ].filter(Boolean).join(" • ");
     }
 
     function clearNode(node) {
@@ -929,8 +973,13 @@
                     context.type = "button";
                     context.addEventListener("click", () => toggleContextReceipt(context, turn, item));
                     actions.appendChild(context);
-                    const reasoning = reasoningEffortLabel(turn.reasoning_effort_requested);
-                    const metadata = [humanModel(turn.model), reasoning, formatLatency(turn.elapsed_ms), `${formatTokens(turn.total_tokens)} tokens`, formatCost(turn.estimated_cost_usd)].filter(Boolean).join(" • ");
+                    const metadata = formatTurnMetadata(
+                        turn.model,
+                        turn.reasoning_effort_requested,
+                        turn.elapsed_ms,
+                        turn.total_tokens,
+                        turn.estimated_cost_usd,
+                    );
                     actions.appendChild(makeElement("span", "", metadata));
                 }
                 item.appendChild(actions);

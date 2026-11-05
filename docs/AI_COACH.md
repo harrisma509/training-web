@@ -695,24 +695,43 @@ Provider SDK types must not escape the provider adapter.
 
 - Provider: OpenAI
 - API: Responses API
-- Model: `gpt-6-luna`
+- Model: selected by `TRAINING_AI_MODEL`
 - Reasoning effort: loaded from persisted Settings and validated for each paid turn (`none`, `low`, `medium`, or `high`); application and database default: `low`
 - Maximum output tokens: loaded from persisted Settings for each paid turn; default: 1,200
 - Provider timeout: 120 seconds, set by the code-level `PROVIDER_TIMEOUT_SECONDS` constant
 - SDK retries: zero initially
 - Service tier: Standard/default processing
 
-### Environment configuration
+### Model configuration
 
-The runtime configuration is provided to `training-web` through the server environment file referenced by Docker Compose.
+Model selection is environment-driven. `TRAINING_AI_MODEL` selects the active
+Coach model for new requests. The selected model must be supported by the
+configured provider and have an application pricing entry for cost preflight;
+unknown pricing fails closed before a paid request. Pricing is maintained in
+application code, not supplied through an environment rate override.
 
 ```env
 TRAINING_AI_PROVIDER=openai
-TRAINING_AI_MODEL=gpt-6-luna
+TRAINING_AI_MODEL=<supported-model-id>
 OPENAI_API_KEY=<secret>
 TRAINING_API_BASE_URL=http://training-api:8090
 TRAINING_API_TOKEN=<secret>
 ```
+
+For reference, the current production model is:
+
+```env
+TRAINING_AI_MODEL=gpt-6-luna
+```
+
+Completed turns retain the actual model used. Existing sessions may therefore
+display their last successful historical model after the environment selection
+changes.
+
+The runtime values are supplied through the server environment file referenced
+by Docker Compose. Changing `/etc/training/.env` requires recreating the
+container; `docker restart training-web` does not reload Compose environment
+values. Use the documented Compose recreation process below.
 
 Secrets must not be committed to source control or printed in logs.
 
@@ -1274,6 +1293,10 @@ Do not make real-provider calls part of the normal unit-test suite.
 ## Operational Runbook
 
 ### Recreate after environment changes
+
+Changing `/etc/training/.env` does not update an existing container, and
+`docker restart training-web` does not reload Compose environment values.
+Recreate the service to apply the updated configuration:
 
 ```bash
 cd /opt/training/web

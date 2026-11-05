@@ -123,7 +123,7 @@ def response():
     return SimpleNamespace(
         text="Coach response",
         provider="fake",
-        model="gpt-5.6-luna",
+        model="synthetic-luna-model",
         provider_response_id="response-1",
         input_tokens=10,
         cached_input_tokens=0,
@@ -136,7 +136,7 @@ def response():
 
 
 class FakeProvider:
-    model = "gpt-5.6-luna"
+    model = "synthetic-luna-model"
 
     def __init__(self, error=None, events=None):
         self.error = error

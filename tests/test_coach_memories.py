@@ -626,14 +626,14 @@ class MemoryRouteTests(unittest.TestCase):
 
     def test_paid_turn_places_memory_after_custom_instructions_and_counts_once(self):
         response = types.SimpleNamespace(
-            text="Coach response", provider="fake", model="gpt-5.6-luna",
+            text="Coach response", provider="fake", model="synthetic-response-model",
             provider_response_id="response-1", input_tokens=10, cached_input_tokens=0,
             output_tokens=5, reasoning_tokens=0, total_tokens=15, elapsed_ms=1,
             finish_status="completed",
         )
 
         class Provider:
-            model = "gpt-5.6-luna"
+            model = "synthetic-luna-model"
 
             def __init__(self): self.requests = []
             def complete(self, request): self.requests.append(request); return response
