@@ -913,13 +913,17 @@
   function renderPlanDayCell(date, row, isWeekCollapsed, isCurrentWeek) {
     const label = formatPlanDay(date);
     const dayKey = toLocalDateKey(date);
-    const isCurrentDay = dayKey === getDenverTodayKey();
+    const todayKey = getDenverTodayKey();
+    const isCurrentDay = dayKey === todayKey;
     const isDayExpanded = PLAN_EXPANDED_DAY_KEYS.has(dayKey);
     const formattedDateLabel = [label.weekday, label.month, label.date].filter(Boolean).join(" ").trim() || "this day";
     const mainRideName = row?.main_ride_name == null ? "" : String(row.main_ride_name).trim();
     const mainRideTime = row?.main_ride_time == null ? "" : String(row.main_ride_time).trim();
     const loadDisplay = formatPlanHeaderLoad(row?.total_load);
     const loadLabel = loadDisplay === "—" ? "No daily load" : `${loadDisplay} daily load`;
+    const loadHtml = dayKey < todayKey || loadDisplay !== "—"
+      ? `<span class="plan-day-load" aria-label="${escapeHtml(loadLabel)}" title="${escapeHtml(loadLabel)}">${escapeHtml(loadDisplay)}</span>`
+      : "";
     const structuredItems = getStructuredOtherActivities(row);
     const supportNames = getSupportActivityNames(row);
     const hasMainRide = Boolean(mainRideName);
@@ -960,7 +964,6 @@
       if (plannedState.status === "success" && plannedItems.length > 0) {
         bodyHtml = '<div class="plan-empty-state">No activity recorded yet</div>';
       } else if (!plannedController || plannedState.status === "success") {
-        const todayKey = getDenverTodayKey();
         const emptyCopy = dayKey > todayKey
           ? "Nothing planned"
           : dayKey === todayKey ? "No activity recorded today" : "No activity recorded";
@@ -1010,7 +1013,7 @@
         <div class="plan-day-header${isCurrentWeek ? " is-current-week" : ""}${isCurrentDay ? " is-current-day" : ""}"${isCurrentDay ? ' aria-current="date"' : ""}>
           <span class="plan-weekday">${escapeHtml(label.weekday || "")}</span>
           ${weatherHtml}
-          <span class="plan-day-load" aria-label="${escapeHtml(loadLabel)}" title="${escapeHtml(loadLabel)}">${escapeHtml(loadDisplay)}</span>
+          ${loadHtml}
           <span class="plan-date">${escapeHtml(label.month || "")} ${escapeHtml(label.date || "")}</span>
         </div>
         <div class="plan-day-body" ${isWeekCollapsed ? "hidden" : ""}>

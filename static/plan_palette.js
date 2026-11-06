@@ -230,6 +230,7 @@
     draggingRow?.classList.remove("is-dragging");
     draggingRow = null;
     state.selectedTemplate = null;
+    state.dragTemplate = null;
     state.targetDate = null;
     state.mode = "idle";
     state.inFlight = false;
@@ -443,17 +444,21 @@
 
   function openPalette() {
     if (state.inFlight) return;
+    const editorState = window.PlanItemEditor?.getState?.();
+    if (editorState && (editorState.mode !== "idle" || editorState.quickMove)
+      && window.PlanItemEditor?.close?.() === false) return;
     setOpen(true);
     loadTemplates(true);
   }
 
   function closePalette({ focus = true } = {}) {
-    if (state.inFlight) return;
+    if (state.inFlight) return false;
     if (state.selectedTemplate || state.mode !== "idle" || state.targetDate || state.dragTemplate) {
       clearSelection();
     }
     state.statusMessage = "";
     setOpen(false, { focus });
+    return true;
   }
 
   function togglePalette() {

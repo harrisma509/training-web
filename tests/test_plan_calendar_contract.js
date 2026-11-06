@@ -36,7 +36,7 @@ assert.match(planSource, /const defaultCollapsed = false/);
 assert.match(planSource, /is-current-week/);
 assert.match(planSource, /is-current-day/);
 assert.match(planSource, /aria-current="date"/);
-assert.match(planSource, /const isCurrentDay = dayKey === getDenverTodayKey\(\)/);
+assert.match(planSource, /const isCurrentDay = dayKey === todayKey/);
 assert.match(planSource, /PlanWeatherController\?\.renderDay\?\.\(\{/);
 assert.match(planSource, /PlanWeatherController\?\.resetForPlanLoad\?\.\(\)/);
 assert.match(planSource, /PlanWeatherController\?\.init\?\.\(\{ onChange: renderPlanStrip \}\)/);
@@ -238,5 +238,75 @@ for (const [isoDate, expectedMonth, expectedDate] of [
   const label = formatPlanDay(new Date(Date.UTC(year, month - 1, day)));
   assert.equal(`${label.month} ${label.date}`, `${expectedMonth} ${expectedDate}`);
 }
+
+function renderPlanDayCellForLoad(dayKey, row, plannedItems = []) {
+  const context = vm.createContext({
+    PLAN_EXPANDED_DAY_KEYS: new Set(),
+    PLAN_VISIBLE_ACTIVITY_LIMIT: 4,
+    escapeHtml: value => String(value ?? ""),
+    formatPlanDay: () => ({ weekday: "FRI", month: "NOV", date: dayKey.slice(-2) }),
+    getDenverTodayKey: () => "2026-11-05",
+    getStructuredOtherActivities: () => [],
+    getSupportActivityNames: () => [],
+    renderActivityWithIcon: () => "",
+    renderPlanCheckinControl: () => "",
+    renderPlanSupportToggle: () => "",
+    toLocalDateKey: () => dayKey,
+    window: {
+      PlanItemsController: {
+        getState: () => ({ status: "success" }),
+        getVisibleItemsForDate: () => plannedItems,
+        renderDaySection: () => plannedItems.length ? '<article class="plan-planned-card">planned</article>' : "",
+      },
+      PlanWeatherController: {
+        renderDay: () => '<button class="plan-weather-trigger">weather</button>',
+      },
+      PlanPaletteController: {
+        getState: () => ({ mode: "idle" }),
+        targetMarkup: () => "",
+      },
+      PlanItemEditor: {
+        isQuickMoveDestination: () => false,
+        targetMarkup: () => "",
+      },
+    },
+  });
+  vm.runInContext(
+    `${extractPlanFunction("formatPlanHeaderLoad")}\n${extractPlanFunction("renderPlanDayCell")}`,
+    context,
+  );
+  context.dayDate = new Date(`${dayKey}T12:00:00Z`);
+  context.row = row;
+  return vm.runInContext("renderPlanDayCell(dayDate, row, false, false)", context);
+}
+
+const futureWithoutLoad = renderPlanDayCellForLoad("2026-11-06", null);
+const todayWithoutLoad = renderPlanDayCellForLoad("2026-11-05", null);
+const futureWithPlannedLoad = renderPlanDayCellForLoad(
+  "2026-11-06",
+  null,
+  [{ prescription: { target_load: 80 } }],
+);
+const pastWithoutLoad = renderPlanDayCellForLoad("2026-11-04", { total_load: null });
+const pastWithLoad = renderPlanDayCellForLoad("2026-11-04", { total_load: 42.6 });
+const todayWithLoad = renderPlanDayCellForLoad("2026-11-05", { total_load: 18 });
+
+for (const [dayLabel, html] of [
+  ["future", futureWithoutLoad],
+  ["today", todayWithoutLoad],
+  ["future with planned load", futureWithPlannedLoad],
+]) {
+  assert.doesNotMatch(html, /class="plan-day-load"/, `${dayLabel} without actual load has no load element`);
+  assert.doesNotMatch(html, /—/, `${dayLabel} without actual load has no dash placeholder`);
+}
+assert.match(futureWithPlannedLoad, /class="plan-planned-card"/);
+assert.match(pastWithoutLoad, /<span class="plan-day-load" aria-label="No daily load" title="No daily load">—<\/span>/);
+assert.match(pastWithLoad, /<span class="plan-day-load" aria-label="43 daily load" title="43 daily load">43<\/span>/);
+assert.match(todayWithLoad, /<span class="plan-day-load" aria-label="18 daily load" title="18 daily load">18<\/span>/);
+for (const html of [futureWithoutLoad, todayWithoutLoad, pastWithLoad]) {
+  assert.ok(html.indexOf('class="plan-weekday"') < html.indexOf('class="plan-weather-trigger"'));
+  assert.ok(html.indexOf('class="plan-weather-trigger"') < html.indexOf('class="plan-date"'));
+}
+assert.match(planCss, /\.plan-day-header\s*\{[^}]*display:\s*flex;[^}]*align-items:\s*center;/s);
 
 console.log("Plan 13-week calendar contract tests passed.");

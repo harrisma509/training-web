@@ -245,6 +245,13 @@
 
   function open(item, opener, mode = "edit", refreshCalendar = mode === "moving") {
     if (!item || item.item_state !== "committed" || item.planned_date < todayKey()) return false;
+    const paletteState = window.PlanPaletteController?.getState?.();
+    if (paletteState && (
+      paletteState.paletteOpen
+      || paletteState.selectedTemplate
+      || paletteState.dragTemplate
+      || paletteState.mode !== "idle"
+    ) && window.PlanPaletteController?.close?.() === false) return false;
     state.item = item;
     state.opener = opener || null;
     state.mode = mode;

@@ -169,7 +169,29 @@ function createHarness() {
   };
   let items = [item];
   let cards = [opener];
-  const calls = { updates: [], cancels: [], removed: [], confirms: [], renders: 0 };
+  const calls = { updates: [], cancels: [], removed: [], confirms: [], renders: 0, paletteCloses: 0 };
+  const paletteState = {
+    paletteOpen: false,
+    selectedTemplate: null,
+    dragTemplate: null,
+    targetDate: null,
+    mode: "idle",
+  };
+  const palette = {
+    state: paletteState,
+    closeResult: true,
+    getState: () => ({ ...paletteState }),
+    close() {
+      calls.paletteCloses += 1;
+      if (!this.closeResult) return false;
+      paletteState.paletteOpen = false;
+      paletteState.selectedTemplate = null;
+      paletteState.dragTemplate = null;
+      paletteState.targetDate = null;
+      paletteState.mode = "idle";
+      return true;
+    },
+  };
   const dateTransfer = {
     types: ["application/x-training-plan-item-id"],
     values: new Map(),
@@ -220,6 +242,10 @@ function createHarness() {
       },
       PlanItemsController: {
         getState: () => ({ items }),
+        acceptCreatedItem: created => {
+          items = [...items, created];
+          return true;
+        },
         replaceItem: updated => {
           items = [updated];
           opener.isConnected = false;
@@ -234,6 +260,7 @@ function createHarness() {
           return true;
         },
       },
+      PlanPaletteController: palette,
       PlanController: { render: () => { calls.renders += 1; } },
     },
   };
@@ -254,6 +281,7 @@ function createHarness() {
     listeners,
     moveCancelButton,
     opener,
+    palette,
     panel,
     sourceDate,
     targetDate,
@@ -390,6 +418,71 @@ async function testDeleteFromPlanConfirmationAndReadOnlyDates() {
   );
 }
 
+async function testEditingClosesAddModeAndPreservesExistingItem() {
+  const harness = createHarness();
+  const editor = harness.context.window.PlanItemEditor;
+  harness.palette.state.paletteOpen = true;
+  harness.palette.state.selectedTemplate = { planTemplateId: 23, templateName: "PT Quick Pick" };
+  harness.palette.state.mode = "selected";
+  harness.formValues.segments = JSON.stringify(harness.item.prescription.segments);
+
+  assert.equal(editor.open(harness.item, harness.opener, "edit", false), true);
+  assert.equal(harness.calls.paletteCloses, 1);
+  assert.equal(harness.palette.state.paletteOpen, false);
+  assert.equal(harness.palette.state.selectedTemplate, null);
+  assert.equal(harness.palette.state.mode, "idle");
+  assert.equal(editor.getState().item, harness.item);
+  assert.deepEqual(
+    harness.context.window.PlanItemsController.getState().items.map(item => item.plan_item_id),
+    [harness.item.plan_item_id],
+  );
+  assert.equal(harness.calls.updates.length, 0);
+  assert.equal(harness.calls.cancels.length, 0);
+
+  assert.equal(editor.close(), true);
+  assert.equal(editor.getState().mode, "idle");
+  assert.equal(harness.context.window.PlanItemsController.getState().items[0], harness.item);
+  assert.equal(harness.calls.updates.length, 0);
+  assert.equal(harness.calls.cancels.length, 0);
+}
+
+async function testEditingNewlyAddedItemClosesAddPanel() {
+  const harness = createHarness();
+  const editor = harness.context.window.PlanItemEditor;
+  const addedItem = {
+    ...harness.item,
+    plan_item_id: 101,
+    planned_date: harness.targetDate,
+    prescription: { ...harness.item.prescription, title: "New template item" },
+  };
+  harness.context.window.PlanItemsController.acceptCreatedItem(addedItem);
+  harness.palette.state.paletteOpen = true;
+
+  assert.equal(editor.open(addedItem, harness.opener, "edit", false), true);
+  assert.equal(harness.calls.paletteCloses, 1);
+  assert.equal(harness.palette.state.paletteOpen, false);
+  assert.equal(editor.getState().item, addedItem);
+  assert.equal(harness.context.window.PlanItemsController.getState().items.at(-1), addedItem);
+  assert.equal(harness.calls.updates.length, 0);
+  assert.equal(harness.calls.cancels.length, 0);
+}
+
+async function testEditingWaitsWhenAddModeCannotClose() {
+  const harness = createHarness();
+  const editor = harness.context.window.PlanItemEditor;
+  harness.palette.state.paletteOpen = true;
+  harness.palette.state.mode = "saving";
+  harness.palette.closeResult = false;
+
+  assert.equal(editor.open(harness.item, harness.opener, "edit", false), false);
+  assert.equal(harness.calls.paletteCloses, 1);
+  assert.equal(harness.palette.state.paletteOpen, true);
+  assert.equal(editor.getState().mode, "idle");
+  assert.equal(editor.getState().item, null);
+  assert.equal(harness.panel.hidden, true);
+  assert.equal(harness.calls.updates.length, 0);
+}
+
 async function testTodayMoveTargetsMustBeFuture() {
   const harness = createHarness();
   harness.item.planned_date = harness.today;
@@ -517,6 +610,9 @@ async function testPhysicalTherapyEditorLabelPreservesCanonicalToken() {
 Promise.all([
   testFullCardDragUsesOneAuthoritativePut(),
   testDeleteFromPlanConfirmationAndReadOnlyDates(),
+  testEditingClosesAddModeAndPreservesExistingItem(),
+  testEditingNewlyAddedItemClosesAddPanel(),
+  testEditingWaitsWhenAddModeCannotClose(),
   testTodayMoveTargetsMustBeFuture(),
   testQuickMoveLifecycleAndFailure(),
   testQuickDeleteConfirmationAndMutation(),

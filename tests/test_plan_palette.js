@@ -200,6 +200,9 @@ async function testQuickPicksUseSharedPhysicalTherapyPresentation() {
   const placementCalls = [];
   const acceptedItems = [];
   const dragStateChanges = [];
+  const editorState = { mode: "edit", quickMove: false };
+  const editorCloseCalls = [];
+  let editorCanClose = true;
   const document = {
     readyState: "loading",
     activeElement: null,
@@ -214,6 +217,16 @@ async function testQuickPicksUseSharedPhysicalTherapyPresentation() {
       ActivityPresentation: activityPresentation,
       innerWidth: 1280,
       setTimeout: callback => callback(),
+      PlanItemEditor: {
+        getState: () => ({ ...editorState }),
+        close: () => {
+          editorCloseCalls.push(editorState.mode);
+          if (!editorCanClose) return false;
+          editorState.mode = "idle";
+          editorState.quickMove = false;
+          return true;
+        },
+      },
       api: {
         fetchPlanCategories: async () => ({ categories: [] }),
         fetchPlanTemplates: async () => ({
@@ -253,6 +266,8 @@ async function testQuickPicksUseSharedPhysicalTherapyPresentation() {
   listeners.get("DOMContentLoaded")();
   trigger.listeners.get("click")();
   await new Promise(resolve => setImmediate(resolve));
+  assert.deepEqual(editorCloseCalls, ["edit"], "opening Add plans closes Edit first");
+  assert.equal(editorState.mode, "idle");
 
   assert.match(quickRows.innerHTML, /Rehabilitation · Physical Therapy · 30 min/);
   assert.doesNotMatch(quickRows.innerHTML, /PhysicalTherapy/);
@@ -334,11 +349,26 @@ async function testQuickPicksUseSharedPhysicalTherapyPresentation() {
 
   selectTemplate();
   assert.match(palette.targetMarkup(today, "today"), /data-plan-palette-target/);
+  const closingDragClasses = new Set();
+  const closingDragRow = {
+    classList: {
+      add: name => closingDragClasses.add(name),
+      remove: name => closingDragClasses.delete(name),
+    },
+    getAttribute: () => "23",
+  };
+  root.listeners.get("dragstart")({
+    target: { closest: () => closingDragRow },
+    dataTransfer: { setData() {}, effectAllowed: "" },
+  });
+  assert.equal(palette.getState().dragTemplate?.planTemplateId, 23);
   closeButton.listeners.get("click")();
   let paletteState = palette.getState();
   assert.equal(root.hidden, true);
   assert.equal(trigger.attributes["aria-expanded"], "false");
   assert.equal(paletteState.selectedTemplate, null);
+  assert.equal(paletteState.dragTemplate, null);
+  assert.equal(closingDragClasses.has("is-dragging"), false);
   assert.equal(paletteState.mode, "idle");
   assert.equal(paletteState.statusMessage, "");
   assert.equal(placementBanner.innerHTML, "");
@@ -384,6 +414,17 @@ async function testQuickPicksUseSharedPhysicalTherapyPresentation() {
   assert.equal(root.hidden, false, "reopening after close succeeds");
   assert.equal(palette.getState().mode, "idle", "reopening starts in idle mode");
   assert.equal(palette.getState().selectedTemplate, null);
+
+  trigger.listeners.get("click")();
+  editorState.mode = "edit";
+  editorCanClose = false;
+  trigger.listeners.get("click")();
+  assert.equal(root.hidden, true, "Add plans stays closed when Edit cannot close");
+  assert.equal(editorState.mode, "edit");
+  editorCanClose = true;
+  trigger.listeners.get("click")();
+  assert.equal(root.hidden, false, "Add plans opens after Edit closes");
+  assert.equal(editorState.mode, "idle");
 }
 
 function denverDateOffset(offset) {
