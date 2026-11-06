@@ -330,8 +330,8 @@ async function testHeaderDeduplicatesForecastsAndFormatsNullableValues() {
   assert.match(html, /\+1/);
   const trigger = html.match(/<button\b([^>]*)>(.*?)<\/button>/s);
   assert.ok(trigger);
-  assert.match(trigger[1], /aria-label="[^"]*High wind: maximum gust 41 mph/);
-  assert.match(trigger[1], /title="[^"]*High wind: maximum gust 41 mph/);
+  assert.match(trigger[1], /aria-label="[^"]*High wind warning: maximum gust 41 mph/);
+  assert.match(trigger[1], /title="[^"]*High wind warning: maximum gust 41 mph/);
   assert.match(trigger[2], /plan-weather-alert is-warning/);
   assert.doesNotMatch(trigger[2], /SW|mph|G\d|gust/i);
   assert.doesNotMatch(html, /null|undefined|NaN|0°|latitude|longitude|weather_code|Open-Meteo|Geoapify/);
@@ -361,22 +361,26 @@ async function renderHeaderForGust(gust, forecastOptions = {}) {
 }
 
 async function testGustAlertThresholdsAndCompactHeaderStyles() {
-  for (const [gust, alertClass, label] of [
-    [null, null, null],
-    [24.9, null, null],
-    [25, "is-caution", "Gusty: maximum gust 25 mph"],
-    [34.9, "is-caution", "Gusty: maximum gust 34.9 mph"],
-    [35, "is-warning", "High wind: maximum gust 35 mph"],
+  for (const [gust, alertClass, label, iconClass, iconShape] of [
+    [null, null, null, null, null],
+    [24.9, null, null, null, null],
+    [25.0, "is-caution", "Windy: maximum gust 25 mph", "plan-weather-wind-icon", "M1.5 5h8.25"],
+    [34.9, "is-caution", "Windy: maximum gust 34.9 mph", "plan-weather-wind-icon", "M1.5 5h8.25"],
+    [35.0, "is-warning", "High wind warning: maximum gust 35 mph", "plan-weather-warning-icon", "M8 1.5 14.5 14H1.5z"],
+    [65.3, "is-warning", "High wind warning: maximum gust 65.3 mph", "plan-weather-warning-icon", "M8 1.5 14.5 14H1.5z"],
   ]) {
     const html = await renderHeaderForGust(gust);
     const trigger = html.match(/<button\b([^>]*)>(.*?)<\/button>/s);
     assert.ok(trigger);
+    assert.match(trigger[2], /<span class="plan-weather-icon" aria-hidden="true">/);
     if (!alertClass) {
       assert.doesNotMatch(trigger[2], /plan-weather-alert/);
       assert.doesNotMatch(trigger[1], /maximum gust/);
     } else {
       assert.match(trigger[2], new RegExp(`plan-weather-alert ${alertClass}`));
       assert.ok(trigger[1].includes(label));
+      assert.match(trigger[2], new RegExp(`<svg class="${iconClass}"`));
+      assert.ok(trigger[2].includes(iconShape), `${iconClass} should render its distinct shape`);
     }
     assert.doesNotMatch(trigger[2], /SW|mph|G\d|gust/i);
   }
@@ -384,21 +388,25 @@ async function testGustAlertThresholdsAndCompactHeaderStyles() {
   assert.match(planCssSource, /\.plan-weather-trigger\s*\{[^}]*max-width:\s*none;[^}]*overflow:\s*visible;/s);
   assert.match(planCssSource, /\.plan-weather-alert\.is-caution/);
   assert.match(planCssSource, /\.plan-weather-alert\.is-warning/);
-  assert.doesNotMatch(planCssSource, /\.plan-weather-wind|\.plan-weather-gust/);
+  assert.match(planCssSource, /\.plan-weather-wind-icon,\s*\.plan-weather-warning-icon\s*\{[^}]*width:\s*11px;[^}]*height:\s*11px;/s);
 
   const cssRules = [...planCssSource.matchAll(/([^{}]+)\{([^{}]*)\}/g)];
   const fontSizesFor = className => cssRules
     .filter(([, selector]) => new RegExp(`\\.${className}(?![\\w-])`).test(selector))
     .flatMap(([, , declarations]) => [...declarations.matchAll(/font-size:\s*([^;]+);/g)])
     .map(([, fontSize]) => fontSize.trim());
+  assert.deepEqual(fontSizesFor("plan-weather-icon"), ["16.5px"]);
   for (const className of [
     "plan-date",
     "plan-weather-trigger",
-    "plan-weather-icon",
     "plan-weather-temperature",
   ]) {
     assert.deepEqual(fontSizesFor(className), ["11px"], `${className} should use 11px throughout the stylesheet`);
   }
+  assert.match(planCssSource, /\.plan-weather-icon\s*\{[^}]*color:\s*#2563EB;[^}]*font-size:\s*16\.5px;[^}]*line-height:\s*1;/s);
+  assert.match(planCssSource, /\.plan-weather-alert\s*\{[^}]*font-size:\s*11px;/s);
+  assert.match(planCssSource, /\.plan-weather-alert\.is-caution\s*\{[^}]*color:\s*#D97706;/s);
+  assert.match(planCssSource, /\.plan-weather-alert\.is-warning\s*\{[^}]*color:\s*#DC2626;/s);
 
   const nullableLow = await renderHeaderForGust(null, { high: 64, low: null });
   assert.match(nullableLow, /H 64°/);

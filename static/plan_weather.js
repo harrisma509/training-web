@@ -3,13 +3,13 @@
   const FORECAST_DAYS = 16;
   const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
   const CONDITIONS = {
-    clear: { icon: "☀", label: "Clear" },
+    clear: { icon: "☀\uFE0E", label: "Clear" },
     partly_cloudy: { icon: "◐", label: "Partly cloudy" },
-    cloudy: { icon: "☁", label: "Cloudy" },
+    cloudy: { icon: "☁\uFE0E", label: "Cloudy" },
     fog: { icon: "≋", label: "Fog" },
-    rain: { icon: "☂", label: "Rain" },
-    snow: { icon: "❄", label: "Snow" },
-    storm: { icon: "⚡", label: "Storm" },
+    rain: { icon: "☂\uFE0E", label: "Rain" },
+    snow: { icon: "❄\uFE0E", label: "Snow" },
+    storm: { icon: "⚡\uFE0E", label: "Storm" },
     unknown: { icon: "·", label: "Conditions unknown" },
   };
   const state = {
@@ -298,18 +298,23 @@
     const temperature = dailyTemperature(daily);
     const gust = daily.wind_gust_max_mph;
     const gustAlert = finiteNumber(gust) && gust >= 25
-      ? {
-        className: gust >= 35 ? "is-warning" : "is-caution",
-        label: gust >= 35
-          ? `High wind: maximum gust ${gust} mph`
-          : `Gusty: maximum gust ${gust} mph`,
-      }
+      ? gust >= 35
+        ? {
+          className: "is-warning",
+          label: `High wind warning: maximum gust ${gust} mph`,
+          icon: '<svg class="plan-weather-warning-icon" viewBox="0 0 16 16" focusable="false"><path d="M8 1.5 14.5 14H1.5z" fill="none" stroke="currentColor" stroke-linejoin="round" stroke-width="1.5"></path><path d="M8 5.2v4.1m0 1.8v.1" fill="none" stroke="currentColor" stroke-linecap="round" stroke-width="1.5"></path></svg>',
+        }
+        : {
+          className: "is-caution",
+          label: `Windy: maximum gust ${gust} mph`,
+          icon: '<svg class="plan-weather-wind-icon" viewBox="0 0 16 16" focusable="false"><path d="M1.5 5h8.25a2 2 0 1 0-1.8-2.9M1.5 8h12M1.5 11h7a2 2 0 1 1-1.8 2.9" fill="none" stroke="currentColor" stroke-linecap="round" stroke-width="1.5"></path></svg>',
+        }
       : null;
     const accessibleLabel = [
       triggerLabel(selection, dateKey),
       gustAlert?.label,
     ].filter(Boolean).join(". ");
-    return `<button type="button" class="plan-weather-trigger" data-plan-weather-trigger="${dateKey}" aria-label="${escapeHtml(accessibleLabel)}" title="${escapeHtml(accessibleLabel)}"><span class="plan-weather-icon" aria-hidden="true">${presentation.icon}</span>${temperature ? `<span class="plan-weather-temperature" aria-hidden="true">${escapeHtml(temperature)}</span>` : ""}${gustAlert ? `<span class="plan-weather-alert ${gustAlert.className}" aria-hidden="true">💨</span>` : ""}${selection.additionalCount ? `<span class="plan-weather-more" aria-hidden="true">+${selection.additionalCount}</span>` : ""}</button>`;
+    return `<button type="button" class="plan-weather-trigger" data-plan-weather-trigger="${dateKey}" aria-label="${escapeHtml(accessibleLabel)}" title="${escapeHtml(accessibleLabel)}"><span class="plan-weather-icon" aria-hidden="true">${presentation.icon}</span>${temperature ? `<span class="plan-weather-temperature" aria-hidden="true">${escapeHtml(temperature)}</span>` : ""}${gustAlert ? `<span class="plan-weather-alert ${gustAlert.className}" aria-hidden="true">${gustAlert.icon}</span>` : ""}${selection.additionalCount ? `<span class="plan-weather-more" aria-hidden="true">+${selection.additionalCount}</span>` : ""}</button>`;
   }
 
   function renderUnavailableTrigger(dateKey, selection) {

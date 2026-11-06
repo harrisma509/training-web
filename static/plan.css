@@ -1638,7 +1638,10 @@
 
 .plan-weather-icon {
     flex: 0 0 auto;
-    font-size: 11px;
+    margin-block: -1.65px;
+    color: #2563EB;
+    font-size: 16.5px;
+    line-height: 1;
 }
 
 .plan-weather-temperature,
@@ -1655,11 +1658,18 @@
 }
 
 .plan-weather-alert.is-caution {
-    color: var(--muted);
+    color: #D97706;
 }
 
 .plan-weather-alert.is-warning {
-    color: var(--red);
+    color: #DC2626;
+}
+
+.plan-weather-wind-icon,
+.plan-weather-warning-icon {
+    display: block;
+    width: 11px;
+    height: 11px;
 }
 
 .plan-weather-more {
