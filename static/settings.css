@@ -252,26 +252,56 @@
 
 .saved-location-management-list {
   display: grid;
-  gap: 10px;
+  gap: 7px;
 }
 
 .saved-location-management-row {
   display: grid;
-  gap: 8px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px 12px;
   border: 1px solid var(--input-border);
   border-radius: 9px;
-  padding: 12px;
+  padding: 8px 10px;
+  min-height: 56px;
   background: var(--panel);
 }
 
-.saved-location-management-row label {
+.saved-location-management-primary {
   display: grid;
-  gap: 5px;
+  gap: 3px;
+  min-width: 0;
 }
 
-.saved-location-management-row input {
+.saved-location-management-name {
+  min-width: 0;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+}
+
+.saved-location-management-meta {
+  margin: 0;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.saved-location-management-rename {
+  display: grid;
+  gap: 4px;
+}
+
+.saved-location-management-rename[hidden],
+.saved-location-management-menu[hidden] {
+  display: none;
+}
+
+.saved-location-management-rename input {
   width: 100%;
-  min-height: 38px;
+  min-height: 40px;
   box-sizing: border-box;
   border: 1px solid var(--input-border);
   border-radius: 7px;
@@ -281,21 +311,43 @@
   font: inherit;
 }
 
-.saved-location-management-row p {
-  margin: 0;
-  color: var(--muted);
-  font-size: 11px;
-}
-
 .saved-location-management-actions {
   display: flex;
   align-items: center;
-  gap: 7px;
+  justify-content: flex-end;
+  gap: 6px;
   flex-wrap: wrap;
 }
 
 .saved-location-management-actions button {
-  min-height: 34px;
+  min-height: 40px;
+}
+
+.saved-location-management-actions button[hidden] {
+  display: none;
+}
+
+.saved-location-management-actions button:focus-visible,
+.saved-location-management-menu button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.saved-location-management-overflow-trigger {
+  width: 40px;
+  padding: 0;
+  font-size: 20px;
+  line-height: 1;
+}
+
+.saved-location-management-menu {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  padding-top: 7px;
+  border-top: 1px solid var(--line);
 }
 
 .settings-ai-coach-card {
@@ -440,6 +492,18 @@
 }
 
 @media (max-width: 700px) {
+  .saved-location-management-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .saved-location-management-actions {
+    justify-content: flex-start;
+  }
+
+  .saved-location-management-overflow-trigger {
+    margin-left: auto;
+  }
+
   .settings-ai-coach-heading {
     display: grid;
     gap: 6px;

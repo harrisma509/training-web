@@ -31,8 +31,8 @@ locations remain durable; permanent deletion is allowed only when no Plan
 template or item references the location.
 
 Normal browser/API payloads expose display and selection metadata, not
-coordinates. Locations has a dedicated Settings tab. Compact-row visual polish
-is deferred UX work, not an architecture change.
+coordinates. Locations has a dedicated Settings tab. Its compact-row
+presentation is a UI detail and does not change this architecture.
 
 ## 4. Geocoding and location creation
 
