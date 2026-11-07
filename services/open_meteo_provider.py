@@ -552,89 +552,135 @@ def _normalize_payload(
         for field in HOURLY_FIELDS
     }
 
-    hourly_by_date: dict[str, list[HourlyWeather]] = {}
+    hourly_records: list[tuple[str, HourlyWeather]] = []
     for index, local_time in enumerate(parsed_hourly_times):
         day_key = local_time.date().isoformat()
-        hourly_by_date.setdefault(day_key, []).append(
-            HourlyWeather(
-                timestamp_local=str(raw_hourly_times[index]),
-                condition=_condition(
-                    hourly_arrays["weather_code"][index],
-                    section="hourly",
-                    index=index,
-                    temporal_value=local_time.isoformat(timespec="minutes"),
+        temporal_value = local_time.isoformat(timespec="minutes")
+        hourly_records.append(
+            (
+                day_key,
+                HourlyWeather(
+                    timestamp_local=str(raw_hourly_times[index]),
+                    condition=_condition(
+                        hourly_arrays["weather_code"][index],
+                        section="hourly",
+                        index=index,
+                        temporal_value=temporal_value,
+                        allow_none=True,
+                    ),
+                    temperature_f=_optional_number(
+                        hourly_arrays["temperature_2m"][index],
+                        section="hourly",
+                        field="temperature_2m",
+                        index=index,
+                        temporal_value=temporal_value,
+                    ),
+                    apparent_temperature_f=_optional_number(
+                        hourly_arrays["apparent_temperature"][index],
+                        section="hourly",
+                        field="apparent_temperature",
+                        index=index,
+                        temporal_value=temporal_value,
+                    ),
+                    precipitation_probability_pct=_optional_number(
+                        hourly_arrays["precipitation_probability"][index],
+                        section="hourly",
+                        field="precipitation_probability",
+                        index=index,
+                        temporal_value=temporal_value,
+                        minimum=0,
+                        maximum=100,
+                    ),
+                    precipitation_in=_optional_number(
+                        hourly_arrays["precipitation"][index],
+                        section="hourly",
+                        field="precipitation",
+                        index=index,
+                        temporal_value=temporal_value,
+                        minimum=0,
+                    ),
+                    snowfall_in=_optional_number(
+                        hourly_arrays["snowfall"][index],
+                        section="hourly",
+                        field="snowfall",
+                        index=index,
+                        temporal_value=temporal_value,
+                        minimum=0,
+                    ),
+                    wind_speed_mph=_optional_number(
+                        hourly_arrays["wind_speed_10m"][index],
+                        section="hourly",
+                        field="wind_speed_10m",
+                        index=index,
+                        temporal_value=temporal_value,
+                        minimum=0,
+                    ),
+                    wind_direction_deg=_optional_number(
+                        hourly_arrays["wind_direction_10m"][index],
+                        section="hourly",
+                        field="wind_direction_10m",
+                        index=index,
+                        temporal_value=temporal_value,
+                        minimum=0,
+                        maximum=360,
+                    ),
+                    wind_gust_mph=_optional_number(
+                        hourly_arrays["wind_gusts_10m"][index],
+                        section="hourly",
+                        field="wind_gusts_10m",
+                        index=index,
+                        temporal_value=temporal_value,
+                        minimum=0,
+                    ),
+                    is_day=_daylight_value(
+                        hourly_arrays["is_day"][index],
+                        index=index,
+                        temporal_value=temporal_value,
+                    ),
                 ),
-                temperature_f=_number(
-                    hourly_arrays["temperature_2m"][index],
-                    section="hourly",
-                    field="temperature_2m",
-                    index=index,
-                    temporal_value=local_time.isoformat(timespec="minutes"),
-                ),
-                apparent_temperature_f=_number(
-                    hourly_arrays["apparent_temperature"][index],
-                    section="hourly",
-                    field="apparent_temperature",
-                    index=index,
-                    temporal_value=local_time.isoformat(timespec="minutes"),
-                ),
-                precipitation_probability_pct=_number(
-                    hourly_arrays["precipitation_probability"][index],
-                    section="hourly",
-                    field="precipitation_probability",
-                    index=index,
-                    temporal_value=local_time.isoformat(timespec="minutes"),
-                    minimum=0,
-                    maximum=100,
-                ),
-                precipitation_in=_number(
-                    hourly_arrays["precipitation"][index],
-                    section="hourly",
-                    field="precipitation",
-                    index=index,
-                    temporal_value=local_time.isoformat(timespec="minutes"),
-                    minimum=0,
-                ),
-                snowfall_in=_number(
-                    hourly_arrays["snowfall"][index],
-                    section="hourly",
-                    field="snowfall",
-                    index=index,
-                    temporal_value=local_time.isoformat(timespec="minutes"),
-                    minimum=0,
-                ),
-                wind_speed_mph=_number(
-                    hourly_arrays["wind_speed_10m"][index],
-                    section="hourly",
-                    field="wind_speed_10m",
-                    index=index,
-                    temporal_value=local_time.isoformat(timespec="minutes"),
-                    minimum=0,
-                ),
-                wind_direction_deg=_number(
-                    hourly_arrays["wind_direction_10m"][index],
-                    section="hourly",
-                    field="wind_direction_10m",
-                    index=index,
-                    temporal_value=local_time.isoformat(timespec="minutes"),
-                    minimum=0,
-                    maximum=360,
-                ),
-                wind_gust_mph=_optional_number(
-                    hourly_arrays["wind_gusts_10m"][index],
-                    section="hourly",
-                    field="wind_gusts_10m",
-                    index=index,
-                    temporal_value=local_time.isoformat(timespec="minutes"),
-                    minimum=0,
-                ),
-                is_day=_daylight_value(hourly_arrays["is_day"][index]),
             )
         )
 
     expected_dates = {value.isoformat() for value in parsed_dates}
-    if set(hourly_by_date) != expected_dates:
+    if {day for day, _ in hourly_records} != expected_dates:
         raise _invalid_response("hourly_date_coverage")
+    last_useful_index = next(
+        (
+            index
+            for index in range(len(hourly_records) - 1, -1, -1)
+            if _has_hourly_weather_values(hourly_records[index][1])
+        ),
+        None,
+    )
+    if last_useful_index is None:
+        raise OpenMeteoInvalidResponseError(
+            "empty_hourly_forecast",
+            diagnostic_context={
+                "section": "hourly",
+                "field": "record",
+                "index": 0,
+                "timestamp": hourly_records[0][1].timestamp_local,
+                "actual_type": "empty_hourly_record",
+                "actual_value": "no_weather_values",
+            },
+        )
+    for index, (_, hour) in enumerate(hourly_records[:last_useful_index]):
+        if not _has_hourly_weather_values(hour):
+            raise OpenMeteoInvalidResponseError(
+                "empty_hourly_record_interior",
+                diagnostic_context={
+                    "section": "hourly",
+                    "field": "record",
+                    "index": index,
+                    "timestamp": hour.timestamp_local,
+                    "actual_type": "empty_hourly_record",
+                    "actual_value": "no_weather_values",
+                },
+            )
+
+    hourly_by_date: dict[str, list[HourlyWeather]] = {}
+    for day_key, hour in hourly_records[:last_useful_index + 1]:
+        hourly_by_date.setdefault(day_key, []).append(hour)
     retained_dates = {day.date for day in daily}
     return NormalizedWeather(
         daily=tuple(daily),
@@ -648,10 +694,43 @@ def _normalize_payload(
     )
 
 
-def _daylight_value(value: object) -> bool:
+def _daylight_value(
+    value: object,
+    *,
+    index: int,
+    temporal_value: str,
+) -> bool | None:
+    if value is None:
+        return None
     if type(value) is not int or value not in (0, 1):
-        raise _invalid_response("is_day_value")
+        raise OpenMeteoInvalidResponseError(
+            "is_day_value",
+            diagnostic_context=_field_diagnostic_context(
+                value,
+                section="hourly",
+                field="is_day",
+                index=index,
+                temporal_value=temporal_value,
+            ),
+        )
     return value == 1
+
+
+def _has_hourly_weather_values(hour: HourlyWeather) -> bool:
+    return hour.condition != "unknown" or any(
+        value is not None
+        for value in (
+            hour.temperature_f,
+            hour.apparent_temperature_f,
+            hour.precipitation_probability_pct,
+            hour.precipitation_in,
+            hour.snowfall_in,
+            hour.wind_speed_mph,
+            hour.wind_direction_deg,
+            hour.wind_gust_mph,
+            hour.is_day,
+        )
+    )
 
 
 def fetch_forecast(

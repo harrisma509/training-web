@@ -55,15 +55,15 @@ class DailyWeather:
 class HourlyWeather:
     timestamp_local: str
     condition: WeatherCondition
-    temperature_f: float
-    apparent_temperature_f: float
-    precipitation_probability_pct: float
-    precipitation_in: float
-    snowfall_in: float
-    wind_speed_mph: float
-    wind_direction_deg: float
+    temperature_f: float | None
+    apparent_temperature_f: float | None
+    precipitation_probability_pct: float | None
+    precipitation_in: float | None
+    snowfall_in: float | None
+    wind_speed_mph: float | None
+    wind_direction_deg: float | None
     wind_gust_mph: float | None
-    is_day: bool
+    is_day: bool | None
 
     def to_dict(self) -> dict[str, str | float | bool | None]:
         return {

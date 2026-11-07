@@ -238,6 +238,73 @@ class TestWeatherRoutes:
         assert hourly_response.status_code == 200
         assert hourly_response.json()["hourly"][0]["wind_gust_mph"] is None
 
+    def test_partial_hourly_values_are_serialized_as_null_without_raw_fields(self):
+        base = sample_forecast()
+        partial_hour = replace(
+            base.hourly_by_date["2026-01-01"][0],
+            condition="unknown",
+            temperature_f=52.0,
+            apparent_temperature_f=None,
+            precipitation_probability_pct=None,
+            precipitation_in=None,
+            snowfall_in=None,
+            wind_speed_mph=None,
+            wind_direction_deg=None,
+            wind_gust_mph=None,
+            is_day=None,
+        )
+        forecast = replace(
+            base,
+            hourly_by_date={"2026-01-01": (partial_hour,)},
+        )
+        with patch(
+            "routes.weather.weather_service.get_hourly_forecast",
+            return_value=forecast,
+        ):
+            response = self.client.get(
+                "/api/weather/locations/7/hourly",
+                params={"date": "2026-01-01"},
+            )
+
+        assert response.status_code == 200
+        hour = response.json()["hourly"][0]
+        assert hour["condition"] == "unknown"
+        assert hour["temperature_f"] == 52.0
+        for field in (
+            "apparent_temperature_f",
+            "precipitation_probability_pct",
+            "precipitation_in",
+            "snowfall_in",
+            "wind_speed_mph",
+            "wind_direction_deg",
+            "wind_gust_mph",
+            "is_day",
+        ):
+            assert hour[field] is None
+        for forbidden in ("latitude", "longitude", "weather_code", "temperature_2m"):
+            assert forbidden not in response.text
+
+    def test_daily_route_survives_when_final_date_has_no_hourly_records(self):
+        forecast = sample_forecast_with_unknown_final_day()
+        final_date = forecast.available_end_date
+        forecast = replace(
+            forecast,
+            hourly_by_date={
+                day: hours
+                for day, hours in forecast.hourly_by_date.items()
+                if day != final_date
+            },
+        )
+        with patch(
+            "routes.weather.weather_service.get_forecast",
+            return_value=forecast,
+        ):
+            response = self.client.get("/api/weather/locations/9/forecast")
+
+        assert response.status_code == 200
+        assert response.json()["available_end_date"] == final_date
+        assert response.json()["daily"][-1]["date"] == final_date
+
     def test_stale_forecast_remains_http_success(self):
         with patch(
             "routes.weather.weather_service.get_forecast",

@@ -87,10 +87,19 @@ inside the retained range is an invalid provider response. Required hourly
 values remain strict.
 The hourly contract contains local timestamp and condition; temperature and
 apparent temperature in Fahrenheit; precipitation probability and amounts;
-snowfall; wind speed, direction, and gust; and a daylight flag. Daily high and
-low temperatures and other optional daily values may be null at the incomplete
-forecast horizon. Unsupported forecast dates are distinct from provider
-unavailability.
+snowfall; wind speed, direction, and gust; and a daylight flag. Provider-null
+hourly values are preserved as null, and a null weather code becomes
+`unknown`. Useful partial hourly records are retained; only a contiguous suffix
+of fully empty records is omitted. A fully empty record before a later useful
+record, or a forecast with no useful hourly records, is unavailable. Timestamp
+ordering, aligned arrays, date coverage, and non-null value validation remain
+strict. The daily range may include a final date with no retained hourly
+records; requesting that date follows the existing unsupported-hourly-date
+behavior.
+
+Daily high and low temperatures and other optional daily values may be null at
+the incomplete forecast horizon. Unsupported forecast dates are distinct from
+provider unavailability.
 
 ## 7. Cache architecture
 
@@ -142,9 +151,8 @@ unavailable. Provider failure does not extend the stale lifetime. Malformed
 provider responses fail safely.
 
 Weather unavailability does not block Plan, Locations, or training-data
-workflows. Missing optional daily values remain null, and missing daily
-conditions remain `unknown`; no weather value is fabricated. Required hourly
-values are not replaced with zero.
+workflows. Missing optional daily and hourly values remain null, and missing
+weather conditions remain `unknown`; no weather value is fabricated.
 
 ## 10. Privacy and security boundaries
 

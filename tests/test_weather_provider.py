@@ -115,7 +115,14 @@ def honolulu_daily_null_code_payload():
         for day in dates
         for hour in range(24)
     ]
-    payload["hourly"]["wind_gusts_10m"] = [3.0] * 384
+    payload["hourly"]["weather_code"][381] = None
+    payload["hourly"]["apparent_temperature"][381] = None
+    payload["hourly"]["precipitation_probability"][381] = None
+    payload["hourly"]["precipitation"][381] = None
+    payload["hourly"]["snowfall"][381] = None
+    payload["hourly"]["wind_direction_10m"][381] = None
+    payload["hourly"]["wind_gusts_10m"] = [3.0] * 378 + [None] * 6
+    payload["hourly"]["is_day"][381] = None
     return payload
 
 
@@ -134,6 +141,22 @@ def clear_daily_row(payload, index):
         "sunset",
     ):
         payload["daily"][field][index] = None
+
+
+def clear_hourly_row(payload, index):
+    for field in (
+        "weather_code",
+        "temperature_2m",
+        "apparent_temperature",
+        "precipitation_probability",
+        "precipitation",
+        "snowfall",
+        "wind_speed_10m",
+        "wind_direction_10m",
+        "wind_gusts_10m",
+        "is_day",
+    ):
+        payload["hourly"][field][index] = None
 
 
 class FakeResponse:
@@ -293,6 +316,122 @@ def test_honolulu_null_daily_weather_code_and_precipitation_preserve_full_foreca
     assert final_day.sunset_local == "2026-11-22T17:45"
     assert len(forecast.hourly_by_date["2026-11-22"]) == 24
     assert forecast.hourly_by_date["2026-11-22"][0].condition == "clear"
+    partial_hour = forecast.hourly_by_date["2026-11-22"][21]
+    assert partial_hour.timestamp_local == "2026-11-22T21:00"
+    assert partial_hour.condition == "unknown"
+    assert partial_hour.temperature_f == 10.0
+    assert partial_hour.apparent_temperature_f is None
+    assert partial_hour.precipitation_probability_pct is None
+    assert partial_hour.precipitation_in is None
+    assert partial_hour.snowfall_in is None
+    assert partial_hour.wind_speed_mph == 2.0
+    assert partial_hour.wind_direction_deg is None
+    assert partial_hour.wind_gust_mph is None
+    assert partial_hour.is_day is None
+    assert partial_hour.to_dict()["temperature_f"] == 10.0
+    assert partial_hour.to_dict()["precipitation_in"] is None
+
+
+@pytest.mark.parametrize(
+    ("provider_field", "model_field", "expected_value"),
+    [
+        ("weather_code", "condition", "unknown"),
+        ("temperature_2m", "temperature_f", None),
+        ("apparent_temperature", "apparent_temperature_f", None),
+        ("precipitation_probability", "precipitation_probability_pct", None),
+        ("precipitation", "precipitation_in", None),
+        ("snowfall", "snowfall_in", None),
+        ("wind_speed_10m", "wind_speed_mph", None),
+        ("wind_direction_10m", "wind_direction_deg", None),
+        ("wind_gusts_10m", "wind_gust_mph", None),
+        ("is_day", "is_day", None),
+    ],
+)
+def test_hourly_optional_values_are_preserved_without_fabrication(
+    provider_field,
+    model_field,
+    expected_value,
+):
+    payload = provider_payload()
+    payload["hourly"][provider_field][2] = None
+    forecast, _ = call_with_payload(payload)
+
+    hour = forecast.hourly_by_date["2026-01-02"][0]
+    assert getattr(hour, model_field) == expected_value
+    assert hour.to_dict()[model_field] == expected_value
+    assert forecast.available_end_date == "2026-01-02"
+
+
+def test_zero_hourly_values_remain_valid_numeric_values():
+    forecast, _ = call_with_payload(provider_payload())
+    hour = forecast.hourly_by_date["2026-01-01"][0]
+
+    assert hour.precipitation_probability_pct == 0.0
+    assert hour.precipitation_in == 0.0
+    assert hour.snowfall_in == 0.0
+    assert hour.is_day is False
+
+
+def test_fully_empty_trailing_hour_is_omitted_without_shortening_daily_range():
+    payload = provider_payload()
+    clear_hourly_row(payload, 3)
+    forecast, _ = call_with_payload(payload)
+
+    assert forecast.available_end_date == "2026-01-02"
+    assert [hour.timestamp_local for hour in forecast.hourly_by_date["2026-01-02"]] == [
+        "2026-01-02T00:00"
+    ]
+
+
+def test_fully_empty_final_day_hourly_suffix_keeps_daily_forecast_available():
+    payload = honolulu_daily_null_code_payload()
+    for index in range(360, 384):
+        clear_hourly_row(payload, index)
+    forecast, _ = call_with_payload(payload)
+
+    assert forecast.available_end_date == "2026-11-22"
+    assert forecast.daily[-1].date == "2026-11-22"
+    assert "2026-11-22" not in forecast.hourly_by_date
+    assert max(forecast.hourly_by_date) == "2026-11-21"
+
+
+def test_empty_hourly_record_inside_final_date_fails_with_timestamp_and_index():
+    payload = honolulu_daily_null_code_payload()
+    clear_hourly_row(payload, 382)
+    response = FakeResponse(json.dumps(payload).encode("utf-8"))
+    with patch("services.open_meteo_provider.urlopen", return_value=response):
+        with pytest.raises(OpenMeteoInvalidResponseError) as error:
+            fetch_forecast(39.7392, -104.9903, "America/Denver")
+
+    assert error.value.category == "empty_hourly_record_interior"
+    assert error.value.diagnostic_context == {
+        "section": "hourly",
+        "field": "record",
+        "index": 382,
+        "timestamp": "2026-11-22T22:00",
+        "actual_type": "empty_hourly_record",
+        "actual_value": "no_weather_values",
+    }
+
+
+def test_hourly_forecast_with_no_useful_records_is_rejected():
+    payload = provider_payload()
+    for index in range(len(payload["hourly"]["time"])):
+        clear_hourly_row(payload, index)
+    response = FakeResponse(json.dumps(payload).encode("utf-8"))
+    with patch("services.open_meteo_provider.urlopen", return_value=response):
+        with pytest.raises(OpenMeteoInvalidResponseError) as error:
+            fetch_forecast(39.7392, -104.9903, "America/Denver")
+
+    assert error.value.category == "empty_hourly_forecast"
+    assert error.value.diagnostic_context == {
+        "section": "hourly",
+        "field": "record",
+        "index": 0,
+        "timestamp": "2026-01-01T00:00",
+        "actual_type": "empty_hourly_record",
+        "actual_value": "no_weather_values",
+    }
 
 
 @pytest.mark.parametrize(
@@ -487,19 +626,6 @@ def test_forecast_with_no_useful_daily_records_fails_precisely():
         ),
         (
             "hourly",
-            2,
-            None,
-            {
-                "section": "hourly",
-                "field": "weather_code",
-                "index": 2,
-                "timestamp": "2026-01-02T00:00",
-                "actual_type": "NoneType",
-                "actual_value": "null",
-            },
-        ),
-        (
-            "hourly",
             3,
             "3",
             {
@@ -607,14 +733,56 @@ def test_weather_code_string_diagnostic_value_is_truncated():
             "hourly",
             "precipitation",
             2,
-            None,
+            "0.2",
             {
                 "section": "hourly",
                 "field": "precipitation",
                 "index": 2,
                 "timestamp": "2026-01-02T00:00",
-                "actual_type": "NoneType",
-                "actual_value": "null",
+                "actual_type": "str",
+                "actual_value": '"0.2"',
+            },
+        ),
+        (
+            "hourly",
+            "wind_speed_10m",
+            2,
+            True,
+            {
+                "section": "hourly",
+                "field": "wind_speed_10m",
+                "index": 2,
+                "timestamp": "2026-01-02T00:00",
+                "actual_type": "bool",
+                "actual_value": "true",
+            },
+        ),
+        (
+            "hourly",
+            "temperature_2m",
+            2,
+            [],
+            {
+                "section": "hourly",
+                "field": "temperature_2m",
+                "index": 2,
+                "timestamp": "2026-01-02T00:00",
+                "actual_type": "list",
+                "actual_value": "<list>",
+            },
+        ),
+        (
+            "hourly",
+            "apparent_temperature",
+            2,
+            {},
+            {
+                "section": "hourly",
+                "field": "apparent_temperature",
+                "index": 2,
+                "timestamp": "2026-01-02T00:00",
+                "actual_type": "dict",
+                "actual_value": "<dict>",
             },
         ),
     ],
@@ -704,6 +872,56 @@ def test_invalid_numeric_values_include_bounded_field_context(
 
     assert error.value.category == category
     assert error.value.diagnostic_context == expected_context
+
+
+@pytest.mark.parametrize(
+    ("value", "actual_type", "actual_value"),
+    [
+        (True, "bool", "true"),
+        ("1", "str", '"1"'),
+        (2, "int", "2"),
+        ([], "list", "<list>"),
+    ],
+)
+def test_invalid_non_null_daylight_values_include_field_context(
+    value,
+    actual_type,
+    actual_value,
+):
+    payload = provider_payload()
+    payload["hourly"]["is_day"][2] = value
+    response = FakeResponse(json.dumps(payload).encode("utf-8"))
+    with patch("services.open_meteo_provider.urlopen", return_value=response):
+        with pytest.raises(OpenMeteoInvalidResponseError) as error:
+            fetch_forecast(39.7392, -104.9903, "America/Denver")
+
+    assert error.value.category == "is_day_value"
+    assert error.value.diagnostic_context == {
+        "section": "hourly",
+        "field": "is_day",
+        "index": 2,
+        "timestamp": "2026-01-02T00:00",
+        "actual_type": actual_type,
+        "actual_value": actual_value,
+    }
+
+
+def test_hourly_timestamp_order_and_daily_date_coverage_remain_strict():
+    payload = provider_payload()
+    payload["hourly"]["time"][1] = payload["hourly"]["time"][0]
+    response = FakeResponse(json.dumps(payload).encode("utf-8"))
+    with patch("services.open_meteo_provider.urlopen", return_value=response):
+        with pytest.raises(OpenMeteoInvalidResponseError) as error:
+            fetch_forecast(39.7392, -104.9903, "America/Denver")
+    assert error.value.category == "timestamp_order"
+
+    payload = provider_payload()
+    payload["hourly"]["time"][3] = "2026-01-03T00:00"
+    response = FakeResponse(json.dumps(payload).encode("utf-8"))
+    with patch("services.open_meteo_provider.urlopen", return_value=response):
+        with pytest.raises(OpenMeteoInvalidResponseError) as error:
+            fetch_forecast(39.7392, -104.9903, "America/Denver")
+    assert error.value.category == "hourly_date_coverage"
 
 
 def test_weather_code_families_map_to_ti_conditions_only():

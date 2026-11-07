@@ -688,6 +688,18 @@ async function testUnavailableAndStaleLocationsRemainIndependentInDetails() {
           precipitation_probability_pct: 0,
           precipitation_in: 0,
           snowfall_in: 0,
+        }, {
+          timestamp_local: "2026-10-20T11:00",
+          condition: "unknown",
+          temperature_f: 52,
+          apparent_temperature_f: null,
+          wind_direction_deg: null,
+          wind_speed_mph: null,
+          wind_gust_mph: null,
+          precipitation_probability_pct: null,
+          precipitation_in: null,
+          snowfall_in: null,
+          is_day: null,
         }],
       };
     },
@@ -731,8 +743,11 @@ async function testUnavailableAndStaleLocationsRemainIndependentInDetails() {
   assert.match(detail, /SW 8 mph · gust 14 mph/);
   assert.match(detail, /10:00 AM/);
   assert.match(detail, /W 6 mph/);
+  assert.match(detail, /11:00 AM/);
+  assert.match(detail, /Conditions unknown/);
+  assert.match(detail, /52°/);
   assert.doesNotMatch(detail, /gust 6 mph/);
-  assert.doesNotMatch(detail, /latitude|longitude|weather_code|Open-Meteo|Geoapify|NaN|undefined/);
+  assert.doesNotMatch(detail, /latitude|longitude|weather_code|Open-Meteo|Geoapify|NaN|undefined|null/);
   assert.equal(mutationCalls, 0);
 
   const keydown = document.listeners.get("keydown")[0];

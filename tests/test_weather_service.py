@@ -19,6 +19,7 @@ from services.weather_service import (
     FRESH_TTL_SECONDS,
     MAX_CACHE_ENTRIES,
     STALE_TTL_SECONDS,
+    WeatherDateError,
     WeatherLocationNotFoundError,
     WeatherService,
     WeatherUnavailableError,
@@ -308,6 +309,70 @@ def test_unknown_daily_condition_forecast_is_cached_without_provider_failure(cap
     assert not any("Weather normalization failed" in record.message for record in caplog.records)
 
 
+def test_partial_hourly_forecast_is_cached_and_serialized_without_fabrication():
+    forecast = normalized_weather_horizon_with_unknown_final_day()
+    final_date = forecast.available_end_date
+    final_hours = forecast.hourly_by_date[final_date]
+    partial_hour = replace(
+        final_hours[-1],
+        condition="unknown",
+        temperature_f=52.0,
+        apparent_temperature_f=None,
+        precipitation_probability_pct=None,
+        precipitation_in=None,
+        snowfall_in=None,
+        wind_speed_mph=None,
+        wind_direction_deg=None,
+        wind_gust_mph=None,
+        is_day=None,
+    )
+    forecast = replace(
+        forecast,
+        hourly_by_date={
+            **forecast.hourly_by_date,
+            final_date: (*final_hours[:-1], partial_hour),
+        },
+    )
+    clock = FakeClock()
+    provider = FakeProvider(forecast)
+    service = make_service(provider, clock)
+
+    first = service.get_forecast(9)
+    second = service.get_forecast(9)
+    hour = service.get_hourly_forecast(9, final_date).hourly_by_date[final_date][-1]
+
+    assert first.freshness == second.freshness == "fresh"
+    assert hour.condition == "unknown"
+    assert hour.temperature_f == 52.0
+    assert hour.apparent_temperature_f is None
+    assert hour.precipitation_in is None
+    assert hour.wind_speed_mph is None
+    assert hour.is_day is None
+    assert hour.to_dict()["temperature_f"] == 52.0
+    assert hour.to_dict()["precipitation_in"] is None
+    assert len(provider.calls) == 1
+
+
+def test_daily_forecast_remains_available_when_final_date_has_no_hourly_records():
+    forecast = normalized_weather_horizon_with_unknown_final_day()
+    final_date = forecast.available_end_date
+    forecast = replace(
+        forecast,
+        hourly_by_date={
+            day: hours
+            for day, hours in forecast.hourly_by_date.items()
+            if day != final_date
+        },
+    )
+    service = make_service(FakeProvider(forecast), FakeClock())
+
+    daily = service.get_forecast(9)
+    assert daily.available_end_date == final_date
+    assert daily.daily[-1].date == final_date
+    with pytest.raises(WeatherDateError):
+        service.get_hourly_forecast(9, final_date)
+
+
 def test_shortened_partial_forecast_is_cached_successfully():
     clock = FakeClock()
     provider = FakeProvider(normalized_weather_with_shortened_horizon())
@@ -383,9 +448,14 @@ def test_provider_failure_without_usable_cache_is_unavailable():
 
 @pytest.mark.parametrize(
     "category",
-    ["empty_daily_record_interior", "empty_daily_forecast"],
+    [
+        "empty_daily_record_interior",
+        "empty_daily_forecast",
+        "empty_hourly_record_interior",
+        "empty_hourly_forecast",
+    ],
 )
-def test_unusable_daily_forecast_categories_remain_unavailable(category):
+def test_unusable_forecast_categories_remain_unavailable(category):
     clock = FakeClock()
     provider = FakeProvider(OpenMeteoInvalidResponseError(category))
     service = make_service(provider, clock)
