@@ -65,6 +65,45 @@ def _coordinate(value: object, minimum: Decimal, maximum: Decimal) -> Decimal:
     return number
 
 
+def _safe_log_text(value: str, *, limit: int = 80) -> str:
+    rendered = "".join(
+        character if character.isprintable() else f"\\u{ord(character):04x}"
+        for character in value
+    )
+    return rendered[:limit]
+
+
+def _log_normalization_failure(
+    location_id: int,
+    location: dict[str, object],
+    error: OpenMeteoError,
+) -> bool:
+    context = getattr(error, "diagnostic_context", None)
+    if not context:
+        return False
+
+    temporal_field = "date" if context["section"] == "daily" else "timestamp"
+    logger.warning(
+        "Weather normalization failed; saved_location_id=%s display_name=%s "
+        "timezone_name=%s latitude=%s longitude=%s section=%s field=%s "
+        "index=%s %s=%s actual_type=%s actual_value=%s category=%s",
+        location_id,
+        _safe_log_text(str(location["display_name"])),
+        _safe_log_text(str(location["timezone_name"])),
+        location["latitude"],
+        location["longitude"],
+        context["section"],
+        context["field"],
+        context["index"],
+        temporal_field,
+        context[temporal_field],
+        context["actual_type"],
+        context["actual_value"],
+        error.category,
+    )
+    return True
+
+
 class WeatherService:
     def __init__(
         self,
@@ -189,21 +228,24 @@ class WeatherService:
                 location["timezone_name"],
             )
         except OpenMeteoError as error:
+            diagnostic_logged = _log_normalization_failure(location_id, location, error)
             if entry is not None:
                 stale_age = max(0.0, self._monotonic() - entry.fetched_at)
                 if stale_age < STALE_TTL_SECONDS:
-                    logger.warning(
-                        "Weather stale fallback; saved_location_id=%s category=%s",
-                        location_id,
-                        error.category,
-                    )
+                    if not diagnostic_logged:
+                        logger.warning(
+                            "Weather stale fallback; saved_location_id=%s category=%s",
+                            location_id,
+                            error.category,
+                        )
                     stale = self._with_location(entry.forecast, location)
                     return stale.with_freshness("stale", int(stale_age // 60))
-            logger.warning(
-                "Weather unavailable; saved_location_id=%s category=%s",
-                location_id,
-                error.category,
-            )
+            if not diagnostic_logged:
+                logger.warning(
+                    "Weather unavailable; saved_location_id=%s category=%s",
+                    location_id,
+                    error.category,
+                )
             raise WeatherUnavailableError(error.category) from None
 
         if not isinstance(normalized, NormalizedWeather):

@@ -227,6 +227,81 @@ def test_november_horizon_preserves_unavailable_gusts_as_null():
     assert type(final_day_hours[0].precipitation_probability_pct) is float
 
 
+@pytest.mark.parametrize(
+    ("section", "index", "value", "expected_context"),
+    [
+        (
+            "daily",
+            1,
+            3.0,
+            {
+                "section": "daily",
+                "field": "weather_code",
+                "index": 1,
+                "date": "2026-01-02",
+                "actual_type": "float",
+                "actual_value": "3.0",
+            },
+        ),
+        (
+            "hourly",
+            2,
+            None,
+            {
+                "section": "hourly",
+                "field": "weather_code",
+                "index": 2,
+                "timestamp": "2026-01-02T00:00",
+                "actual_type": "NoneType",
+                "actual_value": "null",
+            },
+        ),
+        (
+            "hourly",
+            3,
+            "3",
+            {
+                "section": "hourly",
+                "field": "weather_code",
+                "index": 3,
+                "timestamp": "2026-01-02T01:00",
+                "actual_type": "str",
+                "actual_value": '"3"',
+            },
+        ),
+    ],
+)
+def test_weather_code_type_errors_include_bounded_temporal_context(
+    section,
+    index,
+    value,
+    expected_context,
+):
+    payload = provider_payload()
+    payload[section]["weather_code"][index] = value
+    response = FakeResponse(json.dumps(payload).encode("utf-8"))
+    with patch("services.open_meteo_provider.urlopen", return_value=response):
+        with pytest.raises(OpenMeteoInvalidResponseError) as error:
+            fetch_forecast(39.7392, -104.9903, "America/Denver")
+
+    assert error.value.category == "weather_code_type"
+    assert error.value.diagnostic_context == expected_context
+
+
+def test_weather_code_string_diagnostic_value_is_truncated():
+    payload = provider_payload()
+    payload["daily"]["weather_code"][0] = "x" * 200
+    response = FakeResponse(json.dumps(payload).encode("utf-8"))
+    with patch("services.open_meteo_provider.urlopen", return_value=response):
+        with pytest.raises(OpenMeteoInvalidResponseError) as error:
+            fetch_forecast(39.7392, -104.9903, "America/Denver")
+
+    actual_value = error.value.diagnostic_context["actual_value"]
+    assert len(actual_value) <= 80
+    assert actual_value.endswith('..."')
+    assert error.value.diagnostic_context["actual_type"] == "str"
+
+
 def test_weather_code_families_map_to_ti_conditions_only():
     representatives = {
         0: "clear",

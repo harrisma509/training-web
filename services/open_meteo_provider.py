@@ -89,12 +89,20 @@ class OpenMeteoUnavailableError(OpenMeteoError):
 class OpenMeteoInvalidResponseError(OpenMeteoError):
     category = "invalid_provider_response"
 
-    def __init__(self, category: str = "invalid_provider_response"):
+    def __init__(
+        self,
+        category: str = "invalid_provider_response",
+        *,
+        diagnostic_context: dict[str, str | int] | None = None,
+    ):
         super().__init__(category)
         self.category = category
+        self.diagnostic_context = diagnostic_context
 
 
-def _invalid_response(category: str = "invalid_provider_response") -> OpenMeteoInvalidResponseError:
+def _invalid_response(
+    category: str = "invalid_provider_response",
+) -> OpenMeteoInvalidResponseError:
     return OpenMeteoInvalidResponseError(category)
 
 
@@ -200,9 +208,56 @@ def _optional_number(
     return _number(value, minimum=minimum, maximum=maximum)
 
 
-def _condition(value: object) -> WeatherCondition:
+def _safe_diagnostic_value(value: object) -> str:
+    if value is None:
+        return "null"
+    if type(value) is bool:
+        return "true" if value else "false"
+    if type(value) is int:
+        rendered = str(value)
+        return rendered if len(rendered) <= 80 else f"{rendered[:77]}..."
+    if type(value) is float:
+        if math.isnan(value):
+            return "NaN"
+        if math.isinf(value):
+            return "Infinity" if value > 0 else "-Infinity"
+        return repr(value)
+    if isinstance(value, str):
+        escaped = []
+        length = 2
+        truncated = False
+        for character in value:
+            encoded = json.dumps(character, ensure_ascii=True)[1:-1]
+            if length + len(encoded) + (3 if len(escaped) < len(value) - 1 else 0) > 80:
+                truncated = True
+                break
+            escaped.append(encoded)
+            length += len(encoded)
+        suffix = "..." if truncated else ""
+        return f"\"{''.join(escaped)}{suffix}\""
+    return f"<{type(value).__name__}>"
+
+
+def _condition(
+    value: object,
+    *,
+    section: str,
+    index: int,
+    temporal_value: str,
+) -> WeatherCondition:
     if type(value) is not int:
-        raise _invalid_response("weather_code_type")
+        temporal_field = "date" if section == "daily" else "timestamp"
+        raise OpenMeteoInvalidResponseError(
+            "weather_code_type",
+            diagnostic_context={
+                "section": section,
+                "field": "weather_code",
+                "index": index,
+                temporal_field: temporal_value,
+                "actual_type": type(value).__name__,
+                "actual_value": _safe_diagnostic_value(value),
+            },
+        )
     return CONDITION_BY_CODE.get(value, "unknown")
 
 
@@ -267,7 +322,12 @@ def _normalize_payload(
         daily.append(
             DailyWeather(
                 date=local_day.isoformat(),
-                condition=_condition(daily_arrays["weather_code"][index]),
+                condition=_condition(
+                    daily_arrays["weather_code"][index],
+                    section="daily",
+                    index=index,
+                    temporal_value=local_day.isoformat(),
+                ),
                 temperature_high_f=_optional_number(
                     daily_arrays["temperature_2m_max"][index]
                 ),
@@ -313,7 +373,12 @@ def _normalize_payload(
         hourly_by_date.setdefault(day_key, []).append(
             HourlyWeather(
                 timestamp_local=str(raw_hourly_times[index]),
-                condition=_condition(hourly_arrays["weather_code"][index]),
+                condition=_condition(
+                    hourly_arrays["weather_code"][index],
+                    section="hourly",
+                    index=index,
+                    temporal_value=local_time.isoformat(timespec="minutes"),
+                ),
                 temperature_f=_number(hourly_arrays["temperature_2m"][index]),
                 apparent_temperature_f=_number(hourly_arrays["apparent_temperature"][index]),
                 precipitation_probability_pct=_number(

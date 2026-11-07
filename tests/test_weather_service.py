@@ -1,10 +1,14 @@
 from datetime import datetime, timezone
 from decimal import Decimal
+import logging
 from unittest.mock import patch
 
 import pytest
 
-from services.open_meteo_provider import OpenMeteoUnavailableError
+from services.open_meteo_provider import (
+    OpenMeteoInvalidResponseError,
+    OpenMeteoUnavailableError,
+)
 from services.weather_models import (
     DailyWeather,
     HourlyWeather,
@@ -267,6 +271,52 @@ def test_provider_failure_without_usable_cache_is_unavailable():
     with pytest.raises(WeatherUnavailableError):
         service.get_forecast(1)
     assert len(provider.calls) == 1
+
+
+def test_weather_code_failure_log_includes_saved_location_and_field_context(caplog):
+    diagnostic = {
+        "section": "hourly",
+        "field": "weather_code",
+        "index": 284,
+        "timestamp": "2026-11-17T03:00",
+        "actual_type": "NoneType",
+        "actual_value": "null",
+    }
+    service = make_service(
+        FakeProvider(
+            OpenMeteoInvalidResponseError(
+                "weather_code_type",
+                diagnostic_context=diagnostic,
+            )
+        ),
+        FakeClock(),
+    )
+
+    with caplog.at_level(logging.WARNING, logger="services.weather_service"):
+        with pytest.raises(WeatherUnavailableError) as error:
+            service.get_forecast(9)
+
+    assert error.value.category == "weather_code_type"
+    assert len(caplog.records) == 1
+    message = caplog.records[0].getMessage()
+    for expected in (
+        "saved_location_id=9",
+        "display_name=Synthetic location 9",
+        "timezone_name=America/Denver",
+        "latitude=39.7392",
+        "longitude=-104.9903",
+        "section=hourly",
+        "field=weather_code",
+        "index=284",
+        "timestamp=2026-11-17T03:00",
+        "actual_type=NoneType",
+        "actual_value=null",
+        "category=weather_code_type",
+    ):
+        assert expected in message
+    assert "api.open-meteo.com" not in message
+    assert "latitude=" in message
+    assert "{" not in message
 
 
 def test_cache_evicts_least_recently_used_entry_at_entry_thirty_three():
