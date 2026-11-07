@@ -186,9 +186,9 @@ def _number(
     minimum: float | None = None,
     maximum: float | None = None,
 ) -> float:
-    if type(value) not in (int, float):
-        raise OpenMeteoInvalidResponseError(
-            "numeric_type",
+    def numeric_error(category: str) -> OpenMeteoInvalidResponseError:
+        return OpenMeteoInvalidResponseError(
+            category,
             diagnostic_context=_field_diagnostic_context(
                 value,
                 section=section,
@@ -197,16 +197,19 @@ def _number(
                 temporal_value=temporal_value,
             ),
         )
+
+    if type(value) not in (int, float):
+        raise numeric_error("numeric_type")
     try:
         number = float(value)
     except (OverflowError, ValueError):
-        raise _invalid_response("numeric_conversion") from None
+        raise numeric_error("numeric_conversion") from None
     if not math.isfinite(number):
-        raise _invalid_response("numeric_non_finite")
+        raise numeric_error("numeric_non_finite")
     if minimum is not None and number < minimum:
-        raise _invalid_response("numeric_below_range")
+        raise numeric_error("numeric_below_range")
     if maximum is not None and number > maximum:
-        raise _invalid_response("numeric_above_range")
+        raise numeric_error("numeric_above_range")
     return number
 
 
@@ -327,6 +330,42 @@ def _local_datetime(value: object) -> datetime:
         raise _invalid_response("timestamp_format") from None
 
 
+def _optional_daily_datetime(
+    value: object,
+    *,
+    field: str,
+    index: int,
+    local_day: date,
+) -> datetime | None:
+    if value is None:
+        return None
+    try:
+        parsed = _local_datetime(value)
+    except OpenMeteoInvalidResponseError as error:
+        raise OpenMeteoInvalidResponseError(
+            error.category,
+            diagnostic_context=_field_diagnostic_context(
+                value,
+                section="daily",
+                field=field,
+                index=index,
+                temporal_value=local_day.isoformat(),
+            ),
+        ) from None
+    if parsed.date() != local_day:
+        raise OpenMeteoInvalidResponseError(
+            "daily_sunrise_sunset_date_mismatch",
+            diagnostic_context=_field_diagnostic_context(
+                value,
+                section="daily",
+                field=field,
+                index=index,
+                temporal_value=local_day.isoformat(),
+            ),
+        )
+    return parsed
+
+
 def _validate_time_order(times: list[datetime]) -> None:
     if not times:
         raise _invalid_response("timestamp_array_empty")
@@ -360,10 +399,20 @@ def _normalize_payload(
 
     daily: list[DailyWeather] = []
     for index, local_day in enumerate(parsed_dates):
-        sunrise = _local_datetime(daily_arrays["sunrise"][index])
-        sunset = _local_datetime(daily_arrays["sunset"][index])
-        if sunrise.date() != local_day or sunset.date() != local_day:
-            raise _invalid_response("daily_sunrise_sunset_date_mismatch")
+        sunrise_value = daily_arrays["sunrise"][index]
+        sunset_value = daily_arrays["sunset"][index]
+        sunrise = _optional_daily_datetime(
+            sunrise_value,
+            field="sunrise",
+            index=index,
+            local_day=local_day,
+        )
+        sunset = _optional_daily_datetime(
+            sunset_value,
+            field="sunset",
+            index=index,
+            local_day=local_day,
+        )
         daily.append(
             DailyWeather(
                 date=local_day.isoformat(),
@@ -388,7 +437,7 @@ def _normalize_payload(
                     index=index,
                     temporal_value=local_day.isoformat(),
                 ),
-                precipitation_probability_max_pct=_number(
+                precipitation_probability_max_pct=_optional_number(
                     daily_arrays["precipitation_probability_max"][index],
                     section="daily",
                     field="precipitation_probability_max",
@@ -405,7 +454,7 @@ def _normalize_payload(
                     temporal_value=local_day.isoformat(),
                     minimum=0,
                 ),
-                snowfall_in=_number(
+                snowfall_in=_optional_number(
                     daily_arrays["snowfall_sum"][index],
                     section="daily",
                     field="snowfall_sum",
@@ -413,7 +462,7 @@ def _normalize_payload(
                     temporal_value=local_day.isoformat(),
                     minimum=0,
                 ),
-                wind_speed_max_mph=_number(
+                wind_speed_max_mph=_optional_number(
                     daily_arrays["wind_speed_10m_max"][index],
                     section="daily",
                     field="wind_speed_10m_max",
@@ -421,7 +470,7 @@ def _normalize_payload(
                     temporal_value=local_day.isoformat(),
                     minimum=0,
                 ),
-                wind_direction_dominant_deg=_number(
+                wind_direction_dominant_deg=_optional_number(
                     daily_arrays["wind_direction_10m_dominant"][index],
                     section="daily",
                     field="wind_direction_10m_dominant",
@@ -438,10 +487,59 @@ def _normalize_payload(
                     temporal_value=local_day.isoformat(),
                     minimum=0,
                 ),
-                sunrise_local=str(daily_arrays["sunrise"][index]),
-                sunset_local=str(daily_arrays["sunset"][index]),
+                sunrise_local=None if sunrise is None else str(sunrise_value),
+                sunset_local=None if sunset is None else str(sunset_value),
             )
         )
+
+    def has_weather_values(day: DailyWeather) -> bool:
+        return day.condition != "unknown" or any(
+            value is not None
+            for value in (
+                day.temperature_high_f,
+                day.temperature_low_f,
+                day.precipitation_probability_max_pct,
+                day.precipitation_in,
+                day.snowfall_in,
+                day.wind_speed_max_mph,
+                day.wind_direction_dominant_deg,
+                day.wind_gust_max_mph,
+                day.sunrise_local,
+                day.sunset_local,
+            )
+        )
+
+    last_useful_index = next(
+        (index for index in range(len(daily) - 1, -1, -1) if has_weather_values(daily[index])),
+        None,
+    )
+    if last_useful_index is None:
+        day = daily[0]
+        raise OpenMeteoInvalidResponseError(
+            "empty_daily_forecast",
+            diagnostic_context={
+                "section": "daily",
+                "field": "record",
+                "index": 0,
+                "date": day.date,
+                "actual_type": "empty_daily_record",
+                "actual_value": "no_weather_values",
+            },
+        )
+    for index, day in enumerate(daily[:last_useful_index]):
+        if not has_weather_values(day):
+            raise OpenMeteoInvalidResponseError(
+                "empty_daily_record_interior",
+                diagnostic_context={
+                    "section": "daily",
+                    "field": "record",
+                    "index": index,
+                    "date": day.date,
+                    "actual_type": "empty_daily_record",
+                    "actual_value": "no_weather_values",
+                },
+            )
+    daily = daily[:last_useful_index + 1]
 
     hourly_raw = payload.get("hourly")
     raw_hourly_times = hourly_raw.get("time") if isinstance(hourly_raw, dict) else None
@@ -537,14 +635,16 @@ def _normalize_payload(
     expected_dates = {value.isoformat() for value in parsed_dates}
     if set(hourly_by_date) != expected_dates:
         raise _invalid_response("hourly_date_coverage")
+    retained_dates = {day.date for day in daily}
     return NormalizedWeather(
         daily=tuple(daily),
         hourly_by_date={
             day: tuple(items)
             for day, items in hourly_by_date.items()
+            if day in retained_dates
         },
-        available_start_date=parsed_dates[0].isoformat(),
-        available_end_date=parsed_dates[-1].isoformat(),
+        available_start_date=daily[0].date,
+        available_end_date=daily[-1].date,
     )
 
 

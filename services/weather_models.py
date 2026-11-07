@@ -25,14 +25,14 @@ class DailyWeather:
     condition: WeatherCondition
     temperature_high_f: float | None
     temperature_low_f: float | None
-    precipitation_probability_max_pct: float
+    precipitation_probability_max_pct: float | None
     precipitation_in: float | None
-    snowfall_in: float
-    wind_speed_max_mph: float
-    wind_direction_dominant_deg: float
+    snowfall_in: float | None
+    wind_speed_max_mph: float | None
+    wind_direction_dominant_deg: float | None
     wind_gust_max_mph: float | None
-    sunrise_local: str
-    sunset_local: str
+    sunrise_local: str | None
+    sunset_local: str | None
 
     def to_dict(self) -> dict[str, str | float | None]:
         return {

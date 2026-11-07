@@ -68,9 +68,22 @@ def sample_forecast_with_unknown_final_day():
             base.daily[0],
             date=day.isoformat(),
             condition="unknown" if index == 15 else "clear",
+            precipitation_probability_max_pct=(
+                None
+                if index == 15
+                else base.daily[0].precipitation_probability_max_pct
+            ),
             precipitation_in=None if index == 15 else base.daily[0].precipitation_in,
-            sunrise_local=f"{day.isoformat()}T06:30",
-            sunset_local=f"{day.isoformat()}T17:45",
+            snowfall_in=None if index == 15 else base.daily[0].snowfall_in,
+            wind_speed_max_mph=None if index == 15 else base.daily[0].wind_speed_max_mph,
+            wind_direction_dominant_deg=(
+                None
+                if index == 15
+                else base.daily[0].wind_direction_dominant_deg
+            ),
+            wind_gust_max_mph=None if index == 15 else base.daily[0].wind_gust_max_mph,
+            sunrise_local=None if index == 15 else f"{day.isoformat()}T06:30",
+            sunset_local=None if index == 15 else f"{day.isoformat()}T17:45",
         )
         for index, day in enumerate(dates)
     )
@@ -156,7 +169,15 @@ class TestWeatherRoutes:
         assert daily_payload["daily"][-1]["condition"] == "unknown"
         assert daily_payload["daily"][-1]["temperature_high_f"] == 30.0
         assert daily_payload["daily"][-1]["temperature_low_f"] == 10.0
+        assert daily_payload["daily"][-1]["precipitation_probability_max_pct"] is None
         assert daily_payload["daily"][-1]["precipitation_in"] is None
+        assert daily_payload["daily"][-1]["snowfall_in"] is None
+        assert daily_payload["daily"][-1]["wind_speed_max_mph"] is None
+        assert daily_payload["daily"][-1]["wind_direction_dominant_deg"] is None
+        assert daily_payload["daily"][-1]["wind_gust_max_mph"] is None
+        assert daily_payload["daily"][-1]["sunrise_local"] is None
+        assert daily_payload["daily"][-1]["sunset_local"] is None
+        assert "precipitation_sum" not in json.dumps(daily_payload)
 
         with patch(
             "routes.weather.weather_service.get_hourly_forecast",
@@ -170,6 +191,31 @@ class TestWeatherRoutes:
         assert hourly_response.status_code == 200
         assert hourly_response.json()["date"] == "2026-11-22"
         assert len(hourly_response.json()["hourly"]) == 24
+
+    def test_shortened_available_range_is_returned_as_success(self):
+        forecast = sample_forecast_with_unknown_final_day()
+        retained_daily = forecast.daily[:-1]
+        forecast = replace(
+            forecast,
+            daily=retained_daily,
+            hourly_by_date={
+                day: hours
+                for day, hours in forecast.hourly_by_date.items()
+                if day <= retained_daily[-1].date
+            },
+            available_end_date=retained_daily[-1].date,
+        )
+        with patch(
+            "routes.weather.weather_service.get_forecast",
+            return_value=forecast,
+        ):
+            response = self.client.get("/api/weather/locations/9/forecast")
+
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["available_end_date"] == "2026-11-21"
+        assert len(payload["daily"]) == 15
+        assert payload["daily"][-1]["date"] == "2026-11-21"
 
     def test_optional_gusts_are_serialized_as_null(self):
         forecast = sample_forecast(optional_gusts=True)

@@ -104,6 +104,7 @@ def honolulu_daily_null_code_payload():
     payload["daily"]["time"] = date_values
     payload["daily"]["weather_code"][-1] = None
     payload["daily"]["precipitation_sum"][-1] = None
+    payload["daily"]["snowfall_sum"][-1] = None
     payload["daily"]["temperature_2m_max"][-1] = 82.0
     payload["daily"]["temperature_2m_min"][-1] = 70.0
     payload["daily"]["wind_gusts_10m_max"][-1] = 22.0
@@ -116,6 +117,23 @@ def honolulu_daily_null_code_payload():
     ]
     payload["hourly"]["wind_gusts_10m"] = [3.0] * 384
     return payload
+
+
+def clear_daily_row(payload, index):
+    for field in (
+        "weather_code",
+        "temperature_2m_max",
+        "temperature_2m_min",
+        "precipitation_probability_max",
+        "precipitation_sum",
+        "snowfall_sum",
+        "wind_speed_10m_max",
+        "wind_direction_10m_dominant",
+        "wind_gusts_10m_max",
+        "sunrise",
+        "sunset",
+    ):
+        payload["daily"][field][index] = None
 
 
 class FakeResponse:
@@ -207,6 +225,7 @@ def test_request_contract_and_normalized_local_forecast():
     assert forecast.daily[1].condition == "storm"
     assert forecast.daily[0].temperature_high_f == 30.0
     assert forecast.daily[0].precipitation_in == 0.0
+    assert forecast.daily[0].snowfall_in == 0.0
     assert type(forecast.daily[0].precipitation_in) is float
     assert forecast.daily[1].precipitation_in == 0.2
     assert type(forecast.daily[1].precipitation_in) is float
@@ -266,7 +285,7 @@ def test_honolulu_null_daily_weather_code_and_precipitation_preserve_full_foreca
     assert final_day.temperature_low_f == 70.0
     assert final_day.precipitation_probability_max_pct == 5.0
     assert final_day.precipitation_in is None
-    assert final_day.snowfall_in == 0.0
+    assert final_day.snowfall_in is None
     assert final_day.wind_speed_max_mph == 5.0
     assert final_day.wind_direction_dominant_deg == 180.0
     assert final_day.wind_gust_max_mph == 22.0
@@ -274,6 +293,154 @@ def test_honolulu_null_daily_weather_code_and_precipitation_preserve_full_foreca
     assert final_day.sunset_local == "2026-11-22T17:45"
     assert len(forecast.hourly_by_date["2026-11-22"]) == 24
     assert forecast.hourly_by_date["2026-11-22"][0].condition == "clear"
+
+
+@pytest.mark.parametrize(
+    ("provider_field", "model_field", "expected_value"),
+    [
+        ("weather_code", "condition", "unknown"),
+        ("temperature_2m_max", "temperature_high_f", None),
+        ("temperature_2m_min", "temperature_low_f", None),
+        ("precipitation_probability_max", "precipitation_probability_max_pct", None),
+        ("precipitation_sum", "precipitation_in", None),
+        ("snowfall_sum", "snowfall_in", None),
+        ("wind_speed_10m_max", "wind_speed_max_mph", None),
+        ("wind_direction_10m_dominant", "wind_direction_dominant_deg", None),
+        ("wind_gusts_10m_max", "wind_gust_max_mph", None),
+        ("sunrise", "sunrise_local", None),
+        ("sunset", "sunset_local", None),
+    ],
+)
+def test_daily_optional_values_are_normalized_without_fabrication(
+    provider_field,
+    model_field,
+    expected_value,
+):
+    payload = provider_payload()
+    payload["daily"][provider_field][1] = None
+    forecast, _ = call_with_payload(payload)
+
+    daily = forecast.daily[1]
+    normalized = daily.to_dict()
+    assert getattr(daily, model_field) == expected_value
+    assert normalized[model_field] == expected_value
+    assert len(forecast.daily) == 2
+    assert forecast.available_end_date == "2026-01-02"
+    serialized = json.dumps(normalized)
+    assert "temperature_2m_max" not in serialized
+    assert "precipitation_sum" not in serialized
+    assert "weather_code" not in serialized
+
+
+@pytest.mark.parametrize(
+    ("field", "value", "category", "expected_context"),
+    [
+        (
+            "sunrise",
+            "not-a-time",
+            "timestamp_format",
+            {
+                "section": "daily",
+                "field": "sunrise",
+                "index": 1,
+                "date": "2026-01-02",
+                "actual_type": "str",
+                "actual_value": '"not-a-time"',
+            },
+        ),
+        (
+            "sunset",
+            "2026-01-03T17:00",
+            "daily_sunrise_sunset_date_mismatch",
+            {
+                "section": "daily",
+                "field": "sunset",
+                "index": 1,
+                "date": "2026-01-02",
+                "actual_type": "str",
+                "actual_value": '"2026-01-03T17:00"',
+            },
+        ),
+    ],
+)
+def test_invalid_non_null_daily_times_keep_field_diagnostics(
+    field,
+    value,
+    category,
+    expected_context,
+):
+    payload = provider_payload()
+    payload["daily"][field][1] = value
+    response = FakeResponse(json.dumps(payload).encode("utf-8"))
+    with patch("services.open_meteo_provider.urlopen", return_value=response):
+        with pytest.raises(OpenMeteoInvalidResponseError) as error:
+            fetch_forecast(39.7392, -104.9903, "America/Denver")
+
+    assert error.value.category == category
+    assert error.value.diagnostic_context == expected_context
+
+
+def test_fully_empty_trailing_daily_row_is_omitted_from_forecast_range():
+    payload = provider_payload()
+    clear_daily_row(payload, 1)
+    forecast, _ = call_with_payload(payload)
+
+    assert [day.date for day in forecast.daily] == ["2026-01-01"]
+    assert forecast.available_start_date == "2026-01-01"
+    assert forecast.available_end_date == "2026-01-01"
+    assert set(forecast.hourly_by_date) == {"2026-01-01"}
+
+
+def test_multiple_fully_empty_trailing_rows_are_omitted():
+    payload = november_horizon_payload()
+    clear_daily_row(payload, 14)
+    clear_daily_row(payload, 15)
+    forecast, _ = call_with_payload(payload)
+
+    assert len(forecast.daily) == 14
+    assert forecast.available_end_date == "2026-11-15"
+    assert set(forecast.hourly_by_date) == {
+        f"2026-11-{day:02d}" for day in range(2, 16)
+    }
+
+
+def test_fully_empty_interior_daily_row_fails_with_date_and_index():
+    payload = november_horizon_payload()
+    clear_daily_row(payload, 5)
+    response = FakeResponse(json.dumps(payload).encode("utf-8"))
+    with patch("services.open_meteo_provider.urlopen", return_value=response):
+        with pytest.raises(OpenMeteoInvalidResponseError) as error:
+            fetch_forecast(39.7392, -104.9903, "America/Denver")
+
+    assert error.value.category == "empty_daily_record_interior"
+    assert error.value.diagnostic_context == {
+        "section": "daily",
+        "field": "record",
+        "index": 5,
+        "date": "2026-11-07",
+        "actual_type": "empty_daily_record",
+        "actual_value": "no_weather_values",
+    }
+
+
+def test_forecast_with_no_useful_daily_records_fails_precisely():
+    payload = provider_payload()
+    clear_daily_row(payload, 0)
+    clear_daily_row(payload, 1)
+    response = FakeResponse(json.dumps(payload).encode("utf-8"))
+    with patch("services.open_meteo_provider.urlopen", return_value=response):
+        with pytest.raises(OpenMeteoInvalidResponseError) as error:
+            fetch_forecast(39.7392, -104.9903, "America/Denver")
+
+    assert error.value.category == "empty_daily_forecast"
+    assert error.value.diagnostic_context == {
+        "section": "daily",
+        "field": "record",
+        "index": 0,
+        "date": "2026-01-01",
+        "actual_type": "empty_daily_record",
+        "actual_value": "no_weather_values",
+    }
 
 
 @pytest.mark.parametrize(
@@ -384,14 +551,14 @@ def test_weather_code_string_diagnostic_value_is_truncated():
             "daily",
             "precipitation_probability_max",
             1,
-            None,
+            "5",
             {
                 "section": "daily",
                 "field": "precipitation_probability_max",
                 "index": 1,
                 "date": "2026-01-02",
-                "actual_type": "NoneType",
-                "actual_value": "null",
+                "actual_type": "str",
+                "actual_value": '"5"',
             },
         ),
         (
@@ -470,6 +637,75 @@ def test_numeric_type_errors_include_bounded_field_context(
     assert error.value.diagnostic_context == expected_context
 
 
+@pytest.mark.parametrize(
+    ("section", "field", "index", "value", "category", "expected_context"),
+    [
+        (
+            "daily",
+            "snowfall_sum",
+            0,
+            float("nan"),
+            "numeric_non_finite",
+            {
+                "section": "daily",
+                "field": "snowfall_sum",
+                "index": 0,
+                "date": "2026-01-01",
+                "actual_type": "float",
+                "actual_value": "NaN",
+            },
+        ),
+        (
+            "hourly",
+            "wind_speed_10m",
+            2,
+            float("inf"),
+            "numeric_non_finite",
+            {
+                "section": "hourly",
+                "field": "wind_speed_10m",
+                "index": 2,
+                "timestamp": "2026-01-02T00:00",
+                "actual_type": "float",
+                "actual_value": "Infinity",
+            },
+        ),
+        (
+            "daily",
+            "wind_direction_10m_dominant",
+            1,
+            -1,
+            "numeric_below_range",
+            {
+                "section": "daily",
+                "field": "wind_direction_10m_dominant",
+                "index": 1,
+                "date": "2026-01-02",
+                "actual_type": "int",
+                "actual_value": "-1",
+            },
+        ),
+    ],
+)
+def test_invalid_numeric_values_include_bounded_field_context(
+    section,
+    field,
+    index,
+    value,
+    category,
+    expected_context,
+):
+    payload = provider_payload()
+    payload[section][field][index] = value
+    response = FakeResponse(json.dumps(payload, allow_nan=True).encode("utf-8"))
+    with patch("services.open_meteo_provider.urlopen", return_value=response):
+        with pytest.raises(OpenMeteoInvalidResponseError) as error:
+            fetch_forecast(39.7392, -104.9903, "America/Denver")
+
+    assert error.value.category == category
+    assert error.value.diagnostic_context == expected_context
+
+
 def test_weather_code_families_map_to_ti_conditions_only():
     representatives = {
         0: "clear",
@@ -489,6 +725,7 @@ def test_weather_code_families_map_to_ti_conditions_only():
     [
         lambda value: value["daily"]["temperature_2m_max"].pop(),
         lambda value: value["daily"].__setitem__("time", ["not-a-date", "2026-01-02"]),
+        lambda value: value["daily"].__setitem__("time", ["2026-01-02", "2026-01-01"]),
         lambda value: value["daily"]["snowfall_sum"].__setitem__(0, float("nan")),
         lambda value: value["daily"]["temperature_2m_max"].__setitem__(0, float("inf")),
         lambda value: value["daily"]["precipitation_sum"].__setitem__(0, float("nan")),

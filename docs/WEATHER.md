@@ -79,11 +79,18 @@ inside the adapter. TI-owned conditions are `clear`, `partly_cloudy`, `cloudy`,
 The normalized daily contract contains local date and condition; high/low
 temperature in Fahrenheit; precipitation probability and amounts in inches;
 snowfall; maximum wind speed, direction, and gust; and local sunrise/sunset.
+Missing daily values are preserved as null, except a missing weather code is
+represented by the existing `unknown` condition. Daily records with any
+forecast evidence are retained. Fully empty trailing records are omitted and
+the available end date reflects the last retained record; an empty record
+inside the retained range is an invalid provider response. Required hourly
+values remain strict.
 The hourly contract contains local timestamp and condition; temperature and
 apparent temperature in Fahrenheit; precipitation probability and amounts;
 snowfall; wind speed, direction, and gust; and a daylight flag. Daily high and
-low temperatures may be null at the incomplete forecast horizon. Unsupported
-forecast dates are distinct from provider unavailability.
+low temperatures and other optional daily values may be null at the incomplete
+forecast horizon. Unsupported forecast dates are distinct from provider
+unavailability.
 
 ## 7. Cache architecture
 
@@ -135,8 +142,8 @@ unavailable. Provider failure does not extend the stale lifetime. Malformed
 provider responses fail safely.
 
 Weather unavailability does not block Plan, Locations, or training-data
-workflows. Nullable daily temperature extremes and daily/hourly wind-gust
-values remain null when Open-Meteo reports them unavailable; required weather
+workflows. Missing optional daily values remain null, and missing daily
+conditions remain `unknown`; no weather value is fabricated. Required hourly
 values are not replaced with zero.
 
 ## 10. Privacy and security boundaries

@@ -189,11 +189,18 @@ function forecast(date, options = {}) {
       condition: options.condition || "clear",
       temperature_high_f: Object.hasOwn(options, "high") ? options.high : 64,
       temperature_low_f: Object.hasOwn(options, "low") ? options.low : 39,
-      wind_speed_max_mph: 12,
-      wind_direction_dominant_deg: 225,
+      precipitation_probability_max_pct: Object.hasOwn(options, "precipitationProbability")
+        ? options.precipitationProbability
+        : 10,
+      precipitation_in: Object.hasOwn(options, "precipitation") ? options.precipitation : 0.01,
+      snowfall_in: Object.hasOwn(options, "snowfall") ? options.snowfall : 0,
+      wind_speed_max_mph: Object.hasOwn(options, "windSpeed") ? options.windSpeed : 12,
+      wind_direction_dominant_deg: Object.hasOwn(options, "windDirection")
+        ? options.windDirection
+        : 225,
       wind_gust_max_mph: Object.hasOwn(options, "gust") ? options.gust : 24,
-      sunrise_local: `${date}T06:30`,
-      sunset_local: `${date}T17:45`,
+      sunrise_local: Object.hasOwn(options, "sunrise") ? options.sunrise : `${date}T06:30`,
+      sunset_local: Object.hasOwn(options, "sunset") ? options.sunset : `${date}T17:45`,
     }],
   };
 }
@@ -405,6 +412,105 @@ async function testUnknownDailyConditionKeepsWeatherTriggerAndHourlyDetails() {
   assert.deepEqual(forecastCalls, [9]);
   assert.deepEqual(hourlyCalls, [[9, "2026-10-20"]]);
 }
+
+async function testPartialDailyValuesRemainClickableAndRenderHonestly() {
+  const { controller, document } = createWeatherController({
+    fetchWeatherForecast: async () => forecast("2026-10-20", {
+      condition: "unknown",
+      high: null,
+      low: null,
+      precipitationProbability: null,
+      precipitation: null,
+      snowfall: null,
+      windSpeed: null,
+      windDirection: null,
+      gust: null,
+      sunrise: null,
+      sunset: null,
+    }),
+    fetchWeatherHourly: async (_, dateKey) => ({
+      hourly: [{
+        timestamp_local: `${dateKey}T08:00`,
+        condition: "clear",
+        temperature_f: 60,
+        apparent_temperature_f: 59,
+        wind_direction_deg: 225,
+        wind_speed_mph: 8,
+        wind_gust_mph: null,
+        precipitation_probability_pct: 10,
+        precipitation_in: 0.01,
+        snowfall_in: 0,
+      }],
+    }),
+  });
+  const items = [item({ id: 1, locationId: 9, duration: 60 })];
+  controller.renderDay({
+    dateKey: "2026-10-20",
+    todayKey: "2026-10-20",
+    items,
+    itemsReady: true,
+  });
+  await settle();
+  const html = controller.renderDay({
+    dateKey: "2026-10-20",
+    todayKey: "2026-10-20",
+    items,
+    itemsReady: true,
+  });
+
+  assert.match(html, /<button[^>]+data-plan-weather-trigger="2026-10-20"/);
+  assert.match(html, /plan-weather-icon[^>]*>·<\/span>/);
+  assert.doesNotMatch(html, /Forecast unavailable|null|undefined|NaN|0°|plan-weather-alert/);
+
+  controller.init();
+  const trigger = new FakeElement(document, "weather-trigger");
+  trigger.dataset.planWeatherTrigger = "2026-10-20";
+  document.trigger = trigger;
+  document.strip.listeners.get("click")[0]({ target: trigger });
+  await settle();
+
+  const detail = document.body.children.get("planWeatherDialog")
+    ?.querySelector("#planWeatherDialogBody")?.innerHTML;
+  assert.match(detail, /Conditions unknown/);
+  assert.match(detail, /Sunrise and sunset unavailable\./);
+  assert.match(detail, /8:00 AM/);
+  assert.doesNotMatch(detail, /null|undefined|NaN|(?:^|[^0-9])0°|latitude|longitude|weather_code/);
+}
+
+async function testDatesAfterShortenedRangeDoNotShowUnavailableTrigger() {
+  const { controller } = createWeatherController({
+    fetchWeatherForecast: async () => forecast("2026-11-21", {
+      endDate: "2026-11-21",
+      condition: "unknown",
+      high: null,
+      low: null,
+    }),
+  });
+  const items = [item({ id: 1, locationId: 9, duration: 60 })];
+  controller.renderDay({
+    dateKey: "2026-11-21",
+    todayKey: "2026-11-21",
+    items,
+    itemsReady: true,
+  });
+  await settle();
+  const retained = controller.renderDay({
+    dateKey: "2026-11-21",
+    todayKey: "2026-11-21",
+    items,
+    itemsReady: true,
+  });
+  const outsideRange = controller.renderDay({
+    dateKey: "2026-11-22",
+    todayKey: "2026-11-21",
+    items,
+    itemsReady: true,
+  });
+
+  assert.match(retained, /data-plan-weather-trigger="2026-11-21"/);
+  assert.equal(outsideRange, "");
+}
+
 
 async function renderHeaderForGust(gust, forecastOptions = {}) {
   const { controller } = createWeatherController({
@@ -644,6 +750,8 @@ async function run() {
   await testPastAndBeyondRangeDoNotFetchWeather();
   await testHeaderDeduplicatesForecastsAndFormatsNullableValues();
   await testUnknownDailyConditionKeepsWeatherTriggerAndHourlyDetails();
+  await testPartialDailyValuesRemainClickableAndRenderHonestly();
+  await testDatesAfterShortenedRangeDoNotShowUnavailableTrigger();
   await testGustAlertThresholdsAndCompactHeaderStyles();
   await testHomeFallbackAndNoHomeAreDistinct();
   await testUnavailableAndStaleLocationsRemainIndependentInDetails();

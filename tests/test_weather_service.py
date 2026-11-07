@@ -69,9 +69,22 @@ def normalized_weather_horizon_with_unknown_final_day():
             base.daily[0],
             date=day.isoformat(),
             condition="unknown" if index == 15 else "clear",
+            precipitation_probability_max_pct=(
+                None
+                if index == 15
+                else base.daily[0].precipitation_probability_max_pct
+            ),
             precipitation_in=None if index == 15 else base.daily[0].precipitation_in,
-            sunrise_local=f"{day.isoformat()}T06:30",
-            sunset_local=f"{day.isoformat()}T17:45",
+            snowfall_in=None if index == 15 else base.daily[0].snowfall_in,
+            wind_speed_max_mph=None if index == 15 else base.daily[0].wind_speed_max_mph,
+            wind_direction_dominant_deg=(
+                None
+                if index == 15
+                else base.daily[0].wind_direction_dominant_deg
+            ),
+            wind_gust_max_mph=None if index == 15 else base.daily[0].wind_gust_max_mph,
+            sunrise_local=None if index == 15 else f"{day.isoformat()}T06:30",
+            sunset_local=None if index == 15 else f"{day.isoformat()}T17:45",
         )
         for index, day in enumerate(dates)
     )
@@ -90,6 +103,21 @@ def normalized_weather_horizon_with_unknown_final_day():
         hourly_by_date=hourly_by_date,
         available_start_date=dates[0].isoformat(),
         available_end_date=dates[-1].isoformat(),
+    )
+
+
+def normalized_weather_with_shortened_horizon():
+    forecast = normalized_weather_horizon_with_unknown_final_day()
+    retained_daily = forecast.daily[:-1]
+    return replace(
+        forecast,
+        daily=retained_daily,
+        hourly_by_date={
+            day: hours
+            for day, hours in forecast.hourly_by_date.items()
+            if day <= retained_daily[-1].date
+        },
+        available_end_date=retained_daily[-1].date,
     )
 
 
@@ -263,12 +291,37 @@ def test_unknown_daily_condition_forecast_is_cached_without_provider_failure(cap
     assert first.available_end_date == "2026-11-22"
     assert len(first.daily) == 16
     assert first.daily[-1].condition == "unknown"
+    assert first.daily[-1].temperature_high_f == 30.0
+    assert first.daily[-1].temperature_low_f == 10.0
+    assert first.daily[-1].precipitation_probability_max_pct is None
     assert first.daily[-1].precipitation_in is None
+    assert first.daily[-1].snowfall_in is None
+    assert first.daily[-1].wind_speed_max_mph is None
+    assert first.daily[-1].wind_direction_dominant_deg is None
+    assert first.daily[-1].wind_gust_max_mph is None
+    assert first.daily[-1].sunrise_local is None
+    assert first.daily[-1].sunset_local is None
     assert first.daily[-1].to_dict()["precipitation_in"] is None
     assert service._cache[9].forecast.daily[-1].condition == "unknown"
     assert service._cache[9].forecast.daily[-1].precipitation_in is None
     assert len(provider.calls) == 1
     assert not any("Weather normalization failed" in record.message for record in caplog.records)
+
+
+def test_shortened_partial_forecast_is_cached_successfully():
+    clock = FakeClock()
+    provider = FakeProvider(normalized_weather_with_shortened_horizon())
+    service = make_service(provider, clock)
+
+    first = service.get_forecast(9)
+    second = service.get_forecast(9)
+
+    assert first.freshness == second.freshness == "fresh"
+    assert first.available_start_date == "2026-11-07"
+    assert first.available_end_date == "2026-11-21"
+    assert len(first.daily) == 15
+    assert service._cache[9].forecast.available_end_date == "2026-11-21"
+    assert len(provider.calls) == 1
 
 
 def test_refresh_at_thirty_minutes_resets_age_after_success():
@@ -325,6 +378,22 @@ def test_provider_failure_without_usable_cache_is_unavailable():
     service = make_service(provider, clock)
     with pytest.raises(WeatherUnavailableError):
         service.get_forecast(1)
+    assert len(provider.calls) == 1
+
+
+@pytest.mark.parametrize(
+    "category",
+    ["empty_daily_record_interior", "empty_daily_forecast"],
+)
+def test_unusable_daily_forecast_categories_remain_unavailable(category):
+    clock = FakeClock()
+    provider = FakeProvider(OpenMeteoInvalidResponseError(category))
+    service = make_service(provider, clock)
+
+    with pytest.raises(WeatherUnavailableError) as error:
+        service.get_forecast(9)
+
+    assert error.value.category == category
     assert len(provider.calls) == 1
 
 
