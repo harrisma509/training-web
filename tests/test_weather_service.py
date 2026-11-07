@@ -69,6 +69,7 @@ def normalized_weather_horizon_with_unknown_final_day():
             base.daily[0],
             date=day.isoformat(),
             condition="unknown" if index == 15 else "clear",
+            precipitation_in=None if index == 15 else base.daily[0].precipitation_in,
             sunrise_local=f"{day.isoformat()}T06:30",
             sunset_local=f"{day.isoformat()}T17:45",
         )
@@ -262,7 +263,10 @@ def test_unknown_daily_condition_forecast_is_cached_without_provider_failure(cap
     assert first.available_end_date == "2026-11-22"
     assert len(first.daily) == 16
     assert first.daily[-1].condition == "unknown"
+    assert first.daily[-1].precipitation_in is None
+    assert first.daily[-1].to_dict()["precipitation_in"] is None
     assert service._cache[9].forecast.daily[-1].condition == "unknown"
+    assert service._cache[9].forecast.daily[-1].precipitation_in is None
     assert len(provider.calls) == 1
     assert not any("Weather normalization failed" in record.message for record in caplog.records)
 

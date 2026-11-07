@@ -28,7 +28,7 @@ def provider_payload():
             "temperature_2m_max": [30.0, 28.0],
             "temperature_2m_min": [10.0, 14.0],
             "precipitation_probability_max": [5, 90],
-            "precipitation_sum": [0.0, 0.2],
+            "precipitation_sum": [0, 0.2],
             "snowfall_sum": [0.0, 0.0],
             "wind_speed_10m_max": [5.0, 12.0],
             "wind_direction_10m_dominant": [180, 270],
@@ -103,6 +103,7 @@ def honolulu_daily_null_code_payload():
     date_values = [value.isoformat() for value in dates]
     payload["daily"]["time"] = date_values
     payload["daily"]["weather_code"][-1] = None
+    payload["daily"]["precipitation_sum"][-1] = None
     payload["daily"]["temperature_2m_max"][-1] = 82.0
     payload["daily"]["temperature_2m_min"][-1] = 70.0
     payload["daily"]["wind_gusts_10m_max"][-1] = 22.0
@@ -205,6 +206,10 @@ def test_request_contract_and_normalized_local_forecast():
     assert forecast.daily[0].condition == "clear"
     assert forecast.daily[1].condition == "storm"
     assert forecast.daily[0].temperature_high_f == 30.0
+    assert forecast.daily[0].precipitation_in == 0.0
+    assert type(forecast.daily[0].precipitation_in) is float
+    assert forecast.daily[1].precipitation_in == 0.2
+    assert type(forecast.daily[1].precipitation_in) is float
     assert forecast.daily[0].temperature_low_f == 10.0
     assert forecast.daily[0].sunrise_local == "2026-01-01T07:10"
     assert forecast.hourly_by_date["2026-01-01"][0].timestamp_local == "2026-01-01T00:00"
@@ -247,7 +252,7 @@ def test_november_horizon_preserves_unavailable_gusts_as_null():
     assert type(final_day_hours[0].precipitation_probability_pct) is float
 
 
-def test_honolulu_null_daily_weather_code_preserves_full_forecast():
+def test_honolulu_null_daily_weather_code_and_precipitation_preserve_full_forecast():
     forecast, _ = call_with_payload(honolulu_daily_null_code_payload())
 
     assert forecast.available_start_date == "2026-11-07"
@@ -260,7 +265,7 @@ def test_honolulu_null_daily_weather_code_preserves_full_forecast():
     assert final_day.temperature_high_f == 82.0
     assert final_day.temperature_low_f == 70.0
     assert final_day.precipitation_probability_max_pct == 5.0
-    assert final_day.precipitation_in == 0.0
+    assert final_day.precipitation_in is None
     assert final_day.snowfall_in == 0.0
     assert final_day.wind_speed_max_mph == 5.0
     assert final_day.wind_direction_dominant_deg == 180.0
@@ -393,24 +398,24 @@ def test_weather_code_string_diagnostic_value_is_truncated():
             "daily",
             "precipitation_sum",
             0,
-            "0",
+            "0.1",
             {
                 "section": "daily",
                 "field": "precipitation_sum",
                 "index": 0,
                 "date": "2026-01-01",
                 "actual_type": "str",
-                "actual_value": '"0"',
+                "actual_value": '"0.1"',
             },
         ),
         (
             "daily",
-            "wind_speed_10m_max",
+            "precipitation_sum",
             1,
             True,
             {
                 "section": "daily",
-                "field": "wind_speed_10m_max",
+                "field": "precipitation_sum",
                 "index": 1,
                 "date": "2026-01-02",
                 "actual_type": "bool",
@@ -419,12 +424,12 @@ def test_weather_code_string_diagnostic_value_is_truncated():
         ),
         (
             "daily",
-            "snowfall_sum",
+            "precipitation_sum",
             0,
             [],
             {
                 "section": "daily",
-                "field": "snowfall_sum",
+                "field": "precipitation_sum",
                 "index": 0,
                 "date": "2026-01-01",
                 "actual_type": "list",
@@ -433,12 +438,12 @@ def test_weather_code_string_diagnostic_value_is_truncated():
         ),
         (
             "hourly",
-            "temperature_2m",
+            "precipitation",
             2,
             None,
             {
                 "section": "hourly",
-                "field": "temperature_2m",
+                "field": "precipitation",
                 "index": 2,
                 "timestamp": "2026-01-02T00:00",
                 "actual_type": "NoneType",
@@ -486,7 +491,7 @@ def test_weather_code_families_map_to_ti_conditions_only():
         lambda value: value["daily"].__setitem__("time", ["not-a-date", "2026-01-02"]),
         lambda value: value["daily"]["snowfall_sum"].__setitem__(0, float("nan")),
         lambda value: value["daily"]["temperature_2m_max"].__setitem__(0, float("inf")),
-        lambda value: value["daily"]["precipitation_sum"].__setitem__(0, None),
+        lambda value: value["daily"]["precipitation_sum"].__setitem__(0, float("nan")),
         lambda value: value["hourly"]["temperature_2m"].__setitem__(0, "10"),
         lambda value: value["hourly"]["wind_gusts_10m"].__setitem__(0, True),
         lambda value: value["hourly"]["temperature_2m"].pop(),

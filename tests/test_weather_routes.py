@@ -68,6 +68,7 @@ def sample_forecast_with_unknown_final_day():
             base.daily[0],
             date=day.isoformat(),
             condition="unknown" if index == 15 else "clear",
+            precipitation_in=None if index == 15 else base.daily[0].precipitation_in,
             sunrise_local=f"{day.isoformat()}T06:30",
             sunset_local=f"{day.isoformat()}T17:45",
         )
@@ -155,6 +156,7 @@ class TestWeatherRoutes:
         assert daily_payload["daily"][-1]["condition"] == "unknown"
         assert daily_payload["daily"][-1]["temperature_high_f"] == 30.0
         assert daily_payload["daily"][-1]["temperature_low_f"] == 10.0
+        assert daily_payload["daily"][-1]["precipitation_in"] is None
 
         with patch(
             "routes.weather.weather_service.get_hourly_forecast",

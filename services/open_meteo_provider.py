@@ -397,7 +397,7 @@ def _normalize_payload(
                     minimum=0,
                     maximum=100,
                 ),
-                precipitation_in=_number(
+                precipitation_in=_optional_number(
                     daily_arrays["precipitation_sum"][index],
                     section="daily",
                     field="precipitation_sum",

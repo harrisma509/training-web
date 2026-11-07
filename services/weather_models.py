@@ -26,7 +26,7 @@ class DailyWeather:
     temperature_high_f: float | None
     temperature_low_f: float | None
     precipitation_probability_max_pct: float
-    precipitation_in: float
+    precipitation_in: float | None
     snowfall_in: float
     wind_speed_max_mph: float
     wind_direction_dominant_deg: float
