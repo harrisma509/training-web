@@ -337,6 +337,75 @@ async function testHeaderDeduplicatesForecastsAndFormatsNullableValues() {
   assert.doesNotMatch(html, /null|undefined|NaN|0°|latitude|longitude|weather_code|Open-Meteo|Geoapify/);
 }
 
+async function testUnknownDailyConditionKeepsWeatherTriggerAndHourlyDetails() {
+  const forecastCalls = [];
+  const hourlyCalls = [];
+  const { controller, document } = createWeatherController({
+    fetchWeatherForecast: async locationId => {
+      forecastCalls.push(locationId);
+      return forecast("2026-10-20", {
+        condition: "unknown",
+        high: 72,
+        low: 55,
+        gust: 32,
+      });
+    },
+    fetchWeatherHourly: async (locationId, dateKey) => {
+      hourlyCalls.push([locationId, dateKey]);
+      return {
+        hourly: [{
+          timestamp_local: `${dateKey}T08:00`,
+          condition: "clear",
+          temperature_f: 60,
+          apparent_temperature_f: 59,
+          wind_direction_deg: 225,
+          wind_speed_mph: 8,
+          wind_gust_mph: 12,
+          precipitation_probability_pct: 10,
+          precipitation_in: 0.01,
+          snowfall_in: 0,
+        }],
+      };
+    },
+  });
+  const items = [item({ id: 1, locationId: 9, duration: 60 })];
+
+  controller.renderDay({
+    dateKey: "2026-10-20",
+    todayKey: "2026-10-20",
+    items,
+    itemsReady: true,
+  });
+  await settle();
+  const html = controller.renderDay({
+    dateKey: "2026-10-20",
+    todayKey: "2026-10-20",
+    items,
+    itemsReady: true,
+  });
+
+  assert.match(html, /data-plan-weather-trigger="2026-10-20"/);
+  assert.match(html, /plan-weather-icon[^>]*>·<\/span>/);
+  assert.match(html, /72°\/55°/);
+  assert.match(html, /plan-weather-alert is-caution/);
+  assert.doesNotMatch(html, /Forecast unavailable/);
+
+  controller.init();
+  const trigger = new FakeElement(document, "weather-trigger");
+  trigger.dataset.planWeatherTrigger = "2026-10-20";
+  document.trigger = trigger;
+  document.strip.listeners.get("click")[0]({ target: trigger });
+  await settle();
+
+  const detail = document.body.children.get("planWeatherDialog")
+    ?.querySelector("#planWeatherDialogBody")?.innerHTML;
+  assert.match(detail, /Conditions unknown/);
+  assert.match(detail, /8:00 AM/);
+  assert.doesNotMatch(detail, /Hourly forecast unavailable|Forecast unavailable/);
+  assert.deepEqual(forecastCalls, [9]);
+  assert.deepEqual(hourlyCalls, [[9, "2026-10-20"]]);
+}
+
 async function renderHeaderForGust(gust, forecastOptions = {}) {
   const { controller } = createWeatherController({
     fetchWeatherForecast: async () => forecast("2026-10-20", {
@@ -574,6 +643,7 @@ async function run() {
   testMissingDurationsPreserveFirstAndHomeIsOnlyFallback();
   await testPastAndBeyondRangeDoNotFetchWeather();
   await testHeaderDeduplicatesForecastsAndFormatsNullableValues();
+  await testUnknownDailyConditionKeepsWeatherTriggerAndHourlyDetails();
   await testGustAlertThresholdsAndCompactHeaderStyles();
   await testHomeFallbackAndNoHomeAreDistinct();
   await testUnavailableAndStaleLocationsRemainIndependentInDetails();

@@ -97,6 +97,26 @@ def november_horizon_payload():
     return payload
 
 
+def honolulu_daily_null_code_payload():
+    payload = november_horizon_payload()
+    dates = [date(2026, 11, 7) + timedelta(days=offset) for offset in range(16)]
+    date_values = [value.isoformat() for value in dates]
+    payload["daily"]["time"] = date_values
+    payload["daily"]["weather_code"][-1] = None
+    payload["daily"]["temperature_2m_max"][-1] = 82.0
+    payload["daily"]["temperature_2m_min"][-1] = 70.0
+    payload["daily"]["wind_gusts_10m_max"][-1] = 22.0
+    payload["daily"]["sunrise"] = [f"{value}T06:30" for value in date_values]
+    payload["daily"]["sunset"] = [f"{value}T17:45" for value in date_values]
+    payload["hourly"]["time"] = [
+        f"{day.isoformat()}T{hour:02d}:00"
+        for day in dates
+        for hour in range(24)
+    ]
+    payload["hourly"]["wind_gusts_10m"] = [3.0] * 384
+    return payload
+
+
 class FakeResponse:
     def __init__(self, body):
         self.body = body
@@ -227,6 +247,30 @@ def test_november_horizon_preserves_unavailable_gusts_as_null():
     assert type(final_day_hours[0].precipitation_probability_pct) is float
 
 
+def test_honolulu_null_daily_weather_code_preserves_full_forecast():
+    forecast, _ = call_with_payload(honolulu_daily_null_code_payload())
+
+    assert forecast.available_start_date == "2026-11-07"
+    assert forecast.available_end_date == "2026-11-22"
+    assert len(forecast.daily) == 16
+    assert [day.condition for day in forecast.daily[:15]] == ["clear"] * 15
+    final_day = forecast.daily[-1]
+    assert final_day.date == "2026-11-22"
+    assert final_day.condition == "unknown"
+    assert final_day.temperature_high_f == 82.0
+    assert final_day.temperature_low_f == 70.0
+    assert final_day.precipitation_probability_max_pct == 5.0
+    assert final_day.precipitation_in == 0.0
+    assert final_day.snowfall_in == 0.0
+    assert final_day.wind_speed_max_mph == 5.0
+    assert final_day.wind_direction_dominant_deg == 180.0
+    assert final_day.wind_gust_max_mph == 22.0
+    assert final_day.sunrise_local == "2026-11-22T06:30"
+    assert final_day.sunset_local == "2026-11-22T17:45"
+    assert len(forecast.hourly_by_date["2026-11-22"]) == 24
+    assert forecast.hourly_by_date["2026-11-22"][0].condition == "clear"
+
+
 @pytest.mark.parametrize(
     ("section", "index", "value", "expected_context"),
     [
@@ -241,6 +285,32 @@ def test_november_horizon_preserves_unavailable_gusts_as_null():
                 "date": "2026-01-02",
                 "actual_type": "float",
                 "actual_value": "3.0",
+            },
+        ),
+        (
+            "daily",
+            1,
+            "3",
+            {
+                "section": "daily",
+                "field": "weather_code",
+                "index": 1,
+                "date": "2026-01-02",
+                "actual_type": "str",
+                "actual_value": '"3"',
+            },
+        ),
+        (
+            "daily",
+            1,
+            True,
+            {
+                "section": "daily",
+                "field": "weather_code",
+                "index": 1,
+                "date": "2026-01-02",
+                "actual_type": "bool",
+                "actual_value": "true",
             },
         ),
         (

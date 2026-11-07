@@ -1,3 +1,5 @@
+from dataclasses import replace
+from datetime import date, timedelta
 import json
 from unittest.mock import patch
 
@@ -58,6 +60,39 @@ def sample_forecast(freshness="fresh", stale_age_minutes=None, optional_gusts=Fa
     )
 
 
+def sample_forecast_with_unknown_final_day():
+    base = sample_forecast()
+    dates = [date(2026, 11, 7) + timedelta(days=offset) for offset in range(16)]
+    daily = tuple(
+        replace(
+            base.daily[0],
+            date=day.isoformat(),
+            condition="unknown" if index == 15 else "clear",
+            sunrise_local=f"{day.isoformat()}T06:30",
+            sunset_local=f"{day.isoformat()}T17:45",
+        )
+        for index, day in enumerate(dates)
+    )
+    hourly_template = base.hourly_by_date["2026-01-01"][0]
+    hourly_by_date = {
+        day.isoformat(): tuple(
+            replace(
+                hourly_template,
+                timestamp_local=f"{day.isoformat()}T{hour:02d}:00",
+            )
+            for hour in range(24)
+        )
+        for day in dates
+    }
+    return replace(
+        base,
+        available_start_date=dates[0].isoformat(),
+        available_end_date=dates[-1].isoformat(),
+        daily=daily,
+        hourly_by_date=hourly_by_date,
+    )
+
+
 class TestWeatherRoutes:
     def setup_method(self):
         self.client = TestClient(training_app)
@@ -102,6 +137,37 @@ class TestWeatherRoutes:
         assert "longitude" not in response.text
         assert "weather_code" not in response.text
         assert "temperature_2m" not in response.text
+
+    def test_unknown_daily_condition_keeps_forecast_and_hourly_routes_available(self):
+        forecast = sample_forecast_with_unknown_final_day()
+        with patch(
+            "routes.weather.weather_service.get_forecast",
+            return_value=forecast,
+        ):
+            daily_response = self.client.get("/api/weather/locations/9/forecast")
+
+        assert daily_response.status_code == 200
+        daily_payload = daily_response.json()
+        assert daily_payload["available_start_date"] == "2026-11-07"
+        assert daily_payload["available_end_date"] == "2026-11-22"
+        assert len(daily_payload["daily"]) == 16
+        assert daily_payload["daily"][-1]["date"] == "2026-11-22"
+        assert daily_payload["daily"][-1]["condition"] == "unknown"
+        assert daily_payload["daily"][-1]["temperature_high_f"] == 30.0
+        assert daily_payload["daily"][-1]["temperature_low_f"] == 10.0
+
+        with patch(
+            "routes.weather.weather_service.get_hourly_forecast",
+            return_value=forecast,
+        ):
+            hourly_response = self.client.get(
+                "/api/weather/locations/9/hourly",
+                params={"date": "2026-11-22"},
+            )
+
+        assert hourly_response.status_code == 200
+        assert hourly_response.json()["date"] == "2026-11-22"
+        assert len(hourly_response.json()["hourly"]) == 24
 
     def test_optional_gusts_are_serialized_as_null(self):
         forecast = sample_forecast(optional_gusts=True)

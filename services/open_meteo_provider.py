@@ -244,7 +244,10 @@ def _condition(
     section: str,
     index: int,
     temporal_value: str,
+    allow_none: bool = False,
 ) -> WeatherCondition:
+    if value is None and allow_none:
+        return "unknown"
     if type(value) is not int:
         temporal_field = "date" if section == "daily" else "timestamp"
         raise OpenMeteoInvalidResponseError(
@@ -327,6 +330,7 @@ def _normalize_payload(
                     section="daily",
                     index=index,
                     temporal_value=local_day.isoformat(),
+                    allow_none=True,
                 ),
                 temperature_high_f=_optional_number(
                     daily_arrays["temperature_2m_max"][index]

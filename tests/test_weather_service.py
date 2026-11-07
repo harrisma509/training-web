@@ -1,4 +1,5 @@
-from datetime import datetime, timezone
+from dataclasses import replace
+from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 import logging
 from unittest.mock import patch
@@ -57,6 +58,37 @@ def normalized_weather(condition="clear"):
         hourly_by_date={"2026-01-01": (hour,)},
         available_start_date="2026-01-01",
         available_end_date="2026-01-01",
+    )
+
+
+def normalized_weather_horizon_with_unknown_final_day():
+    base = normalized_weather()
+    dates = [date(2026, 11, 7) + timedelta(days=offset) for offset in range(16)]
+    daily = tuple(
+        replace(
+            base.daily[0],
+            date=day.isoformat(),
+            condition="unknown" if index == 15 else "clear",
+            sunrise_local=f"{day.isoformat()}T06:30",
+            sunset_local=f"{day.isoformat()}T17:45",
+        )
+        for index, day in enumerate(dates)
+    )
+    hourly_by_date = {
+        day.isoformat(): tuple(
+            replace(
+                base.hourly_by_date["2026-01-01"][0],
+                timestamp_local=f"{day.isoformat()}T{hour:02d}:00",
+            )
+            for hour in range(24)
+        )
+        for day in dates
+    }
+    return NormalizedWeather(
+        daily=daily,
+        hourly_by_date=hourly_by_date,
+        available_start_date=dates[0].isoformat(),
+        available_end_date=dates[-1].isoformat(),
     )
 
 
@@ -214,6 +246,25 @@ def test_first_miss_caches_and_fresh_hits_skip_provider_while_updating_lru():
         Decimal("-104.9903"),
         "America/Denver",
     )
+
+
+def test_unknown_daily_condition_forecast_is_cached_without_provider_failure(caplog):
+    clock = FakeClock()
+    provider = FakeProvider(normalized_weather_horizon_with_unknown_final_day())
+    service = make_service(provider, clock)
+
+    with caplog.at_level(logging.WARNING, logger="services.weather_service"):
+        first = service.get_forecast(9)
+        second = service.get_forecast(9)
+
+    assert first.freshness == second.freshness == "fresh"
+    assert first.available_start_date == "2026-11-07"
+    assert first.available_end_date == "2026-11-22"
+    assert len(first.daily) == 16
+    assert first.daily[-1].condition == "unknown"
+    assert service._cache[9].forecast.daily[-1].condition == "unknown"
+    assert len(provider.calls) == 1
+    assert not any("Weather normalization failed" in record.message for record in caplog.records)
 
 
 def test_refresh_at_thirty_minutes_resets_age_after_success():
