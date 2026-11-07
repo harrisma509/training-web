@@ -372,6 +372,99 @@ def test_weather_code_string_diagnostic_value_is_truncated():
     assert error.value.diagnostic_context["actual_type"] == "str"
 
 
+@pytest.mark.parametrize(
+    ("section", "field", "index", "value", "expected_context"),
+    [
+        (
+            "daily",
+            "precipitation_probability_max",
+            1,
+            None,
+            {
+                "section": "daily",
+                "field": "precipitation_probability_max",
+                "index": 1,
+                "date": "2026-01-02",
+                "actual_type": "NoneType",
+                "actual_value": "null",
+            },
+        ),
+        (
+            "daily",
+            "precipitation_sum",
+            0,
+            "0",
+            {
+                "section": "daily",
+                "field": "precipitation_sum",
+                "index": 0,
+                "date": "2026-01-01",
+                "actual_type": "str",
+                "actual_value": '"0"',
+            },
+        ),
+        (
+            "daily",
+            "wind_speed_10m_max",
+            1,
+            True,
+            {
+                "section": "daily",
+                "field": "wind_speed_10m_max",
+                "index": 1,
+                "date": "2026-01-02",
+                "actual_type": "bool",
+                "actual_value": "true",
+            },
+        ),
+        (
+            "daily",
+            "snowfall_sum",
+            0,
+            [],
+            {
+                "section": "daily",
+                "field": "snowfall_sum",
+                "index": 0,
+                "date": "2026-01-01",
+                "actual_type": "list",
+                "actual_value": "<list>",
+            },
+        ),
+        (
+            "hourly",
+            "temperature_2m",
+            2,
+            None,
+            {
+                "section": "hourly",
+                "field": "temperature_2m",
+                "index": 2,
+                "timestamp": "2026-01-02T00:00",
+                "actual_type": "NoneType",
+                "actual_value": "null",
+            },
+        ),
+    ],
+)
+def test_numeric_type_errors_include_bounded_field_context(
+    section,
+    field,
+    index,
+    value,
+    expected_context,
+):
+    payload = provider_payload()
+    payload[section][field][index] = value
+    response = FakeResponse(json.dumps(payload).encode("utf-8"))
+    with patch("services.open_meteo_provider.urlopen", return_value=response):
+        with pytest.raises(OpenMeteoInvalidResponseError) as error:
+            fetch_forecast(39.7392, -104.9903, "America/Denver")
+
+    assert error.value.category == "numeric_type"
+    assert error.value.diagnostic_context == expected_context
+
+
 def test_weather_code_families_map_to_ti_conditions_only():
     representatives = {
         0: "clear",

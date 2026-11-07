@@ -179,11 +179,24 @@ def _array(container: object, key: str, expected_length: int) -> list[object]:
 def _number(
     value: object,
     *,
+    section: str,
+    field: str,
+    index: int,
+    temporal_value: str,
     minimum: float | None = None,
     maximum: float | None = None,
 ) -> float:
     if type(value) not in (int, float):
-        raise _invalid_response("numeric_type")
+        raise OpenMeteoInvalidResponseError(
+            "numeric_type",
+            diagnostic_context=_field_diagnostic_context(
+                value,
+                section=section,
+                field=field,
+                index=index,
+                temporal_value=temporal_value,
+            ),
+        )
     try:
         number = float(value)
     except (OverflowError, ValueError):
@@ -200,12 +213,24 @@ def _number(
 def _optional_number(
     value: object,
     *,
+    section: str,
+    field: str,
+    index: int,
+    temporal_value: str,
     minimum: float | None = None,
     maximum: float | None = None,
 ) -> float | None:
     if value is None:
         return None
-    return _number(value, minimum=minimum, maximum=maximum)
+    return _number(
+        value,
+        section=section,
+        field=field,
+        index=index,
+        temporal_value=temporal_value,
+        minimum=minimum,
+        maximum=maximum,
+    )
 
 
 def _safe_diagnostic_value(value: object) -> str:
@@ -238,6 +263,25 @@ def _safe_diagnostic_value(value: object) -> str:
     return f"<{type(value).__name__}>"
 
 
+def _field_diagnostic_context(
+    value: object,
+    *,
+    section: str,
+    field: str,
+    index: int,
+    temporal_value: str,
+) -> dict[str, str | int]:
+    temporal_field = "date" if section == "daily" else "timestamp"
+    return {
+        "section": section,
+        "field": field,
+        "index": index,
+        temporal_field: temporal_value,
+        "actual_type": type(value).__name__,
+        "actual_value": _safe_diagnostic_value(value),
+    }
+
+
 def _condition(
     value: object,
     *,
@@ -249,17 +293,15 @@ def _condition(
     if value is None and allow_none:
         return "unknown"
     if type(value) is not int:
-        temporal_field = "date" if section == "daily" else "timestamp"
         raise OpenMeteoInvalidResponseError(
             "weather_code_type",
-            diagnostic_context={
-                "section": section,
-                "field": "weather_code",
-                "index": index,
-                temporal_field: temporal_value,
-                "actual_type": type(value).__name__,
-                "actual_value": _safe_diagnostic_value(value),
-            },
+            diagnostic_context=_field_diagnostic_context(
+                value,
+                section=section,
+                field="weather_code",
+                index=index,
+                temporal_value=temporal_value,
+            ),
         )
     return CONDITION_BY_CODE.get(value, "unknown")
 
@@ -333,26 +375,67 @@ def _normalize_payload(
                     allow_none=True,
                 ),
                 temperature_high_f=_optional_number(
-                    daily_arrays["temperature_2m_max"][index]
+                    daily_arrays["temperature_2m_max"][index],
+                    section="daily",
+                    field="temperature_2m_max",
+                    index=index,
+                    temporal_value=local_day.isoformat(),
                 ),
                 temperature_low_f=_optional_number(
-                    daily_arrays["temperature_2m_min"][index]
+                    daily_arrays["temperature_2m_min"][index],
+                    section="daily",
+                    field="temperature_2m_min",
+                    index=index,
+                    temporal_value=local_day.isoformat(),
                 ),
                 precipitation_probability_max_pct=_number(
                     daily_arrays["precipitation_probability_max"][index],
+                    section="daily",
+                    field="precipitation_probability_max",
+                    index=index,
+                    temporal_value=local_day.isoformat(),
                     minimum=0,
                     maximum=100,
                 ),
-                precipitation_in=_number(daily_arrays["precipitation_sum"][index], minimum=0),
-                snowfall_in=_number(daily_arrays["snowfall_sum"][index], minimum=0),
-                wind_speed_max_mph=_number(daily_arrays["wind_speed_10m_max"][index], minimum=0),
+                precipitation_in=_number(
+                    daily_arrays["precipitation_sum"][index],
+                    section="daily",
+                    field="precipitation_sum",
+                    index=index,
+                    temporal_value=local_day.isoformat(),
+                    minimum=0,
+                ),
+                snowfall_in=_number(
+                    daily_arrays["snowfall_sum"][index],
+                    section="daily",
+                    field="snowfall_sum",
+                    index=index,
+                    temporal_value=local_day.isoformat(),
+                    minimum=0,
+                ),
+                wind_speed_max_mph=_number(
+                    daily_arrays["wind_speed_10m_max"][index],
+                    section="daily",
+                    field="wind_speed_10m_max",
+                    index=index,
+                    temporal_value=local_day.isoformat(),
+                    minimum=0,
+                ),
                 wind_direction_dominant_deg=_number(
                     daily_arrays["wind_direction_10m_dominant"][index],
+                    section="daily",
+                    field="wind_direction_10m_dominant",
+                    index=index,
+                    temporal_value=local_day.isoformat(),
                     minimum=0,
                     maximum=360,
                 ),
                 wind_gust_max_mph=_optional_number(
                     daily_arrays["wind_gusts_10m_max"][index],
+                    section="daily",
+                    field="wind_gusts_10m_max",
+                    index=index,
+                    temporal_value=local_day.isoformat(),
                     minimum=0,
                 ),
                 sunrise_local=str(daily_arrays["sunrise"][index]),
@@ -383,23 +466,68 @@ def _normalize_payload(
                     index=index,
                     temporal_value=local_time.isoformat(timespec="minutes"),
                 ),
-                temperature_f=_number(hourly_arrays["temperature_2m"][index]),
-                apparent_temperature_f=_number(hourly_arrays["apparent_temperature"][index]),
+                temperature_f=_number(
+                    hourly_arrays["temperature_2m"][index],
+                    section="hourly",
+                    field="temperature_2m",
+                    index=index,
+                    temporal_value=local_time.isoformat(timespec="minutes"),
+                ),
+                apparent_temperature_f=_number(
+                    hourly_arrays["apparent_temperature"][index],
+                    section="hourly",
+                    field="apparent_temperature",
+                    index=index,
+                    temporal_value=local_time.isoformat(timespec="minutes"),
+                ),
                 precipitation_probability_pct=_number(
                     hourly_arrays["precipitation_probability"][index],
+                    section="hourly",
+                    field="precipitation_probability",
+                    index=index,
+                    temporal_value=local_time.isoformat(timespec="minutes"),
                     minimum=0,
                     maximum=100,
                 ),
-                precipitation_in=_number(hourly_arrays["precipitation"][index], minimum=0),
-                snowfall_in=_number(hourly_arrays["snowfall"][index], minimum=0),
-                wind_speed_mph=_number(hourly_arrays["wind_speed_10m"][index], minimum=0),
+                precipitation_in=_number(
+                    hourly_arrays["precipitation"][index],
+                    section="hourly",
+                    field="precipitation",
+                    index=index,
+                    temporal_value=local_time.isoformat(timespec="minutes"),
+                    minimum=0,
+                ),
+                snowfall_in=_number(
+                    hourly_arrays["snowfall"][index],
+                    section="hourly",
+                    field="snowfall",
+                    index=index,
+                    temporal_value=local_time.isoformat(timespec="minutes"),
+                    minimum=0,
+                ),
+                wind_speed_mph=_number(
+                    hourly_arrays["wind_speed_10m"][index],
+                    section="hourly",
+                    field="wind_speed_10m",
+                    index=index,
+                    temporal_value=local_time.isoformat(timespec="minutes"),
+                    minimum=0,
+                ),
                 wind_direction_deg=_number(
                     hourly_arrays["wind_direction_10m"][index],
+                    section="hourly",
+                    field="wind_direction_10m",
+                    index=index,
+                    temporal_value=local_time.isoformat(timespec="minutes"),
                     minimum=0,
                     maximum=360,
                 ),
                 wind_gust_mph=_optional_number(
                     hourly_arrays["wind_gusts_10m"][index],
+                    section="hourly",
+                    field="wind_gusts_10m",
+                    index=index,
+                    temporal_value=local_time.isoformat(timespec="minutes"),
                     minimum=0,
                 ),
                 is_day=_daylight_value(hourly_arrays["is_day"][index]),

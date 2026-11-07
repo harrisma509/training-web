@@ -370,6 +370,51 @@ def test_weather_code_failure_log_includes_saved_location_and_field_context(capl
     assert "{" not in message
 
 
+def test_numeric_type_failure_log_includes_field_context(caplog):
+    diagnostic = {
+        "section": "daily",
+        "field": "precipitation_probability_max",
+        "index": 15,
+        "date": "2026-11-22",
+        "actual_type": "NoneType",
+        "actual_value": "null",
+    }
+    service = make_service(
+        FakeProvider(
+            OpenMeteoInvalidResponseError(
+                "numeric_type",
+                diagnostic_context=diagnostic,
+            )
+        ),
+        FakeClock(),
+    )
+
+    with caplog.at_level(logging.WARNING, logger="services.weather_service"):
+        with pytest.raises(WeatherUnavailableError) as error:
+            service.get_forecast(9)
+
+    assert error.value.category == "numeric_type"
+    assert len(caplog.records) == 1
+    message = caplog.records[0].getMessage()
+    for expected in (
+        "saved_location_id=9",
+        "display_name=Synthetic location 9",
+        "timezone_name=America/Denver",
+        "latitude=39.7392",
+        "longitude=-104.9903",
+        "section=daily",
+        "field=precipitation_probability_max",
+        "index=15",
+        "date=2026-11-22",
+        "actual_type=NoneType",
+        "actual_value=null",
+        "category=numeric_type",
+    ):
+        assert expected in message
+    assert "api.open-meteo.com" not in message
+    assert "{" not in message
+
+
 def test_cache_evicts_least_recently_used_entry_at_entry_thirty_three():
     clock = FakeClock()
     provider = FakeProvider()
